@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo "Enable TCP forwarding..."
+sed -i 's/AllowTcpForwarding no/AllowTcpForwarding yes/g' /etc/ssh/sshd_config

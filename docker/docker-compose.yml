@@ -1,0 +1,293 @@
+# Copyright (c) 2023 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Eclipse Public License 2.0 which is available at
+# http://www.eclipse.org/legal/epl-2.0
+#
+# SPDX-License-Identifier: EPL-2.0
+
+version: "2.4"
+
+networks:
+  test:
+    name: ${DOCKER_NETWORK:-test}
+
+services:
+
+  zookeeper:
+    networks:
+      - test
+    image: bitnami/zookeeper:3.6.2
+    expose:
+      - "2181"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  artemis:
+    image: vromero/activemq-artemis:2.13.0-alpine
+    networks:
+      - test
+    expose:
+      - "5672"
+    volumes:
+      - ./artemis:/var/lib/artemis/etc-override
+
+  mqtt:
+    image: docker.io/eclipse-mosquitto:1.6.15
+    networks:
+      - test
+    expose:
+      - "1883"
+      - "8883"
+    volumes:
+      - ./mqtt:/mosquitto/config:ro
+
+  kafka:
+    image: bitnami/kafka:2.7.0
+    depends_on:
+      - zookeeper
+    networks:
+      - test
+    expose:
+      - "9092"
+      - "9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_CFG_ADVERTISED_LISTENERS: CLIENT://:9092,INTERNAL://:9093
+      KAFKA_CFG_LISTENERS: CLIENT://:9092,INTERNAL://:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CLIENT:SASL_PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CFG_SASL_MECHANISM_INTER_BROKER_PROTOCOL: PLAIN
+      KAFKA_CFG_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_OPTS: "-Djava.security.auth.login.config=/opt/bitnami/kafka/config/kafka_jaas.conf"
+      KAFKA_ZOOKEEPER_SASL_ENABLED: "false"
+      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_TLS_CLIENT_AUTH: "none"
+
+
+    volumes:
+      - ./kafka/kafka_jaas.conf:/opt/bitnami/kafka/config/kafka_jaas.conf
+
+  rabbitmq:
+    image: docker.io/rabbitmq:3.6.6-management-alpine
+    networks:
+      test:
+        aliases:
+          - rabbitmq-overwrite
+    expose:
+      - "5672"
+      - "15672"
+    environment:
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit log_levels [{connection,error}]
+    volumes:
+      - ./rabbitmq:/etc/rabbitmq:ro
+
+  fluentbit:
+    image: docker.io/fluent/fluent-bit:1.8
+    networks:
+      - test
+    depends_on:
+      - kafka
+    expose:
+      - "2020"
+      - "24224"
+    volumes:
+      - ./fluentbit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+
+  oauth:
+    image: ghcr.io/navikt/mock-oauth2-server:0.5.7
+    networks:
+      - test
+    expose:
+      - "9900"
+    environment:
+      - PORT=9900
+
+  mongodb:
+    image: docker.io/mongo:5.0
+    networks:
+      - test
+    expose:
+      - "27017"
+    command: mongod --storageEngine wiredTiger
+
+  policies:
+    image: ${COMPOSE_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-policies:${DITTO_VERSION:-nightly}
+    depends_on:
+      - mongodb
+    networks:
+      - test
+    env_file: docker-compose.env
+    environment:
+      - TZ=Europe/Berlin
+      - INSTANCE_INDEX=1
+      - BIND_HOSTNAME=policies
+      - REMOTING_IDLE_CPU_LEVEL=2
+      - JAVA_TOOL_OPTIONS=-Xms${POLICIES_MEMORY:-1g} -Xmx${POLICIES_MEMORY:-1g} -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=policies ${TEST_JAVA_OPTIONS}
+      - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
+      - LOG_LEVEL=INFO
+      - LOG_LEVEL_APPLICATION=INFO
+      - POLICY_SNAPSHOT_THRESHOLD=1
+      - POLICY_SNAPSHOT_INTERVAL=${POLICY_SNAPSHOT_INTERVAL:-1s}
+      - POLICY_SUBJECT_EXPIRY_GRANULARITY=5s # configure to 5 seconds in order to test for invalidation in system test
+      - POLICY_SUBJECT_DELETION_ANNOUNCEMENT_GRANULARITY=1s
+      - CLEANUP_ENABLED=false
+      - CLEANUP_TIMER_THRESHOLD=10s
+      - CLEANUP_CREDITS_PER_BATCH=400
+
+  things:
+    image: ${COMPOSE_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-things:${DITTO_VERSION:-nightly}
+    depends_on:
+      - mongodb
+      - policies
+    networks:
+      - test
+    env_file: docker-compose.env
+    environment:
+      - TZ=Europe/Berlin
+      - INSTANCE_INDEX=1
+      - BIND_HOSTNAME=things
+      - REMOTING_IDLE_CPU_LEVEL=2
+      - JAVA_TOOL_OPTIONS=-Xms${THINGS_MEMORY:-1g} -Xmx${THINGS_MEMORY:-1g} -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=things ${TEST_JAVA_OPTIONS}
+      - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
+      - LOG_LEVEL=INFO
+      - LOG_LEVEL_APPLICATION=INFO
+      - THING_SNAPSHOT_INTERVAL=${THING_SNAPSHOT_INTERVAL:-1s}
+      - THING_SNAPSHOT_THRESHOLD=1
+      - CLEANUP_ENABLED=false
+      - CLEANUP_TIMER_THRESHOLD=10s
+      - CLEANUP_CREDITS_PER_BATCH=400
+
+  things-search:
+    image: ${COMPOSE_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-things-search:${DITTO_VERSION:-nightly}
+    depends_on:
+      - mongodb
+      - policies
+      - things
+    networks:
+      - test
+    env_file: docker-compose.env
+    environment:
+      - TZ=Europe/Berlin
+      - INSTANCE_INDEX=1
+      - BIND_HOSTNAME=things-search
+      - REMOTING_IDLE_CPU_LEVEL=2
+      - JAVA_TOOL_OPTIONS=-Xms${THINGS_SEARCH_MEMORY:-1g} -Xmx${THINGS_SEARCH_MEMORY:-1g} -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=things-search ${TEST_JAVA_OPTIONS} ${THINGS_SEARCH_JAVA_OPTIONS}
+      - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
+      - LOG_LEVEL=INFO
+      - LOG_LEVEL_APPLICATION=INFO
+      - EVENT_PROCESSING_ACTIVE=${EVENT_PROCESSING_ACTIVE:-true}
+      - BACKGROUND_SYCN_THROTTLE_PERIOD=1s
+      - BACKGROUND_SYNC_ENABLED=${BACKGROUND_SYNC_ENABLED:-true}
+      - BACKGROUND_SYNC_TOLERANCE_WINDOW=${BACKGROUND_SYNC_TOLERANCE_WINDOW:-2m}
+      - BACKGROUND_SYNC_QUIET_PERIOD=${BACKGROUND_SYNC_QUIET_PERIOD:-5m}
+      - THINGS_SEARCH_UPDATER_STREAM_WRITE_INTERVAL=${THINGS_SEARCH_UPDATER_STREAM_WRITE_INTERVAL:-1s}
+      - THINGS_SEARCH_UPDATER_STREAM_POLICY_CACHE_RETRY_DELAY=${THINGS_SEARCH_UPDATER_STREAM_POLICY_CACHE_RETRY_DELAY:-0s}
+      - THINGS_SEARCH_UPDATER_STREAM_THING_CACHE_RETRY_DELAY=${THINGS_SEARCH_UPDATER_STREAM_THING_CACHE_RETRY_DELAY:-0s}
+      - MONGO_DB_CONNECTION_POOL_SIZE=100
+
+  connectivity:
+    image: ${COMPOSE_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-connectivity:${DITTO_VERSION:-nightly}
+    depends_on:
+      - mongodb
+      - policies
+    networks:
+      - test
+    env_file: docker-compose.env
+    environment:
+      - TZ=Europe/Berlin
+      - INSTANCE_INDEX=1
+      - BIND_HOSTNAME=connectivity
+      - REMOTING_IDLE_CPU_LEVEL=2
+      - JAVA_TOOL_OPTIONS=-Xms${CONNECTIVITY_MEMORY:-1g} -Xmx${CONNECTIVITY_MEMORY:-1g} -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=connectivity ${TEST_JAVA_OPTIONS} -Dditto.connectivity.connection.snapshot.threshold=1 -Dakka.cluster.sharding.updating-state-timeout=10s
+      - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
+      - LOG_LEVEL=INFO
+      - LOG_LEVEL_APPLICATION=INFO
+      - AMQP10_CONSUMER_THROTTLING_INTERVAL=100ms
+      - AMQP10_CONSUMER_THROTTLING_ENABLED=true
+      - AMQP10_CONSUMER_THROTTLING_INTERVAL=1s
+      - AMQP10_CONSUMER_THROTTLING_LIMIT=10
+      - KAFKA_CONSUMER_THROTTLING_ENABLED=true
+      - KAFKA_CONSUMER_THROTTLING_INTERVAL=1s
+      - KAFKA_CONSUMER_THROTTLING_LIMIT=10
+      - CONNECTIVITY_CONNECTION_ENCRYPTION_KEY=vJFSTPE9PO2BtZlcMAwNjs8jdFvQCk0Ya9MVdYjRJUU=
+      - CONNECTIVITY_CONNECTION_ENCRYPTION_ENABLED=true
+      - CONNECTIVITY_CONNECTION_ENCRYPTION_POINTERS.0=/uri
+      - CONNECTIVITY_CONNECTION_ENCRYPTION_POINTERS.1=/credentials/key
+      - CONNECTIVITY_CONNECTION_ENCRYPTION_POINTERS.2=/sshTunnel/credentials/password
+      - CONNECTIVITY_CONNECTION_ENCRYPTION_POINTERS.3=/sshTunnel/credentials/privateKey
+      - CONNECTIVITY_CONNECTION_ENCRYPTION_POINTERS.4=/credentials/parameters/accessKey
+      - CONNECTIVITY_CONNECTION_ENCRYPTION_POINTERS.5=/credentials/parameters/secretKey
+      - CONNECTIVITY_CONNECTION_ENCRYPTION_POINTERS.6=/credentials/parameters/sharedKey
+      - CONNECTIVITY_CONNECTION_ENCRYPTION_POINTERS.7=/credentials/clientSecret
+      - CONNECTIVITY_HTTP_PUSH_MAX_QUEUE_SIZE=100
+      - CONNECTIVITY_LOGGER_PUBLISHER_FLUENCY_HOST=fluentbit
+      - CONNECTIVITY_CONNECTION_ALLOWED_HOSTNAMES=127.0.0.1,localhost,artemis,system-test-container,kafka,mqtt,rabbitmq,ssh,unknown,oauth
+      - CONNECTIVITY_CONNECTION_BLOCKED_HOSTNAMES=127.0.0.1
+      - CONNECTIVITY_ALL_CLIENT_ACTORS_ON_ONE_NODE=true
+      - CONNECTIVITY_MQTT_RECONNECT_FOR_REDELIVERY=true
+      - CONNECTIVITY_MQTT_SEPARATE_PUBLISHER_CLIENT=true
+      - CONNECTION_SOURCE_NUMBER=10
+      - CLEANUP_ENABLED=false
+      - CLEANUP_TIMER_THRESHOLD=10s
+      - CLEANUP_CREDITS_PER_BATCH=400
+      - CONNECTIVITY_HTTP_OAUTH2_ENFORCE_HTTPS=false
+      - CONNECTIVITY_KAFKA_SOURCES_BLOCKED_HOSTNAMES=bosch-iot-suite.com
+      - HONO_CONNECTION_URI=tcp://kafka:9092
+      - HONO_CONNECTION_BOOTSTRAP_SERVERS=kafka:9092
+      - HONO_CONNECTION_SASL_MECHANISM=PLAIN
+
+  gateway:
+    image: ${COMPOSE_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-gateway:${DITTO_VERSION:-nightly}
+    depends_on:
+      - policies
+    networks:
+      - test
+    expose:
+      - "8080"
+    env_file: docker-compose.env
+    environment:
+      - TZ=Europe/Berlin
+      - INSTANCE_INDEX=1
+      - BIND_HOSTNAME=gateway
+      - REMOTING_IDLE_CPU_LEVEL=2
+      - JAVA_TOOL_OPTIONS=-Xms${GATEWAY_MEMORY:-1g} -Xmx${GATEWAY_MEMORY:-1g} -Dconfig.override_with_env_vars=true -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=gateway ${TEST_JAVA_OPTIONS}
+      - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
+      - LOG_LEVEL=INFO
+      - LOG_LEVEL_APPLICATION=INFO
+      - DEVOPS_SECURED=false
+      - DEVOPS_PASSWORD=foobar
+      - STATUS_PASSWORD=status
+      - FORCE_HTTPS=false
+      - ENABLE_PRE_AUTHENTICATION=true
+      - OAUTH_PROTOCOL=http
+      - CONFIG_FORCE_ditto_gateway_authentication_oauth_openid__connect__issuers_ditto_issuer=oauth:9900/ditto
+      - GATEWAY_WEBSOCKET_THROTTLING_ENABLED=true
+      - GATEWAY_WEBSOCKET_THROTTLING_INTERVAL=1s
+      - GATEWAY_WEBSOCKET_THROTTLING_LIMIT=100
+      - WS_SUBSCRIBER_BACKPRESSURE=10
+      - WS_PUBLISHER_BACKPRESSURE=20
+      - GATEWAY_SSE_THROTTLING_ENABLED=true
+      - GATEWAY_SSE_THROTTLING_INTERVAL=1s
+      - GATEWAY_SSE_THROTTLING_LIMIT=100
+
+  ssh:
+    image: ghcr.io/linuxserver/openssh-server:8.6_p1-r3-ls72
+    networks:
+      - test
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Berlin
+      - PUBLIC_KEY=ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC80uc7Ftb9eg7tO7DXorQ9TJWmYBVx9kvfDruYtxm7Lt9FqsddHXLSLGSnBGOhnYelkBc6TBN6YgosL0/TQH/9w19CG6cTZsQlO9KhU0oAp6ur8HkzsYez3UQn4kk1+BaccSpJip67NoMbDZ4+VoksP7OPRN6bCC/f5tg3lZH79Oaos+KCllHAgPWfj/koUYdjAcxNIIPF5pTSKKePCcCHgp85chA42hpPHzkWca87zh0pJMhm1v7VVmsEHk/sQQGUzr8PQDdxNkMEtxeRQulNqmgmPQRcnNeHjnv47VifJDQi3NsNnyrLObpyPj70rufk1OqOD6XrzSgJ33iMvztF
+      - PASSWORD_ACCESS=true
+      - USER_NAME=test
+      - USER_PASSWORD=test
+    volumes:
+      - ./sshd/config:/config:rw
+    expose:
+      - "2222"

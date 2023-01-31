@@ -1,0 +1,20 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Mongo for test" type="docker-deploy" factoryName="docker-image" server-name="Docker" folderName="Ditto testing :: Run configs">
+    <deployment type="docker-image">
+      <settings>
+        <option name="imageTag" value="mongo" />
+        <option name="command" value="mongod --storageEngine wiredTiger" />
+        <option name="containerName" value="localMongo" />
+        <option name="portBindings">
+          <list>
+            <DockerPortBindingImpl>
+              <option name="containerPort" value="27017" />
+              <option name="hostPort" value="27017" />
+            </DockerPortBindingImpl>
+          </list>
+        </option>
+      </settings>
+    </deployment>
+    <method v="2" />
+  </configuration>
+</component>

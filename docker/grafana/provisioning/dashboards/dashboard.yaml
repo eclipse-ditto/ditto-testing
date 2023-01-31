@@ -1,0 +1,19 @@
+apiVersion: 1
+
+providers:
+- name: 'Ditto_0'
+  orgId: 1
+  folder: 'provisioned_0'
+  type: file
+  disableDeletion: true
+  editable: true
+  options:
+    path: /var/lib/grafana/provisioning/dashboards_0
+- name: 'Ditto_1'
+  orgId: 1
+  folder: 'provisioned_1'
+  type: file
+  disableDeletion: true
+  editable: true
+  options:
+    path: /var/lib/grafana/provisioning/dashboards_1

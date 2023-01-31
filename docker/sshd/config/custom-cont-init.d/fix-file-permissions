@@ -1,0 +1,10 @@
+#!/bin/bash
+
+echo "fix file permissions..."
+
+chmod -R 600 /config/ssh_host_keys/ssh_host_*
+
+for f in /config/ssh_host_keys/ssh_host*; do echo "Processing $f file.."; done
+for f in /config/ssh_host_keys/ssh_host*; do echo sed -i 's/\r//g' $f; done
+
+ls -al /config/ssh_host_keys

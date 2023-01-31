@@ -1,0 +1,27 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Gateway for test" type="Application" factoryName="Application" folderName="Ditto testing :: Run configs">
+    <option name="ALTERNATIVE_JRE_PATH" value="17" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
+    <envs>
+      <env name="CHECK_API_TOKEN" value="true" />
+      <env name="CONFIG_FORCE_ditto_gateway_authentication_oauth_openid__connect__issuers_ditto_issuers.0" value="localhost:9900/ditto" />
+      <env name="CONFIG_FORCE_ditto_gateway_authentication_oauth_openid__connect__issuers_ditto_issuers.1" value="localhost:9900/token" />
+      <env name="DEVOPS_PASSWORD" value="foobar" />
+      <env name="DEVOPS_SECURED" value="true" />
+      <env name="ENABLE_PRE_AUTHENTICATION" value="true" />
+      <env name="FORCE_HTTPS" value="false" />
+      <env name="INSTANCE_INDEX" value="1" />
+      <env name="LOG_LEVEL" value="INFO" />
+      <env name="LOG_LEVEL_APPLICATION" value="INFO" />
+      <env name="OAUTH_PROTOCOL" value="http" />
+      <env name="REMOTING_IDLE_CPU_LEVEL" value="2" />
+      <env name="STATUS_PASSWORD" value="status" />
+    </envs>
+    <option name="MAIN_CLASS_NAME" value="org.eclipse.ditto.gateway.service.starter.GatewayService" />
+    <module name="ditto-gateway-service" />
+    <option name="VM_PARAMETERS" value="-Xms1g -Xmx1g -Dakka.cluster.failure-detector.acceptable-heartbeat-pause=20s -Dconfig.override_with_env_vars=true" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

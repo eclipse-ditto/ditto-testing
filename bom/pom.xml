@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) 2023 Contributors to the Eclipse Foundation
+  ~
+  ~ See the NOTICE file(s) distributed with this work for additional
+  ~ information regarding copyright ownership.
+  ~
+  ~ This program and the accompanying materials are made available under the
+  ~ terms of the Eclipse Public License 2.0 which is available at
+  ~ http://www.eclipse.org/legal/epl-2.0
+  ~
+  ~ SPDX-License-Identifier: EPL-2.0
+  -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.eclipse.ditto.testing</groupId>
+        <artifactId>ditto-testing</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>bom</artifactId>
+    <packaging>pom</packaging>
+    <name>Eclipse Ditto :: Testing :: BOM</name>
+
+    <properties>
+        <ditto.version>${revision}</ditto.version>
+        <ditto-client.version>${revision}</ditto-client.version>
+
+        <jackson-bom.version>2.13.4</jackson-bom.version>
+        <asynchttpclient.version>2.10.2</asynchttpclient.version>
+        <netty-bom.version>4.1.86.Final</netty-bom.version>
+        <amqp-client.version>3.5.4</amqp-client.version>
+        <kafka-client.version>3.0.2</kafka-client.version>
+        <typesafe-config.version>1.4.2</typesafe-config.version>
+        <slf4j.version>1.7.36</slf4j.version>
+        <logback.version>1.2.11</logback.version>
+        <restassured.version>4.3.3</restassured.version>
+
+        <junit.version>4.13.2</junit.version>
+        <assertj.version>3.22.0</assertj.version>
+
+        <hivemq-mqtt-client.version>1.3.0</hivemq-mqtt-client.version>
+        <json.version>20220320</json.version>
+        <commons-io.version>2.7</commons-io.version>
+        <commons-lang.version>3.9</commons-lang.version>
+        <awaitility.version>4.0.3</awaitility.version>
+        <vertx-proton.version>3.8.3</vertx-proton.version>
+        <qpid-jms-client.version>1.0.0</qpid-jms-client.version>
+        <jsonassert.version>1.5.0</jsonassert.version>
+        <mongo-java-driver.version>4.1.2</mongo-java-driver.version>
+
+        <scala.version>2.13</scala.version>
+        <scala.version.full>2.13.10</scala.version.full>
+
+        <gatling.version>3.6.1</gatling.version>
+        <akka.version>2.6.17</akka.version>
+        <akka-http.version>10.2.7</akka-http.version>
+
+        <!-- ### Provided dependencies versions -->
+        <jsr302.version>3.0.2</jsr302.version>
+
+        <!-- test dependency versions -->
+        <commons-logging.version>1.2</commons-logging.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- ### Ditto artifacts ### -->
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-json</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-json-cbor</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-protocol</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-internal-utils-jwt</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-base-model</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-connectivity-model</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-jwt-model</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-things-model</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-things-model</artifactId>
+                <type>test-jar</type>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-policies-model</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-messages-model</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-thingsearch-model</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-things-api</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-policies-api</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-connectivity-api</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-internal-utils-protocol</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-base-service</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-internal-utils-config</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-internal-utils-health</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-internal-utils-akka</artifactId>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-client</artifactId>
+                <version>${ditto-client.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.typesafe.akka</groupId>
+                <artifactId>akka-actor_${scala.version}</artifactId>
+                <version>${akka.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.typesafe.akka</groupId>
+                <artifactId>akka-stream_${scala.version}</artifactId>
+                <version>${akka.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.typesafe.akka</groupId>
+                <artifactId>akka-slf4j_${scala.version}</artifactId>
+                <version>${akka.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.typesafe.akka</groupId>
+                <artifactId>akka-http_${scala.version}</artifactId>
+                <version>${akka-http.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.typesafe.akka</groupId>
+                <artifactId>akka-http-spray-json_${scala.version}</artifactId>
+                <version>${akka-http.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.typesafe.akka</groupId>
+                <artifactId>akka-http-core_${scala.version}</artifactId>
+                <version>${akka-http.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.rabbitmq</groupId>
+                <artifactId>amqp-client</artifactId>
+                <version>${amqp-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>kafka-clients</artifactId>
+                <version>${kafka-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>kafka_${scala.version}</artifactId>
+                <version>${kafka-client.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.hivemq</groupId>
+                <artifactId>hivemq-mqtt-client</artifactId>
+                <version>${hivemq-mqtt-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.typesafe</groupId>
+                <artifactId>config</artifactId>
+                <version>${typesafe-config.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.json</groupId>
+                <artifactId>json</artifactId>
+                <version>${json.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.rest-assured</groupId>
+                <artifactId>rest-assured</artifactId>
+                <version>${restassured.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>${junit.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>${assertj.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.gatling.highcharts</groupId>
+                <artifactId>gatling-charts-highcharts</artifactId>
+                <version>${gatling.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.gatling</groupId>
+                <artifactId>gatling-app</artifactId>
+                <version>${gatling.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>${commons-io.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.asynchttpclient</groupId>
+                <artifactId>async-http-client</artifactId>
+                <version>${asynchttpclient.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.asynchttpclient</groupId>
+                <artifactId>async-http-client-extras-guava</artifactId>
+                <version>${asynchttpclient.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <type>pom</type>
+                <version>${netty-bom.version}</version>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.awaitility</groupId>
+                <artifactId>awaitility</artifactId>
+                <version>${awaitility.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vertx</groupId>
+                <artifactId>vertx-proton</artifactId>
+                <version>${vertx-proton.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.qpid</groupId>
+                <artifactId>qpid-jms-client</artifactId>
+                <version>${qpid-jms-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>${commons-lang.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-json</artifactId>
+                <type>test-jar</type>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-base-model</artifactId>
+                <type>test-jar</type>
+                <version>${ditto.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.skyscreamer</groupId>
+                <artifactId>jsonassert</artifactId>
+                <version>${jsonassert.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.mongodb</groupId>
+                <artifactId>mongodb-driver-sync</artifactId>
+                <version>${mongo-java-driver.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.scala-lang</groupId>
+                <artifactId>scala-library</artifactId>
+                <version>${scala.version.full}</version>
+            </dependency>
+
+            <!-- include commons-logging in test scope to pacify netty -->
+            <dependency>
+                <groupId>commons-logging</groupId>
+                <artifactId>commons-logging</artifactId>
+                <version>${commons-logging.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- ### Provided ### -->
+            <dependency>
+                <groupId>com.google.code.findbugs</groupId>
+                <artifactId>jsr305</artifactId>
+                <version>${jsr302.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.ditto</groupId>
+                <artifactId>ditto-utils-jsr305</artifactId>
+                <version>${ditto.version}</version>
+                <scope>provided</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

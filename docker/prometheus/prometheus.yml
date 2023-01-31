@@ -1,0 +1,41 @@
+---
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: prometheus
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'prometheus:9090'
+  - job_name: policies
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:9010'
+  - job_name: things
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:9011'
+  - job_name: things-search
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:9013'
+  - job_name: connectivity
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:9014'
+  - job_name: gateway
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:9015'
+  - job_name: solutions
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'host.docker.internal:9019'

@@ -1,0 +1,22 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Policies for test" type="Application" factoryName="Application" folderName="Ditto testing :: Run configs">
+    <option name="ALTERNATIVE_JRE_PATH" value="17" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
+    <envs>
+      <env name="INSTANCE_INDEX" value="1" />
+      <env name="LOG_LEVEL" value="INFO" />
+      <env name="LOG_LEVEL_APPLICATION" value="INFO" />
+      <env name="POLICY_SNAPSHOT_INTERVAL" value="1s" />
+      <env name="POLICY_SNAPSHOT_THRESHOLD" value="1" />
+      <env name="POLICY_SUBJECT_DELETION_ANNOUNCEMENT_GRANULARITY" value="1s" />
+      <env name="POLICY_SUBJECT_EXPIRY_GRANULARITY" value="5s" />
+      <env name="REMOTING_IDLE_CPU_LEVEL" value="2" />
+    </envs>
+    <option name="MAIN_CLASS_NAME" value="org.eclipse.ditto.policies.service.starter.PoliciesService" />
+    <module name="ditto-policies-service" />
+    <option name="VM_PARAMETERS" value="-Xms1g -Xmx1g -Dakka.cluster.failure-detector.acceptable-heartbeat-pause=20s" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

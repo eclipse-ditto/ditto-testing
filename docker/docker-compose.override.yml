@@ -1,0 +1,124 @@
+# Copyright (c) 2023 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Eclipse Public License 2.0 which is available at
+# http://www.eclipse.org/legal/epl-2.0
+#
+# SPDX-License-Identifier: EPL-2.0
+
+version: "2.4"
+# This file is used for local testing. It's getting deleted when running on jenkins because we want to avoid
+# port conflicts by parallel test runs.
+services:
+  artemis:
+    ports:
+      - ${ARTEMIS_PORT:-5673}:5672
+
+  mqtt:
+    ports:
+      - ${MQTT_PORT_TCP:-1883}:1883
+      - ${MQTT_PORT_SSL:-8883}:8883
+
+  zookeeper:
+    ports:
+      - ${ZOOKEEPER_PORT_TCP:-2181}:2181
+
+  kafka:
+    ports:
+      - ${KAFKA_PORT_TCP:-9092}:9092
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: CLIENT://localhost:9092,INTERNAL://:9093
+
+  rabbitmq:
+    ports:
+      - ${RABBITMQ_PORT_TCP:-5672}:5672
+      - ${RABBITMQ_PORT_SSL:-15672}:15672
+
+  fluentbit:
+    ports:
+      - ${FLUENTBIT_TCP:-24224}:24224
+      - ${FLUENTBIT_METRICS:-2020}:2020
+
+  oauth:
+    ports:
+      - ${OAUTH_PORT_TCP:-9900}:9900
+
+  mongodb:
+    ports:
+      - ${MONGODB_PORT_TCP:-27017}:27017
+    command: mongod --storageEngine wiredTiger # start without replicaset param
+
+  gateway:
+    environment:
+      - AUTH_HTTP_PROXY_ENABLED=${PROXY_ENABLED:-false}
+      - AUTH_HTTP_PROXY_HOST=${PROXY_HOST:-172.17.0.1}
+      - AUTH_HTTP_PROXY_PORT=${PROXY_PORT:-3128}
+    ports:
+      - ${IOT_THINGS_PORT_HTTP:-8080}:8080
+
+  connectivity:
+    environment:
+      - HONO_CONNECTION_URI="tcp://localhost:9092"
+      - HONO_CONNECTION_BOOTSTRAP_SERVERS="localhost:9092"
+      - HONO_CONNECTION_SASL_MECHANISM="PLAIN"
+
+  ssh:
+    ports:
+      - ${SSH_PORT_TCP:-2222}:2222
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.36
+    networks:
+      - test
+    expose:
+      - "4317"
+      - "4318"
+      - "16686"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - ${JAEGER_PORT_OTLP_GRPC_TCP:-4317}:4317
+      - ${JAEGER_PORT_OTLP_HTTP_TCP:-4318}:4318
+      - ${JAEGER_PORT_TCP:-16686}:16686
+
+  prometheus:
+    image: prom/prometheus:v2.36.2
+    networks:
+      - test
+    volumes:
+      - ./prometheus:/etc/prometheus
+    expose:
+      - "9090"
+    ports:
+      - ${PROMETHEUS_PORT_TCP:-9090}:9090
+
+  grafana:
+    image: grafana/grafana:8.5.6
+    networks:
+      - test
+    volumes:
+      - ./grafana/provisioning/dashboards:/var/lib/grafana/provisioning/dashboards
+      - ./../../ditto/deployment/operations/grafana-datasources:/var/lib/grafana/provisioning/datasources
+      - ./../../ditto/deployment/operations/grafana-dashboards:/var/lib/grafana/provisioning/dashboards_0
+    expose:
+      - "3000"
+    environment:
+      - GF_USERS_SIGNUP=false
+      - GF_ALLOW_ORG_CREATE=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_AUTH_BASIC_ENABLED=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_ANONYMOUS_ORG_NAME=Main Org.
+      - GF_SMTP_ENABLED=false
+      - GF_PATHS_PROVISIONING=/var/lib/grafana/provisioning
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_UNIFIED_ALERTING_ENABLED=false
+      - GF_ALERTING_ENABLED=true
+      - TZ=Europe/Berlin
+    ports:
+      - ${GRAFANA_PORT_TCP:-3000}:3000

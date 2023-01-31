@@ -1,0 +1,23 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="OAuth Mock for test" type="docker-deploy" factoryName="docker-image" server-name="Docker" folderName="Ditto testing :: Run configs">
+    <deployment type="docker-image">
+      <settings>
+        <option name="imageTag" value="ghcr.io/navikt/mock-oauth2-server:0.5.7" />
+        <option name="containerName" value="localOAuthMock" />
+        <option name="envVars">
+          <list>
+          </list>
+        </option>
+        <option name="portBindings">
+          <list>
+            <DockerPortBindingImpl>
+              <option name="containerPort" value="8080" />
+              <option name="hostPort" value="9900" />
+            </DockerPortBindingImpl>
+          </list>
+        </option>
+      </settings>
+    </deployment>
+    <method v="2" />
+  </configuration>
+</component>

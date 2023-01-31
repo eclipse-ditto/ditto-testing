@@ -1,0 +1,12 @@
+.checkstyle
+.classpath
+.idea
+*.iml
+logs/
+*.log
+.project
+.settings
+*.swp
+target/
+.env
+/docker/sshd/config/sshd.pid

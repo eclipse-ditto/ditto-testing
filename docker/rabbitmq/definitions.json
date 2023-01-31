@@ -1,0 +1,16 @@
+{
+  "users":[
+    {"name":"guest","password":"guest","tags":"administrator"}
+  ],
+  "vhosts":[
+    {"name":"/"}
+  ],
+  "permissions":[
+    {"user":"guest","vhost":"/","configure":".*","write":".*","read":".*"}
+  ],
+  "parameters":[],
+  "policies":[],
+  "exchanges": [],
+  "queues": [],
+  "bindings": []
+}

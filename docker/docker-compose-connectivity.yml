@@ -1,0 +1,89 @@
+# Copyright (c) 2023 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Eclipse Public License 2.0 which is available at
+# http://www.eclipse.org/legal/epl-2.0
+#
+# SPDX-License-Identifier: EPL-2.0
+
+# docker-compose file for local testing with services running in IntelliJ
+# run docker-compose -f docker-compose-connectivity.yml up -d
+version: "2.4"
+
+services:
+
+  artemis:
+    image: vromero/activemq-artemis:2.13.0-alpine    
+    ports:
+      - 5673:5672
+      # for management console: http://localhost:8161/console
+      - 8161:8161
+    volumes:
+      - ./artemis:/var/lib/artemis/etc-override
+    environment:
+      # login for management console
+      ARTEMIS_USERNAME: artemis
+      ARTEMIS_PASSWORD: ditto
+
+  mqtt:
+    image: docker.io/eclipse-mosquitto:1.6.15
+    ports:
+      - "1883:1883"
+      - "8883:8883"
+    volumes:
+      - ./mqtt:/mosquitto/config:ro
+
+  zookeeper:
+    image: bitnami/zookeeper:3.6.2
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  kafka:
+    image: bitnami/kafka:2.7.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: CLIENT://localhost:9092,INTERNAL://:9093
+      KAFKA_LISTENERS: CLIENT://:9092,INTERNAL://:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CLIENT:SASL_PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: PLAIN
+      KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_OPTS: "-Djava.security.auth.login.config=/opt/bitnami/kafka/config/kafka_jaas.conf"
+      ZOOKEEPER_SASL_ENABLED: "false"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+
+    volumes:
+      - ./kafka/kafka_jaas.conf:/opt/bitnami/kafka/config/kafka_jaas.conf
+
+  rabbitmq:
+    image: docker.io/rabbitmq:3.6.6-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit log_levels [{connection,error}]
+    volumes:
+      - ./rabbitmq:/etc/rabbitmq:ro
+
+  ssh:
+    image: ghcr.io/linuxserver/openssh-server:8.6_p1-r3-ls72
+    ports:
+      - "2222:2222"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Berlin
+      - PUBLIC_KEY=ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC80uc7Ftb9eg7tO7DXorQ9TJWmYBVx9kvfDruYtxm7Lt9FqsddHXLSLGSnBGOhnYelkBc6TBN6YgosL0/TQH/9w19CG6cTZsQlO9KhU0oAp6ur8HkzsYez3UQn4kk1+BaccSpJip67NoMbDZ4+VoksP7OPRN6bCC/f5tg3lZH79Oaos+KCllHAgPWfj/koUYdjAcxNIIPF5pTSKKePCcCHgp85chA42hpPHzkWca87zh0pJMhm1v7VVmsEHk/sQQGUzr8PQDdxNkMEtxeRQulNqmgmPQRcnNeHjnv47VifJDQi3NsNnyrLObpyPj70rufk1OqOD6XrzSgJ33iMvztF
+      - PASSWORD_ACCESS=true
+      - USER_NAME=test
+      - USER_PASSWORD=test
+    volumes:
+      - ./sshd/config:/config:rw

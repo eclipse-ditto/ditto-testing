@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) 2023 Contributors to the Eclipse Foundation
+  ~
+  ~ See the NOTICE file(s) distributed with this work for additional
+  ~ information regarding copyright ownership.
+  ~
+  ~ This program and the accompanying materials are made available under the
+  ~ terms of the Eclipse Public License 2.0 which is available at
+  ~ http://www.eclipse.org/legal/epl-2.0
+  ~
+  ~ SPDX-License-Identifier: EPL-2.0
+  -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.eclipse.ditto.testing</groupId>
+    <artifactId>ditto-testing</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+    <name>Eclipse Ditto :: Testing</name>
+
+    <scm>
+        <connection>${release.scm.connection}</connection>
+        <developerConnection>${release.scm.developerConnection}</developerConnection>
+        <url>${release.scm.url}</url>
+    </scm>
+
+    <modules>
+        <module>bom</module>
+        <module>common</module>
+        <module>system</module>
+        <module>system-sync</module>
+    </modules>
+
+    <properties>
+        <revision>0-SNAPSHOT</revision>
+
+        <javac.source>17</javac.source>
+        <javac.target>17</javac.target>
+
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <release.scm.connection>scm:git:git@github.com:eclipse-ditto/ditto-testing.git</release.scm.connection>
+        <release.scm.developerConnection>scm:git:https://github.com/eclipse-ditto/ditto-testing.git</release.scm.developerConnection>
+        <release.scm.url>https://github.com/eclipse-ditto/ditto-testing.git</release.scm.url>
+
+        <skipITs>true</skipITs>
+
+        <latestDockerTag>${project.version}</latestDockerTag>
+
+        <docker.network.name>${project.artifactId}</docker.network.name>
+
+        <ditto.thirdPartyLicences.excludedGroups>
+            (org\.eclipse\.ditto.*)
+        </ditto.thirdPartyLicences.excludedGroups>
+
+        <!-- plugin versions -->
+        <gatling-maven-plugin.version>3.1.2</gatling-maven-plugin.version>
+        <scala-maven-plugin.version>4.5.3</scala-maven-plugin.version>
+        <maven-failsafe-plugin.version>3.0.0-M5</maven-failsafe-plugin.version>
+        <port-allocator-maven-plugin.version>1.2</port-allocator-maven-plugin.version>
+        <gmaven-plugin.version>1.5</gmaven-plugin.version>
+        <maven-jar-plugin.version>3.1.1</maven-jar-plugin.version>
+        <maven-install-plugin.version>2.5.2</maven-install-plugin.version>
+        <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
+        <maven-release-plugin.version>2.5.3</maven-release-plugin.version>
+        <maven-resources-plugin.version>3.1.0</maven-resources-plugin.version>
+        <maven-build-helper-plugin.version>3.2.0</maven-build-helper-plugin.version>
+    </properties>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven-compiler-plugin.version}</version>
+                    <configuration>
+                        <source>${javac.source}</source>
+                        <target>${javac.target}</target>
+                        <encoding>UTF-8</encoding>
+                        <forceJavacCompilerUse>true</forceJavacCompilerUse>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>${maven-resources-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>build-helper-maven-plugin</artifactId>
+                    <version>${maven-build-helper-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>${maven-install-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>${maven-jar-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>com.mycila</groupId>
+                    <artifactId>license-maven-plugin</artifactId>
+                    <version>3.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>license-maven-plugin</artifactId>
+                    <version>2.0.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.gmaven</groupId>
+                    <artifactId>gmaven-plugin</artifactId>
+                    <version>${gmaven-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.sonatype.plugins</groupId>
+                    <artifactId>port-allocator-maven-plugin</artifactId>
+                    <version>${port-allocator-maven-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${maven-failsafe-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>io.gatling</groupId>
+                    <artifactId>gatling-maven-plugin</artifactId>
+                    <version>${gatling-maven-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>net.alchim31.maven</groupId>
+                    <artifactId>scala-maven-plugin</artifactId>
+                    <version>${scala-maven-plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <groupId>com.mycila</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+                <inherited>false</inherited>
+                <configuration>
+                    <header>${project.basedir}/legal/headers/license-header.txt</header>
+                    <validHeaders>
+<!--                        <header>${project.basedir}/legal/headers/license-header-2021.txt</header>-->
+                    </validHeaders>
+                    <headerDefinitions>
+                        <headerDefinition>${project.basedir}/legal/headers/license-header-xml-def.xml</headerDefinition>
+                    </headerDefinitions>
+                    <includes>
+                        <include>**/*.java</include>
+                        <include>**/*.scala</include>
+                        <include>**/pom.xml</include>
+                    </includes>
+                    <excludes>
+                        <exclude>target/**</exclude>
+                    </excludes>
+                    <aggregate>true</aggregate>
+                    <quiet>false</quiet>
+                    <failIfMissing>true</failIfMissing>
+                    <strictCheck>false</strictCheck>
+                    <useDefaultExcludes>true</useDefaultExcludes>
+                    <encoding>UTF-8</encoding>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <phase>validate</phase>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>generate-third-party-licenses</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>license-maven-plugin</artifactId>
+                        <inherited>false</inherited>
+                        <executions>
+                            <execution>
+                                <id>add-third-party</id>
+                                <goals>
+                                    <goal>aggregate-add-third-party</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>./legal</outputDirectory>
+                                    <excludedGroups>${ditto.thirdPartyLicences.excludedGroups}</excludedGroups>
+                                    <includedScopes>compile,runtime</includedScopes>
+                                    <failOnMissing>true</failOnMissing>
+                                    <fileTemplate>./legal/templates/third-party-file.ftl</fileTemplate>
+                                    <thirdPartyFilename>NOTICE-THIRD-PARTY.md</thirdPartyFilename>
+                                    <licenseMergesFile>./legal/templates/licenses-merges-file</licenseMergesFile>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+</project>

@@ -49,14 +49,10 @@ public class CommonTestConfig {
 
     private static final String PROPERTY_GATEWAY_URL = GATEWAY_PREFIX + "url";
     private static final String PROPERTY_GATEWAY_WS_URL = GATEWAY_PREFIX + "ws-url";
-    private static final String PROPERTY_DEVELOPER_CONSOLE_URL = "developer-console.url";
-
     private static final String CONNECTIVITY_PREFIX = "connectivity.";
     private static final String RABBITMQ_PREFIX = CONNECTIVITY_PREFIX + "rabbitmq.";
     private static final String PROPERTY_RABBITMQ_HOSTNAME = RABBITMQ_PREFIX + PROPERTY_LEAF_HOSTNAME;
     private static final String PROPERTY_RABBITMQ_TUNNEL = RABBITMQ_PREFIX + "tunnel";
-    private static final String PROPERTY_RABBITMQ_OVERWRITE_HOSTNAME = RABBITMQ_PREFIX + PROPERTY_LEAF_OVERWRITE_HOSTNAME;
-
     private static final String PROPERTY_RABBITMQ_PORT = RABBITMQ_PREFIX + PROPERTY_LEAF_PORT;
     private static final String PROPERTY_RABBITMQ_USER = RABBITMQ_PREFIX + "username";
     private static final String PROPERTY_RABBITMQ_PASSWORD = RABBITMQ_PREFIX + "password";
@@ -152,14 +148,6 @@ public class CommonTestConfig {
         return conf.getString(PROPERTY_MONGODB_URI);
     }
 
-    public String getDeveloperConsoleUrl(final String subUrl) {
-        return concatUrl(getDeveloperConsoleBaseUrl(), subUrl);
-    }
-
-    public String getDeveloperConsoleBaseUrl() {
-        return conf.getString(PROPERTY_DEVELOPER_CONSOLE_URL);
-    }
-
     public String getGatewayUrl(final String subUrl) {
         return concatUrl(getGatewayBaseUrl(), subUrl);
     }
@@ -200,10 +188,6 @@ public class CommonTestConfig {
 
     public String getRabbitMqTunnel() {
         return conf.getString(PROPERTY_RABBITMQ_TUNNEL);
-    }
-
-    public String getRabbitMqOverwriteHostname() {
-        return conf.getString(PROPERTY_RABBITMQ_OVERWRITE_HOSTNAME);
     }
 
     public int getRabbitMqPort() {

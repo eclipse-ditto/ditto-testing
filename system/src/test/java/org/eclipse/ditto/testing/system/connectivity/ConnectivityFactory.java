@@ -58,6 +58,7 @@ import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.Solution;
+import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.client.ConnectionsClient;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.slf4j.Logger;
@@ -140,21 +141,51 @@ public final class ConnectivityFactory {
         this.defaultHeaderMapping = Collections.emptyMap();
         this.getReplyTargetAddress = name -> null;
         maxClientCount = DEFAULT_MAX_CLIENT_COUNT;
-        connectionName1 = disambiguate(connectionNamePrefix + 1);
-        connectionName2 = disambiguate(connectionNamePrefix + 2);
-        connectionNameWithPayloadMapping = disambiguate(connectionNamePrefix + 3);
-        connectionNameWithAuthPlaceholderOnHEADER_ID = disambiguate(connectionNamePrefix + 4);
-        connectionNameWithNamespaceAndRqlFilter = disambiguate(connectionNamePrefix + 5);
-        connectionNameWithEnforcementEnabled = disambiguate(connectionNamePrefix + 6);
-        connectionNameWithHeaderMapping = disambiguate(connectionNamePrefix + 7);
-        connectionNameWithMultiplePayloadMappings = disambiguate(connectionNamePrefix + 8);
-        connectionNameWithExtraFields = disambiguate(connectionNamePrefix + 9);
-        connectionWithRawMessageMapper1 = disambiguate(connectionNamePrefix + 10);
-        connectionWithRawMessageMapper2 = disambiguate(connectionNamePrefix + 11);
-        connectionWithTunnel = disambiguate(connectionNamePrefix + 12);
-        connectionWithConnectionAnnouncements = disambiguate(connectionNamePrefix + 13);
-        connectionWith2Sources = disambiguate(connectionNamePrefix + 14);
-        connectionHonoName = disambiguate(connectionNamePrefix + 15);
+        connectionName1 = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 1
+        );
+        connectionName2 = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 2
+        );
+        connectionNameWithPayloadMapping = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 3
+        );
+        connectionNameWithAuthPlaceholderOnHEADER_ID = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 4
+        );
+        connectionNameWithNamespaceAndRqlFilter = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 5
+        );
+        connectionNameWithEnforcementEnabled = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 6
+        );
+        connectionNameWithHeaderMapping = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 7
+        );
+        connectionNameWithMultiplePayloadMappings = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 8
+        );
+        connectionNameWithExtraFields = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 9
+        );
+        connectionWithRawMessageMapper1 = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 10
+        );
+        connectionWithRawMessageMapper2 = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 11
+        );
+        connectionWithTunnel = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 12
+        );
+        connectionWithConnectionAnnouncements = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 13
+        );
+        connectionWith2Sources = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 14
+        );
+        connectionHonoName = disambiguateConnectionName(
+                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 15
+        );
     }
 
     // copy constructor
@@ -225,41 +256,24 @@ public final class ConnectivityFactory {
     }
 
     public String getConnectionName(final ConnectionCategory category) {
-        switch (category) {
-            case CONNECTION1:
-                return connectionName1;
-            case CONNECTION2:
-                return connectionName2;
-            case CONNECTION_WITH_PAYLOAD_MAPPING:
-                return connectionNameWithPayloadMapping;
-            case CONNECTION_WITH_AUTH_PLACEHOLDER_ON_HEADER_ID:
-                return connectionNameWithAuthPlaceholderOnHEADER_ID;
-            case CONNECTION_WITH_NAMESPACE_AND_RQL_FILTER:
-                return connectionNameWithNamespaceAndRqlFilter;
-            case CONNECTION_WITH_ENFORCEMENT_ENABLED:
-                return connectionNameWithEnforcementEnabled;
-            case CONNECTION_WITH_HEADER_MAPPING:
-                return connectionNameWithHeaderMapping;
-            case CONNECTION_WITH_MULTIPLE_PAYLOAD_MAPPINGS:
-                return connectionNameWithMultiplePayloadMappings;
-            case CONNECTION_WITH_EXTRA_FIELDS:
-                return connectionNameWithExtraFields;
-            case CONNECTION_WITH_RAW_MESSAGE_MAPPER_1:
-                return connectionWithRawMessageMapper1;
-            case CONNECTION_WITH_RAW_MESSAGE_MAPPER_2:
-                return connectionWithRawMessageMapper2;
-            case CONNECTION_WITH_SSH_TUNNEL:
-                return connectionWithTunnel;
-            case CONNECTION_WITH_CONNECTION_ANNOUNCEMENTS:
-                return connectionWithConnectionAnnouncements;
-            case CONNECTION_WITH_2_SOURCES:
-                return connectionWith2Sources;
-            case CONNECTION_HONO:
-                return connectionHonoName;
-            case NONE:
-                return "noname";
-        }
-        throw new IllegalArgumentException("Unknown connection category provided.");
+        return switch (category) {
+            case CONNECTION1 -> connectionName1;
+            case CONNECTION2 -> connectionName2;
+            case CONNECTION_WITH_PAYLOAD_MAPPING -> connectionNameWithPayloadMapping;
+            case CONNECTION_WITH_AUTH_PLACEHOLDER_ON_HEADER_ID -> connectionNameWithAuthPlaceholderOnHEADER_ID;
+            case CONNECTION_WITH_NAMESPACE_AND_RQL_FILTER -> connectionNameWithNamespaceAndRqlFilter;
+            case CONNECTION_WITH_ENFORCEMENT_ENABLED -> connectionNameWithEnforcementEnabled;
+            case CONNECTION_WITH_HEADER_MAPPING -> connectionNameWithHeaderMapping;
+            case CONNECTION_WITH_MULTIPLE_PAYLOAD_MAPPINGS -> connectionNameWithMultiplePayloadMappings;
+            case CONNECTION_WITH_EXTRA_FIELDS -> connectionNameWithExtraFields;
+            case CONNECTION_WITH_RAW_MESSAGE_MAPPER_1 -> connectionWithRawMessageMapper1;
+            case CONNECTION_WITH_RAW_MESSAGE_MAPPER_2 -> connectionWithRawMessageMapper2;
+            case CONNECTION_WITH_SSH_TUNNEL -> connectionWithTunnel;
+            case CONNECTION_WITH_CONNECTION_ANNOUNCEMENTS -> connectionWithConnectionAnnouncements;
+            case CONNECTION_WITH_2_SOURCES -> connectionWith2Sources;
+            case CONNECTION_HONO -> connectionHonoName;
+            case NONE -> "noname";
+        };
     }
 
     public String[] allConnectionNames(final String... extraNames) {
@@ -368,7 +382,7 @@ public final class ConnectivityFactory {
         final String username = solutionSupplier.getSolution().getUsername();
         return Map.ofEntries(
                 entry(ConnectionCategory.CONNECTION1, () -> getSingleConnection(username, connectionName1,
-                        Set.of("integration:" + username + ":" + client.getClientId()))),
+                        Set.of("integration:" + username + ":" + TestingContext.DEFAULT_SCOPE))),
                 entry(ConnectionCategory.CONNECTION2, () -> setupSingleConnectionReceivingNackResponses(connectionName2, maxClientCount)),
                 entry(ConnectionCategory.CONNECTION_WITH_PAYLOAD_MAPPING,
                         () -> setupSingleConnectionWithPayloadMapping(connectionNameWithPayloadMapping)),
@@ -415,7 +429,7 @@ public final class ConnectivityFactory {
                 connectionType, connectionName, getConnectionUri(), clientCount);
 
         final Connection singleConnection = getSingleConnection(solution.getUsername(), connectionName);
-        final Connection singleConnectionWithExpectedNackResponses = singleConnection.toBuilder()
+        return singleConnection.toBuilder()
                 .clientCount(clientCount)
                 .setSources(singleConnection.getSources().stream()
                         .map(source -> ConnectivityModelFactory.newSourceBuilder(source)
@@ -428,7 +442,6 @@ public final class ConnectivityFactory {
                                 .build())
                         .collect(Collectors.toList()))
                 .build();
-        return singleConnectionWithExpectedNackResponses;
     }
 
     public Connection getSingleConnection(final String username, final String connectionName) {
@@ -488,10 +501,6 @@ public final class ConnectivityFactory {
 
     public Connection getConnectionHono(final String connectionId) {
         return getSingleConnection(connectionId);
-//        return modelBuilder.buildHonoConnectionModel(
-//                solutionSupplier.getSolution().getId(),
-//                connectionId,
-//                Map.of());
     }
 
     public Connection getSingleConnection(final String connectionName) {
@@ -739,7 +748,7 @@ public final class ConnectivityFactory {
                             .timeout(LIVE_STATUS_POLL_TIMEOUT).untilAsserted(
                                     () -> {
                                         final ConnectivityStatus connectivityStatus =
-                                                getLiveStatusOfConnection(solution, connectionId);
+                                                getLiveStatusOfConnection(connectionId);
                                         LOGGER.info("Connectivity status of connection <{}> is {} (expected {}).",
                                                 connectionId, connectivityStatus, expectedStatus);
                                         assertThat((CharSequence) connectivityStatus).isEqualTo(expectedStatus);
@@ -747,8 +756,7 @@ public final class ConnectivityFactory {
                 });
     }
 
-    public ConnectivityStatus getLiveStatusOfConnection(final Solution solution,
-            final CharSequence connectionId) {
+    public ConnectivityStatus getLiveStatusOfConnection(final CharSequence connectionId) {
         final Response statusResponse = ConnectionsClient.getInstance()
                 .getConnectionStatus(connectionId)
                 .withDevopsAuth()
@@ -826,13 +834,6 @@ public final class ConnectivityFactory {
 
         default String get() {
             return get(false, true);
-//            final URI uri = URI.create(get());
-//            try {
-//                return new URI(uri.getScheme(), uri.getUserInfo(), DOCKER_HOST_IP, uri.getPort(), uri.getPath(),
-//                        uri.getQuery(), uri.getFragment()).toString();
-//            } catch (final URISyntaxException e) {
-//                throw new IllegalArgumentException("Provided URI is invalid: " + e.getMessage());
-//            }
         }
     }
 
@@ -881,6 +882,10 @@ public final class ConnectivityFactory {
 
     public String disambiguate(final String prefix) {
         return String.format("%s_%X", prefix, DISAMBIGUATION_COUNTER.getAndIncrement());
+    }
+
+    public String disambiguateConnectionName(final String username, final String prefix) {
+        return String.format("%s_%s_%X", username, prefix, DISAMBIGUATION_COUNTER.getAndIncrement());
     }
 
 }

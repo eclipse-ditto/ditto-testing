@@ -90,10 +90,10 @@ public final class QueryThingsIT {
                     createThingWithRandomAttrValues(createThingId("user1", idGenerator())), 10);
             thing1Id = persistThingAndWaitTillAvailable(createThing1());
             thing2Id = persistThingAndWaitTillAvailable(createThing2());
-            final AuthClient suiteAuthClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
+            final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
             persistThingsAndWaitTillAvailable(
                     i -> createThingWithRandomAttrValues(createThingId("user2", idGenerator())),
-                    suiteAuthClient, 4, V_2);
+                    authClient, 4, V_2);
         }
 
         private static Thing createThingWithRandomAttrValues(final ThingId thingId) {
@@ -267,7 +267,7 @@ public final class QueryThingsIT {
         }
 
         private SearchMatcher unauthorizedSearch(final SearchFilter searchFilter) {
-            return search(searchFilter).withJWT(serviceEnv.getUnauthorizedAccessToken());
+            return search(searchFilter).withJWT(serviceEnv.getTestingContext5().getOAuthClient().getAccessToken());
         }
     }
 
@@ -277,10 +277,10 @@ public final class QueryThingsIT {
         private static ThingId thing1Id;
 
         protected void createTestData() {
-            final AuthClient suiteAuthClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
+            final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
             final Thing thing1 =
                     ThingsModelFactory.newThingBuilder().setId(createThingId("thing1", idGenerator())).build();
-            thing1Id = persistThingAndWaitTillAvailable(thing1, JSON_SCHEMA_VERSION, suiteAuthClient);
+            thing1Id = persistThingAndWaitTillAvailable(thing1, JSON_SCHEMA_VERSION, authClient);
         }
 
         @Test

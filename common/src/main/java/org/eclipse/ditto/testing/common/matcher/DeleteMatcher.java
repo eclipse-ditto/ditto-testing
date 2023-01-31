@@ -14,6 +14,7 @@ package org.eclipse.ditto.testing.common.matcher;
 
 import java.util.List;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import org.hamcrest.Matcher;
@@ -53,7 +54,7 @@ public final class DeleteMatcher extends HttpVerbMatcher<DeleteMatcher> {
     }
 
     @Override
-    protected void doLog(final Logger logger, final String path, final String entityType) {
+    protected void doLog(final Logger logger, final String path, @Nullable final String entityType) {
         logger.info(DELETE_MESSAGE_TEMPLATE, entityType, path);
     }
 

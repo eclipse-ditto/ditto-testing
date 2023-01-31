@@ -30,7 +30,7 @@
         <ditto.version>${revision}</ditto.version>
         <ditto-client.version>${revision}</ditto-client.version>
 
-        <jackson-bom.version>2.13.4</jackson-bom.version>
+        <jackson-bom.version>2.13.4.20221013</jackson-bom.version>
         <asynchttpclient.version>2.10.2</asynchttpclient.version>
         <netty-bom.version>4.1.86.Final</netty-bom.version>
         <amqp-client.version>3.5.4</amqp-client.version>

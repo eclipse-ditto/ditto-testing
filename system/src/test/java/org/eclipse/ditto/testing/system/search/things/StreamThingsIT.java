@@ -27,7 +27,6 @@ import org.eclipse.ditto.json.JsonFieldSelector;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.testing.common.IntegrationTest;
-import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.common.ws.ThingsWebsocketClient;
 import org.eclipse.ditto.things.model.Thing;
@@ -84,28 +83,21 @@ public class StreamThingsIT extends IntegrationTest {
             .setAttribute(JsonPointer.of("counter"), JsonValue.of(10))
             .build();
 
-    final static Thing thing5 = Thing.newBuilder()
-            .setId(ThingId.of(idGenerator().withPrefixedRandomName("005")))
-            .setAttribute(JsonPointer.of("counter"), JsonValue.of(10))
-            .build();
-
     private static final String ISOLATION_FILTER = String.format(
-            "in(thingId,\"%s\",\"%s\",\"%s\",\"%s\",\"%s\")",
+            "in(thingId,\"%s\",\"%s\",\"%s\",\"%s\")",
             thing.getEntityId().orElseThrow(),
             thing2.getEntityId().orElseThrow(),
             thing3.getEntityId().orElseThrow(),
-            thing4.getEntityId().orElseThrow(),
-            thing5.getEntityId().orElseThrow()
+            thing4.getEntityId().orElseThrow()
     );
 
     private static AuthClient clientForDefaultSolution;
     private static AuthClient clientForSolution2;
-    private static AuthClient secondClientForDefaultSolution;
 
     @Before
     public void createWebsocketClients() {
         client = newClient(clientForDefaultSolution.getAccessToken(), Collections.emptyMap());
-        client2 = newClient(secondClientForDefaultSolution.getAccessToken(), Collections.emptyMap());
+        client2 = newClient(clientForDefaultSolution.getAccessToken(), Collections.emptyMap());
         client.connect("ThingsWebsocketClient1-" + UUID.randomUUID());
         client2.connect("ThingsWebsocketClient2-" + UUID.randomUUID());
     }
@@ -113,11 +105,6 @@ public class StreamThingsIT extends IntegrationTest {
     @BeforeClass
     public static void createTestData() {
         clientForDefaultSolution = serviceEnv.getDefaultTestingContext().getOAuthClient();
-        final TestingContext testingContext =
-                TestingContext.withGeneratedMockClient(serviceEnv.getDefaultTestingContext().getSolution(),
-                        TEST_CONFIG);
-        secondClientForDefaultSolution = testingContext.getOAuthClient();
-
         clientForSolution2 = serviceEnv.getTestingContext2().getOAuthClient();
 
         final var acksHeaderKey = "requested-acks";
@@ -145,13 +132,6 @@ public class StreamThingsIT extends IntegrationTest {
                 .withJWT(clientForSolution2.getAccessToken())
                 .expectingStatusCodeSuccessful()
                 .fire();
-
-        // create thing5 as user2 over REST because user1 lacks permission
-        putThing(2, thing5, JsonSchemaVersion.V_2)
-                .withHeader(acksHeaderKey, acksHeaderVal)
-                .withJWT(secondClientForDefaultSolution.getAccessToken())
-                .expectingStatusCodeSuccessful()
-                .fire();
     }
 
     @AfterClass
@@ -164,9 +144,6 @@ public class StreamThingsIT extends IntegrationTest {
         deleteThing(2, thing4.getEntityId().orElseThrow())
                 .withJWT(clientForSolution2.getAccessToken())
                 .fire();
-        deleteThing(2, thing5.getEntityId().orElseThrow())
-                .withJWT(secondClientForDefaultSolution.getAccessToken())
-                .fire();
 
         deletePolicy(thing.getEntityId().orElseThrow()).fire();
         deletePolicy(thing2.getEntityId().orElseThrow()).fire();
@@ -175,9 +152,6 @@ public class StreamThingsIT extends IntegrationTest {
                 .fire();
         deletePolicy(thing4.getEntityId().orElseThrow())
                 .withJWT(clientForSolution2.getAccessToken())
-                .fire();
-        deletePolicy(thing5.getEntityId().orElseThrow())
-                .withJWT(secondClientForDefaultSolution.getAccessToken())
                 .fire();
     }
 
@@ -191,7 +165,7 @@ public class StreamThingsIT extends IntegrationTest {
         }
     }
 
-    private static ThingsWebsocketClient newClient(final String suiteAuthToken,
+    private static ThingsWebsocketClient newClient(final String authToken,
             final Map<String, String> additionalHttpHeaders) {
         final ProxyServer proxyServer;
         if (TEST_CONFIG.isHttpProxyEnabled()) {
@@ -201,7 +175,7 @@ public class StreamThingsIT extends IntegrationTest {
             proxyServer = null;
         }
 
-        return ThingsWebsocketClient.newInstance(thingsWsUrl(JsonSchemaVersion.V_2.toInt()), suiteAuthToken,
+        return ThingsWebsocketClient.newInstance(dittoWsUrl(JsonSchemaVersion.V_2.toInt()), authToken,
                 additionalHttpHeaders, proxyServer, ThingsWebsocketClient.JwtAuthMethod.HEADER);
     }
 
@@ -502,7 +476,11 @@ public class StreamThingsIT extends IntegrationTest {
                 assertThat(subscriptionHasNextPage.getItems().toString())
                         .contains(thing.getEntityId().orElseThrow().toString());
                 assertThat(subscriptionHasNextPage.getItems().toString())
-                        .doesNotContain(thing5.getEntityId().orElseThrow().toString());
+                        .contains(thing2.getEntityId().orElseThrow().toString());
+                assertThat(subscriptionHasNextPage.getItems().toString())
+                        .doesNotContain(thing3.getEntityId().orElseThrow().toString());
+                assertThat(subscriptionHasNextPage.getItems().toString())
+                        .doesNotContain(thing4.getEntityId().orElseThrow().toString());
                 latch.countDown();
             }
         });

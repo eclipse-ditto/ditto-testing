@@ -59,7 +59,6 @@ services:
       ZOOKEEPER_SASL_ENABLED: "false"
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       ALLOW_PLAINTEXT_LISTENER: "yes"
-
     volumes:
       - ./kafka/kafka_jaas.conf:/opt/bitnami/kafka/config/kafka_jaas.conf
 

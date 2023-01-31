@@ -22,6 +22,7 @@ import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.base.model.headers.DittoHeaderDefinition;
 import org.eclipse.ditto.base.model.headers.DittoHeaders;
 import org.eclipse.ditto.connectivity.model.signals.commands.ConnectivityCommand;
+import org.eclipse.ditto.json.JsonFieldSelector;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.testing.common.CommonTestConfig;
 import org.eclipse.ditto.testing.common.PiggyBackCommander;
@@ -107,9 +108,38 @@ public final class ConnectionsClient {
         return restMatcherFactory.get(connectionsUrl).withLogging(LOGGER, LOGGER_ENTITY_TYPE_CONNECTIONS);
     }
 
+    /**
+     * Wraps a get request for the Connections with the passed fieldSelector.
+     *
+     * @param fields the fields to select from the connections
+     * @return the wrapped request.
+     */
+    public GetMatcher getConnections(final JsonFieldSelector fields) {
+        final String path = ResourcePathBuilder.connections().toString();
+        final String connectionsUrl = buildApiUrl(API_V_2, path);
+
+        return restMatcherFactory.get(connectionsUrl)
+                .withParam("fields", fields.toString())
+                .withLogging(LOGGER, LOGGER_ENTITY_TYPE_CONNECTIONS);
+    }
 
     /**
-     * Wraps a get request for a connection of a given Solution ID.
+     * Wraps a get request for all Connection IDs.
+     *
+     * @return the wrapped request.
+     */
+    public GetMatcher getConnectionIds() {
+        final String path = ResourcePathBuilder.connections().toString();
+        final String connectionsUrl = buildApiUrl(API_V_2, path);
+
+        return restMatcherFactory.get(connectionsUrl)
+                .withParam("ids-only", "true")
+                .withLogging(LOGGER, LOGGER_ENTITY_TYPE_CONNECTIONS);
+    }
+
+
+    /**
+     * Wraps a get request for a connection.
      *
      * @param connectionId the connection ID.
      * @return the wrapped request.
@@ -159,7 +189,7 @@ public final class ConnectionsClient {
     }
 
     /**
-     * Wraps a delete request for a connection of a given Solution ID.
+     * Wraps a delete request for a connection.
      *
      * @param connectionId the connection ID.
      * @return the wrapped request.
@@ -171,6 +201,8 @@ public final class ConnectionsClient {
         final String path =
                 ResourcePathBuilder.connections().connection(connectionId).toString();
         final String connectionUrl = buildApiUrl(API_V_2, path);
+
+        LOGGER.info("Deleting connection with connectionId: {}", connectionId);
 
         return restMatcherFactory.delete(connectionUrl).withLogging(LOGGER, LOGGER_ENTITY_TYPE_CONNECTIONS);
     }

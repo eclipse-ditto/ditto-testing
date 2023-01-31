@@ -71,7 +71,7 @@ public final class ConnectivityTestWebsocketClient implements WebSocketListener 
     private final DefaultAsyncHttpClient client;
     private final ProtocolAdapter protocolAdapter;
     private final String endpoint;
-    private final String suiteAuthToken;
+    private final String authToken;
 
     private final Map<String, PendingResponse> pendingResponses;
 
@@ -83,7 +83,7 @@ public final class ConnectivityTestWebsocketClient implements WebSocketListener 
     private final ConcurrentMap<String, CompletableFuture<Void>> pendingAcknowledgements =
             new ConcurrentSkipListMap<>();
 
-    private ConnectivityTestWebsocketClient(final String endpoint, final String suiteAuthToken) {
+    private ConnectivityTestWebsocketClient(final String endpoint, final String authToken) {
         final DefaultAsyncHttpClientConfig.Builder configBuilder = new DefaultAsyncHttpClientConfig.Builder();
         configBuilder.setThreadPoolName("things-ws");
         configBuilder.setUserAgent("ConnectivityTestWebsocketClient");
@@ -92,14 +92,14 @@ public final class ConnectivityTestWebsocketClient implements WebSocketListener 
         this.client = new DefaultAsyncHttpClient(configBuilder.build());
         this.protocolAdapter = DittoProtocolAdapter.of(HeaderTranslator.empty());
         this.endpoint = endpoint;
-        this.suiteAuthToken = suiteAuthToken;
+        this.authToken = authToken;
         this.pendingResponses = new HashMap<>();
     }
 
-    public static ConnectivityTestWebsocketClient newInstance(final String endpoint, final String suiteAuthToken) {
+    public static ConnectivityTestWebsocketClient newInstance(final String endpoint, final String authToken) {
         requireNonNull(endpoint);
-        requireNonNull(suiteAuthToken);
-        return new ConnectivityTestWebsocketClient(endpoint, suiteAuthToken);
+        requireNonNull(authToken);
+        return new ConnectivityTestWebsocketClient(endpoint, authToken);
     }
 
     /**
@@ -112,7 +112,7 @@ public final class ConnectivityTestWebsocketClient implements WebSocketListener 
                 .build();
         final ListenableFuture<NettyWebSocket> execute = client
                 .prepareGet(endpoint)
-                .addHeader(HttpHeader.AUTHORIZATION.getName(), "Bearer " + suiteAuthToken)
+                .addHeader(HttpHeader.AUTHORIZATION.getName(), "Bearer " + authToken)
                 .addHeader(HttpHeader.X_CORRELATION_ID.getName(), correlationId)
                 .execute(upgradeHandler);
 

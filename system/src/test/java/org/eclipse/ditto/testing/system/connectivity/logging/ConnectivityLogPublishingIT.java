@@ -68,6 +68,8 @@ import org.eclipse.ditto.policies.model.Subjects;
 import org.eclipse.ditto.protocol.ProtocolFactory;
 import org.eclipse.ditto.protocol.adapter.DittoProtocolAdapter;
 import org.eclipse.ditto.testing.common.IntegrationTest;
+import org.eclipse.ditto.testing.common.ServiceEnvironment;
+import org.eclipse.ditto.testing.common.Solution;
 import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
@@ -150,11 +152,12 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
     }
 
     @BeforeClass
-    public static void createSolution() throws InterruptedException, TimeoutException, ExecutionException {
-        testingContext = serviceEnv.getDefaultTestingContext();
+    public static void createSolution() {
+        final Solution solution = ServiceEnvironment.createSolutionWithRandomUsernameRandomNamespace();
+        testingContext = TestingContext.withGeneratedMockClient(solution, TEST_CONFIG);
 
         preAuthenticatedConnectionSubject = SubjectIssuer.INTEGRATION +
-                ":" + testingContext.getSolution().getUsername() + ":test";
+                ":" + testingContext.getSolution().getUsername() + ":" + TestingContext.DEFAULT_SCOPE;
 
         testThingId = ThingId.of(
                 idGenerator(testingContext.getSolution().getDefaultNamespace()).withRandomName()
@@ -174,13 +177,15 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
                 .build();
 
         putThingWithPolicy(API_V_2, thing, policy, JsonSchemaVersion.V_2)
-                .withDevopsAuth()
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
+
+        configureRestMatchers(testingContext.getOAuthClient());
     }
 
-    private static void configureRestMatchers(final AuthClient suiteAuthClient) {
-        restMatcherConfigurer = RestMatcherConfigurer.withJwt(suiteAuthClient.getAccessToken());
+    private static void configureRestMatchers(final AuthClient authClient) {
+        restMatcherConfigurer = RestMatcherConfigurer.withJwt(authClient.getAccessToken());
         restMatcherFactory = new RestMatcherFactory(restMatcherConfigurer);
     }
 
@@ -205,7 +210,7 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
 
         final ConnectivityFactory connectivityFactory =
                 ConnectivityFactory.of(ConnectivityLogPublishingIT.class.getSimpleName(),
-                        new ConnectionModelFactory((username) -> preAuthenticatedConnectionSubject),
+                        new ConnectionModelFactory((username, suffix) -> preAuthenticatedConnectionSubject),
                         () -> testingContext.getSolution(),
                         ConnectionType.KAFKA,
                         ConnectivityLogPublishingIT::getConnectionUri,
@@ -247,8 +252,7 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
 
         assertThat(consumedRecords)
                 .allMatch(logEntry ->
-                        logEntry.connectionId.equals(createdConnectionId) &&
-                        logEntry.solutionId.equals(testingContext.getSolution().getUsername())
+                        logEntry.connectionId.equals(createdConnectionId)
                 )
                 .anyMatch(ensureLogEntry(LogLevel.SUCCESS, LogCategory.CONNECTION, LogType.OTHER,
                         null, "Connection successful"));
@@ -307,7 +311,7 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
         final String correlationId = UUID.randomUUID().toString();
 
         putAttribute(API_V_2, testThingId, "new-attr", "true")
-                .withDevopsAuth()
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withHeader("correlation-id", correlationId)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
@@ -418,9 +422,6 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
         public static final JsonFieldDefinition<String> INSTANCE_ID =
                 JsonFactory.newStringFieldDefinition("instanceId");
 
-        public static final JsonFieldDefinition<String> SOLUTION_ID =
-                JsonFactory.newStringFieldDefinition("solutionId");
-
         private final Instant timestamp;
         private final ConnectionId connectionId;
         private final LogLevel level;
@@ -430,7 +431,6 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
         @Nullable private final String correlationId;
         private final String message;
         private final String instanceId;
-        private final String solutionId;
 
         private TestLogEntry(final Instant timestamp,
                 final ConnectionId connectionId,
@@ -440,8 +440,7 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
                 @Nullable final String address,
                 @Nullable final String correlationId,
                 final String message,
-                final String instanceId,
-                final String solutionId) {
+                final String instanceId) {
             this.timestamp = timestamp;
             this.connectionId = connectionId;
             this.level = level;
@@ -451,7 +450,6 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
             this.correlationId = correlationId;
             this.message = message;
             this.instanceId = instanceId;
-            this.solutionId = solutionId;
         }
 
         static TestLogEntry fromJsonString(final String jsonString) {
@@ -471,10 +469,9 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
                     .orElse(null);
             final String message = jsonObject.getValueOrThrow(MESSAGE);
             final String instanceId = jsonObject.getValueOrThrow(INSTANCE_ID);
-            final String solutionId = jsonObject.getValueOrThrow(SOLUTION_ID);
 
             return new TestLogEntry(timestamp, connectionId, level, category, type, address, correlationId, message,
-                    instanceId, solutionId);
+                    instanceId);
         }
 
         @Override
@@ -490,14 +487,14 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
                     Objects.equals(connectionId, that.connectionId) && level == that.level &&
                     category == that.category && type == that.type && Objects.equals(address, that.address) &&
                     Objects.equals(correlationId, that.correlationId) &&
-                    Objects.equals(message, that.message) && Objects.equals(instanceId, that.instanceId) &&
-                    Objects.equals(solutionId, that.solutionId);
+                    Objects.equals(message, that.message) &&
+                    Objects.equals(instanceId, that.instanceId);
         }
 
         @Override
         public int hashCode() {
             return Objects.hash(timestamp, connectionId, level, category, type, address, correlationId, message,
-                    instanceId, solutionId);
+                    instanceId);
         }
 
         @Override
@@ -512,7 +509,6 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
                     ", correlationId=" + correlationId +
                     ", message=" + message +
                     ", instanceId=" + instanceId +
-                    ", solutionId=" + solutionId +
                     "]";
         }
     }

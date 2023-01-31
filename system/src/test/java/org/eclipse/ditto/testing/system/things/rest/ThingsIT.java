@@ -239,10 +239,7 @@ public final class ThingsIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void getThingsByIdWithFieldSelectors() {
         final List<JsonFieldDefinition<?>> expectedJsonFieldDefinitions = List.of(Thing.JsonFields.ID);
@@ -383,10 +380,7 @@ public final class ThingsIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void postAndPutSameThing() {
         final ThingId thingId = ThingId.of(parseIdFromLocation(postThing(TestConstants.API_V_2, JsonFactory.newObject())
@@ -404,10 +398,7 @@ public final class ThingsIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void putThingWithInvalidId() {
         final String thingId = "invalidThingId";
@@ -421,23 +412,6 @@ public final class ThingsIT extends IntegrationTest {
                 .fire();
     }
 
-    /**
-     *
-     */
-    @Test
-    public void putThingWithEmptyNamespace() {
-        final ThingId thingId = ThingId.inDefaultNamespace("myTestThing");
-
-        final Thing thing = Thing.newBuilder().setId(thingId).build();
-
-        putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
-                .expectingHttpStatus(HttpStatus.NOT_FOUND)
-                .fire();
-    }
-
-    /**
-     *
-     */
     @Test
     public void postThingAndReceiveLocation() {
         final String thingId = parseIdFromLocation(postThing(TestConstants.API_V_2)
@@ -587,10 +561,7 @@ public final class ThingsIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void tryToDeleteUnknownThing() {
         deleteThing(TestConstants.API_V_2, serviceEnv.getDefaultNamespaceName() + ":unknownThingId")
@@ -599,17 +570,7 @@ public final class ThingsIT extends IntegrationTest {
     }
 
     @Test
-    public void putThingWithWrongNamespace() {
-        final ThingId thingId = ThingId.of(serviceEnv.getTesting2NamespaceName(), "RC-CRaaSCar");
-        final Thing thing = Thing.newBuilder().setId(thingId).build();
-
-        putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
-                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
-                .fire();
-    }
-
-    @Test
-    public void putThingWithDifferentSolutionIsAllowedWhenThingAlreadyExists() {
+    public void putThingIsAllowedWhenThingAlreadyExists() {
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
 
         final Thing thing = Thing.newBuilder().setId(thingId).build();
@@ -746,7 +707,7 @@ public final class ThingsIT extends IntegrationTest {
     public void tryToAccessApiWithDoubleSlashes() {
         final String path = HttpResource.THINGS.getPath();
         final String jsonString = "{}";
-        final String thingsServiceUrlWithDoubleSlash = thingsServiceUrl(TestConstants.API_V_2, path) + "//";
+        final String thingsServiceUrlWithDoubleSlash = dittoUrl(TestConstants.API_V_2, path) + "//";
         final String thingsServiceUrlWithDoubleSlashAndId =
                 thingsServiceUrlWithDoubleSlash + ThingId.of(idGenerator().withRandomName());
 

@@ -70,18 +70,15 @@ public final class TestSolutionResource extends ExternalResource
     @Override
     protected void before() throws Throwable {
         solution = createDefaultSolution();
-        accessTokenSupplier = getCachingSuiteAuthMockJwtSupplier();
+        accessTokenSupplier = getCachingAuthMockJwtSupplier();
     }
 
-    private AccessTokenSupplier<JsonWebToken> getCachingSuiteAuthMockJwtSupplier() {
-        return AccessTokenSuppliers.getCachingSuiteAuthMockJwtSupplier(OAuthMockConfig.of(testConfig), solution);
+    private AccessTokenSupplier<JsonWebToken> getCachingAuthMockJwtSupplier() {
+        return AccessTokenSuppliers.getCachingAuthMockJwtSupplier(OAuthMockConfig.of(testConfig), solution);
     }
 
     private Solution createDefaultSolution() {
-        final var defaultSolution = new Solution("user", "password",
-                ServiceEnvironment.DEFAULT_NAMESPACE);
-
-        return defaultSolution;
+        return ServiceEnvironment.createSolutionWithRandomUsernameRandomNamespace();
     }
 
     /**

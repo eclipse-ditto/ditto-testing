@@ -53,7 +53,7 @@ public final class TestConstants {
 
         public static final String THING_RESOURCE_TYPE = "thing";
         public static final SubjectType ARBITRARY_SUBJECT_TYPE = SubjectType.newInstance("arbitrarySubjectType");
-        public static final SubjectType SUITE_AUTH_SUBJECT_TYPE = SubjectType.newInstance("ditto-auth");
+        public static final SubjectType DITTO_AUTH_SUBJECT_TYPE = SubjectType.newInstance("ditto-auth");
         public static final JsonObject DEFAULT_POLICY = JsonObject.of(
                 "{\n" +
                         "  \"entries\": {\n" +
@@ -116,7 +116,8 @@ public final class TestConstants {
                                     .set(Source.JsonFields.ADDRESSES, JsonArray.of(JsonValue.of("telemetry/tenant")))
                                     .set(Source.JsonFields.CONSUMER_COUNT, 1)
                                     .set(Source.JsonFields.AUTHORIZATION_CONTEXT,
-                                            JsonArray.of(JsonValue.of("integration:" + integrationName + ":test")))
+                                            JsonArray.of(JsonValue.of("integration:" + integrationName + ":" +
+                                                    TestingContext.DEFAULT_SCOPE)))
                                     .build()))
                     .build();
         }

@@ -15,19 +15,13 @@ package org.eclipse.ditto.testing.system.connectivity;
 public class ConnectivityConstants {
 
     /**
-     * This thing id is used to test placeholder substitution in target addresses. So it is also referenced in queue
-     * names (e.g. resources/rabbitmq/definitions.json)
-     */
-    public static final String FIXED_LOCAL_THING_ID = "thingId";
-
-    /**
      * The header used to test placeholder substitution
      */
     public static final String HEADER_ID = "headerId";
 
-    public static final String TARGET_SUFFIX = "_pap";
+    public static final String TARGET_SUFFIX = "_org"; // substring-before "org.eclipse.ditto" - taking the "_org" - see below
 
-    // should match from namespace "pap.th.ns1.*" the "pap":
+    // should match from namespace "org.eclipse.ditto.ns1.*" the "org":
     public static final String TARGET_SUFFIX_PLACEHOLDER = "_{{thing:namespace | fn:substring-before('.') | fn:default(thing:namespace)}}";
 
 

@@ -29,6 +29,7 @@ services:
   kafka:
     ports:
       - ${KAFKA_PORT_TCP:-9092}:9092
+      - ${KAFKA_INTERNAL_PORT_TCP:-9093}:9093
     environment:
       KAFKA_ADVERTISED_LISTENERS: CLIENT://localhost:9092,INTERNAL://:9093
 

@@ -81,7 +81,7 @@ public final class ConnectionResource extends ExternalResource {
     protected void before() throws Throwable {
         super.before();
         final var baseCorrelationId = CorrelationId.random();
-        connection = postConnectionToTestSolution(getRequestConnectionOrThrow(),
+        connection = postConnection(getRequestConnectionOrThrow(),
                 baseCorrelationId.withSuffix(".postConnection"));
         waitUntilConnectionLiveStatusIsOpen(baseCorrelationId.withSuffix(".fetchLiveStatusOpen"));
         state = ExternalResourceState.POST_BEFORE;
@@ -91,7 +91,7 @@ public final class ConnectionResource extends ExternalResource {
         return checkNotNull(connectionSupplier.get(), "supplied connection");
     }
 
-    private Connection postConnectionToTestSolution(final Connection connection, final CorrelationId correlationId) {
+    private Connection postConnection(final Connection connection, final CorrelationId correlationId) {
         return getConnectionsHttpClient().postConnection(connection, correlationId);
     }
 

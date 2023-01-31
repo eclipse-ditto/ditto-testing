@@ -25,7 +25,7 @@ import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
  */
 public final class TestingContext {
 
-    private static final String DEFAULT_SCOPES = "system-test";
+    public static final String DEFAULT_SCOPE = "system-test";
 
     private final Solution solution;
     private final AuthClient oAuthClient;
@@ -57,7 +57,7 @@ public final class TestingContext {
                 ThingsSubjectIssuer.DITTO,
                 solution.getUsername(),
                 solution.getSecret(),
-                DEFAULT_SCOPES,
+                DEFAULT_SCOPE,
                 httpClient);
 
         return newInstance(solution, oAuthClient);

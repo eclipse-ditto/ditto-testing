@@ -17,6 +17,7 @@ import static org.eclipse.ditto.testing.common.matcher.search.SearchResponseMatc
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.newSortOption;
 
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
+import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.VersionedSearchIntegrationTest;
 import org.eclipse.ditto.testing.common.matcher.search.SearchMatcher;
 import org.eclipse.ditto.testing.common.matcher.search.SortProperties;
@@ -29,9 +30,6 @@ import org.eclipse.ditto.thingsearch.model.SortOption;
 import org.eclipse.ditto.thingsearch.model.SortOptionEntry;
 import org.junit.Test;
 
-/**
- *
- */
 public final class QueryThingsWithSortingBySpecialCharKeyIT extends VersionedSearchIntegrationTest {
 
     private static final String COMMON_ATTR_KEY = "commonAttr";
@@ -42,6 +40,8 @@ public final class QueryThingsWithSortingBySpecialCharKeyIT extends VersionedSea
     private static final String SPECIAL_CHAR_SORT_FEATURE_PROPERTY_KEY = "things.itests.someKey";
     private static final String SPECIAL_CHAR_SORT_FEATURE_FIELD =
             SPECIAL_CHAR_SORT_FEATURE_ID + "/properties/" + SPECIAL_CHAR_SORT_FEATURE_PROPERTY_KEY;
+
+    private static final String RANDOM_NAMESPACE = ServiceEnvironment.createRandomDefaultNamespace();
 
     private static ThingId thing1Id;
     private static ThingId thing2Id;
@@ -91,7 +91,8 @@ public final class QueryThingsWithSortingBySpecialCharKeyIT extends VersionedSea
     }
 
     private ThingId createThingId(final int i) {
-        return ThingId.of(idGenerator().withPrefixedRandomName(getClass().getSimpleName(), String.valueOf(i)));
+        return ThingId.of(idGenerator(RANDOM_NAMESPACE)
+                .withPrefixedRandomName(getClass().getSimpleName(), String.valueOf(i)));
     }
 
     @Test
@@ -128,6 +129,7 @@ public final class QueryThingsWithSortingBySpecialCharKeyIT extends VersionedSea
 
     private static SearchMatcher search(final SortOption sortOption, final JsonSchemaVersion apiVersion) {
         return searchThings(apiVersion)
+                .namespaces(RANDOM_NAMESPACE)
                 .filter(attribute(COMMON_ATTR_KEY).eq(COMMON_ATTR_VALUE))
                 .option(sortOption);
     }

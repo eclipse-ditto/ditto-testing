@@ -111,8 +111,8 @@ public final class LiveHttpChannelHttpPushIT {
 
     @ClassRule(order = 2)
     public static final PolicyWithConnectionSubjectResource POLICY_WITH_CONNECTION_SUBJECT_RESOURCE =
-            PolicyWithConnectionSubjectResource.newInstance(POLICIES_HTTP_CLIENT_RESOURCE,
-                    CONNECTION_NAME);
+            PolicyWithConnectionSubjectResource.newInstance(TEST_SOLUTION_RESOURCE,
+                    POLICIES_HTTP_CLIENT_RESOURCE, CONNECTION_NAME);
     @ClassRule(order = 1)
     public static final ThingsHttpClientResource THINGS_HTTP_CLIENT_RESOURCE =
             ThingsHttpClientResource.newInstance(TEST_CONFIG, TEST_SOLUTION_RESOURCE);
@@ -126,6 +126,7 @@ public final class LiveHttpChannelHttpPushIT {
                     CONNECTIONS_CLIENT_RESOURCE,
                     () -> HttpPushConnectionFactory.getHttpPushConnection(HTTP_PUSH_CONFIG.getHostName(),
                             HTTP_TEST_SERVER_RESOURCE.getHttpTestServerPort(),
+                            TEST_SOLUTION_RESOURCE.getTestUsername(),
                             CONNECTION_NAME,
                             SIGNAL_TARGET_TOPIC));
 

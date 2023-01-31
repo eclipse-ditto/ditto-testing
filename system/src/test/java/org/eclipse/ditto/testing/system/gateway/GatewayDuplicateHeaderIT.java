@@ -53,7 +53,7 @@ public class GatewayDuplicateHeaderIT extends IntegrationTest {
     @Category(Acceptance.class)
     public void postThingWithDuplicateCorrelationIdHeader() throws ExecutionException, InterruptedException {
 
-        final String url = thingsServiceUrl(TestConstants.API_V_2, TestConstants.Things.THINGS_PATH);
+        final String url = dittoUrl(TestConstants.API_V_2, TestConstants.Things.THINGS_PATH);
 
         final ListenableFuture<Response> execute = client.preparePost(url)
                 .setHeader("Authorization",

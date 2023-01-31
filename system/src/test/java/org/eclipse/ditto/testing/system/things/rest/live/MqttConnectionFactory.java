@@ -43,12 +43,14 @@ final class MqttConnectionFactory {
     }
 
     static Connection getMqttConnection(final URI mqttServerUri,
+            final CharSequence username,
             final CharSequence connectionName,
             final CharSequence signalTargetTopic,
             final CharSequence signalSourceTopic,
             final AcknowledgementLabel... declaredSourceAckLabels) {
 
         ConditionChecker.checkNotNull(mqttServerUri, "mqttServerUri");
+        ConditionChecker.argumentNotEmpty(username, "username");
         ConditionChecker.argumentNotEmpty(connectionName, "connectionName");
         ConditionChecker.argumentNotEmpty(signalTargetTopic, "signalTargetTopic");
         ConditionChecker.argumentNotEmpty(signalSourceTopic, "signalSourceTopic");
@@ -56,8 +58,9 @@ final class MqttConnectionFactory {
 
         final var authorizationContext =
                 AuthorizationContext.newInstance(DittoAuthorizationContextType.PRE_AUTHENTICATED_CONNECTION,
-                        AuthorizationSubject.newInstance(MessageFormat.format("{0}:{1}",
+                        AuthorizationSubject.newInstance(MessageFormat.format("{0}:{1}:{2}",
                                 SubjectIssuer.INTEGRATION,
+                                username,
                                 connectionName)));
 
         // This ID will be discarded anyway by posting the connection to Solutions.

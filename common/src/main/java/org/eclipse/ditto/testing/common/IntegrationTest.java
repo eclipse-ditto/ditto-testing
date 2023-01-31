@@ -68,7 +68,6 @@ import org.eclipse.ditto.testing.common.matcher.BodyContainsJsonValueMatcher;
 import org.eclipse.ditto.testing.common.matcher.BodyContainsOnlyExpectedJsonKeysMatcher;
 import org.eclipse.ditto.testing.common.matcher.BodyContainsOnlyExpectedJsonValueMatcher;
 import org.eclipse.ditto.testing.common.matcher.CharSequenceContainsMatcher;
-import org.eclipse.ditto.testing.common.matcher.ConnectionIdsMatcher;
 import org.eclipse.ditto.testing.common.matcher.DeleteMatcher;
 import org.eclipse.ditto.testing.common.matcher.EmptyCollectionMatcher;
 import org.eclipse.ditto.testing.common.matcher.EmptyJsonMatcher;
@@ -204,7 +203,7 @@ public abstract class IntegrationTest {
 
     @BeforeClass
     public static void logUrlBeforeTests() {
-        LOGGER.info("Use Ditto URL: {}", thingsServiceUrl(TestConstants.API_V_2));
+        LOGGER.info("Use Ditto URL: {}", dittoUrl(TestConstants.API_V_2));
     }
 
     @BeforeClass
@@ -299,9 +298,9 @@ public abstract class IntegrationTest {
                 .build();
     }
 
-    protected static Subjects toSubjects(final List<AuthClient> suiteAuthClients) {
+    protected static Subjects toSubjects(final List<AuthClient> authClients) {
 
-        return PoliciesModelFactory.newSubjects(suiteAuthClients.stream()
+        return PoliciesModelFactory.newSubjects(authClients.stream()
                 .map(AuthClient::getSubject)
                 .collect(Collectors.toList())
         );
@@ -314,7 +313,7 @@ public abstract class IntegrationTest {
      * @param path the resource path.
      * @return the URL.
      */
-    protected static String thingsServiceUrl(final int version, final CharSequence path) {
+    protected static String dittoUrl(final int version, final CharSequence path) {
         return CommonTestConfig.getInstance().getGatewayApiUrl(version, path);
     }
 
@@ -354,7 +353,7 @@ public abstract class IntegrationTest {
             proxyServer = null;
         }
 
-        return ThingsWebsocketClient.newInstance(thingsWsUrl(apiVersion), jwt, additionalHttpHeaders, proxyServer,
+        return ThingsWebsocketClient.newInstance(dittoWsUrl(apiVersion), jwt, additionalHttpHeaders, proxyServer,
                 jwtAuthMethod);
     }
 
@@ -364,8 +363,8 @@ public abstract class IntegrationTest {
      * @param version the API version.
      * @return the URL.
      */
-    protected static String thingsServiceUrl(final int version) {
-        return thingsServiceUrl(version, "");
+    protected static String dittoUrl(final int version) {
+        return dittoUrl(version, "");
     }
 
     /**
@@ -374,7 +373,7 @@ public abstract class IntegrationTest {
      * @param version the API version.
      * @return the URL.
      */
-    protected static String thingsWsUrl(final int version) {
+    protected static String dittoWsUrl(final int version) {
         return CommonTestConfig.getInstance().getWsUrl(String.format(WS_URL_TEMPLATE, version));
     }
 
@@ -551,10 +550,6 @@ public abstract class IntegrationTest {
         return new SatisfiesMatcher<>(requirements);
     }
 
-    protected static Matcher<String> containsConnectionIdsFromConnection(final List<String> expectedConnectionIds) {
-        return new ConnectionIdsMatcher(expectedConnectionIds, Collections.emptyList());
-    }
-
     /**
      * Returns a {@link Matcher} for checking if the JSON of a response contains the expected {@code charSequence}.
      *
@@ -592,7 +587,7 @@ public abstract class IntegrationTest {
      * @return the wrapped request.
      */
     protected static GetMatcher getThings(final int version) {
-        return get(thingsServiceUrl(version, HttpResource.THINGS.getPath())).withLogging(LOGGER, "Things");
+        return get(dittoUrl(version, HttpResource.THINGS.getPath())).withLogging(LOGGER, "Things");
     }
 
     /**
@@ -625,7 +620,7 @@ public abstract class IntegrationTest {
      */
     public static PostMatcher postThing(final int version, final String jsonString) {
         final String path = HttpResource.THINGS.getPath();
-        final String thingsServiceUrl = thingsServiceUrl(version, path);
+        final String thingsServiceUrl = dittoUrl(version, path);
 
         final PostMatcher result = post(thingsServiceUrl, jsonString).withLogging(LOGGER, "Thing");
         result.registerResponseConsumer(response -> {
@@ -681,7 +676,7 @@ public abstract class IntegrationTest {
 
         final String path = ResourcePathBuilder.forThing(thingId).toString();
         final String jsonString = thing.toString();
-        final String thingsServiceUrl = thingsServiceUrl(version, path);
+        final String thingsServiceUrl = dittoUrl(version, path);
 
         return put(thingsServiceUrl, jsonString).withLogging(LOGGER, "Thing");
     }
@@ -731,7 +726,7 @@ public abstract class IntegrationTest {
         rememberForCleanUp(deleteThing(version, thingId));
 
         final String path = ResourcePathBuilder.forThing(thingId).toString();
-        final String thingsServiceUrl = thingsServiceUrl(version, path);
+        final String thingsServiceUrl = dittoUrl(version, path);
 
         return put(thingsServiceUrl, jsonString).withLogging(LOGGER, "Thing");
     }
@@ -789,7 +784,7 @@ public abstract class IntegrationTest {
         checkNotNull(thingId, "thingId");
         final String path =
                 JsonPointer.of(ResourcePathBuilder.forThing(thingId).toString()).append(patchPath).toString();
-        final String thingsServiceUrl = thingsServiceUrl(version, path);
+        final String thingsServiceUrl = dittoUrl(version, path);
         return patch(thingsServiceUrl, contentType, value.toString()).withLogging(LOGGER, "Thing");
     }
 
@@ -801,7 +796,7 @@ public abstract class IntegrationTest {
      */
     public static GetMatcher getThing(final int version, final CharSequence thingId) {
         final String path = ResourcePathBuilder.forThing(thingId).toString();
-        final String thingsServiceUrl = thingsServiceUrl(version, path);
+        final String thingsServiceUrl = dittoUrl(version, path);
 
         return get(thingsServiceUrl).withLogging(LOGGER, "Thing");
     }
@@ -815,7 +810,7 @@ public abstract class IntegrationTest {
      */
     public static DeleteMatcher deleteThing(final int version, final CharSequence thingId) {
         final String path = ResourcePathBuilder.forThing(thingId).toString();
-        final String thingsServiceUrl = thingsServiceUrl(version, path);
+        final String thingsServiceUrl = dittoUrl(version, path);
 
         return delete(thingsServiceUrl).withLogging(LOGGER, "Thing");
     }
@@ -830,7 +825,7 @@ public abstract class IntegrationTest {
     protected static PutMatcher putPolicyId(final CharSequence thingId, final CharSequence policyId) {
         final String path = ResourcePathBuilder.forThing(thingId).policyId().toString();
 
-        return put(thingsServiceUrl(TestConstants.API_V_2, path), JsonValue.of(policyId.toString()).toString())
+        return put(dittoUrl(TestConstants.API_V_2, path), JsonValue.of(policyId.toString()).toString())
                 .withLogging(LOGGER, "Thing/PolicyId");
     }
 
@@ -843,7 +838,7 @@ public abstract class IntegrationTest {
     protected static GetMatcher getPolicyId(final CharSequence thingId) {
         final String path = ResourcePathBuilder.forThing(thingId).policyId().toString();
 
-        return get(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "Thing/PolicyId");
+        return get(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "Thing/PolicyId");
     }
 
     /**
@@ -856,7 +851,7 @@ public abstract class IntegrationTest {
      */
     protected static PutMatcher putAttributes(final int version, final CharSequence thingId, final String jsonString) {
         final String path = ResourcePathBuilder.forThing(thingId).attributes().toString();
-        return put(thingsServiceUrl(version, path), jsonString).withLogging(LOGGER, "Attributes");
+        return put(dittoUrl(version, path), jsonString).withLogging(LOGGER, "Attributes");
     }
 
     /**
@@ -868,7 +863,7 @@ public abstract class IntegrationTest {
      */
     protected static GetMatcher getAttributes(final int version, final CharSequence thingId) {
         final String path = ResourcePathBuilder.forThing(thingId).attributes().toString();
-        return get(thingsServiceUrl(version, path)).withLogging(LOGGER, "Attributes");
+        return get(dittoUrl(version, path)).withLogging(LOGGER, "Attributes");
     }
 
     /**
@@ -880,7 +875,7 @@ public abstract class IntegrationTest {
      */
     protected static DeleteMatcher deleteAttributes(final int version, final CharSequence thingId) {
         final String path = ResourcePathBuilder.forThing(thingId).attributes().toString();
-        return delete(thingsServiceUrl(version, path)).withLogging(LOGGER, "Attributes");
+        return delete(dittoUrl(version, path)).withLogging(LOGGER, "Attributes");
     }
 
     /**
@@ -898,7 +893,7 @@ public abstract class IntegrationTest {
             final String jsonString) {
 
         final String path = ResourcePathBuilder.forThing(thingId).attribute(attributeJsonPointer).toString();
-        return put(thingsServiceUrl(version, path), jsonString).withLogging(LOGGER, "Attribute");
+        return put(dittoUrl(version, path), jsonString).withLogging(LOGGER, "Attribute");
     }
 
     /**
@@ -913,7 +908,7 @@ public abstract class IntegrationTest {
             final CharSequence attributeJsonPointer) {
 
         final String path = ResourcePathBuilder.forThing(thingId).attribute(attributeJsonPointer).toString();
-        return get(thingsServiceUrl(version, path)).withLogging(LOGGER, "Attribute");
+        return get(dittoUrl(version, path)).withLogging(LOGGER, "Attribute");
     }
 
     /**
@@ -928,7 +923,7 @@ public abstract class IntegrationTest {
             final CharSequence attributeJsonPointer) {
 
         final String path = ResourcePathBuilder.forThing(thingId).attribute(attributeJsonPointer).toString();
-        return delete(thingsServiceUrl(version, path)).withLogging(LOGGER, "Attribute");
+        return delete(dittoUrl(version, path)).withLogging(LOGGER, "Attribute");
     }
 
     /**
@@ -944,7 +939,7 @@ public abstract class IntegrationTest {
             final String jsonString) {
 
         final String path = ResourcePathBuilder.forThing(thingId).definition().toString();
-        return put(thingsServiceUrl(version, path), jsonString).withLogging(LOGGER, "Definition");
+        return put(dittoUrl(version, path), jsonString).withLogging(LOGGER, "Definition");
     }
 
     /**
@@ -957,7 +952,7 @@ public abstract class IntegrationTest {
     protected static GetMatcher getDefinition(final int version, final CharSequence thingId) {
 
         final String path = ResourcePathBuilder.forThing(thingId).definition().toString();
-        return get(thingsServiceUrl(version, path)).withLogging(LOGGER, "Definition");
+        return get(dittoUrl(version, path)).withLogging(LOGGER, "Definition");
     }
 
     /**
@@ -970,7 +965,7 @@ public abstract class IntegrationTest {
     protected static DeleteMatcher deleteDefinition(final int version, final CharSequence thingId) {
 
         final String path = ResourcePathBuilder.forThing(thingId).definition().toString();
-        return delete(thingsServiceUrl(version, path)).withLogging(LOGGER, "Definition");
+        return delete(dittoUrl(version, path)).withLogging(LOGGER, "Definition");
     }
 
     /**
@@ -983,7 +978,7 @@ public abstract class IntegrationTest {
      */
     protected static PostMatcher postFeatures(final int version, final CharSequence thingId, final String jsonString) {
         final String path = ResourcePathBuilder.forThing(thingId).features().toString();
-        return post(thingsServiceUrl(version, path), jsonString).withLogging(LOGGER, "Feature");
+        return post(dittoUrl(version, path), jsonString).withLogging(LOGGER, "Feature");
     }
 
     /**
@@ -1008,7 +1003,7 @@ public abstract class IntegrationTest {
      */
     protected static PutMatcher putFeatures(final int version, final CharSequence thingId, final String jsonString) {
         final String path = ResourcePathBuilder.forThing(thingId).features().toString();
-        return put(thingsServiceUrl(version, path), jsonString).withLogging(LOGGER, "Features");
+        return put(dittoUrl(version, path), jsonString).withLogging(LOGGER, "Features");
     }
 
     /**
@@ -1021,7 +1016,7 @@ public abstract class IntegrationTest {
      */
     protected static GetMatcher getFeatures(final int version, final CharSequence thingId) {
         final String path = ResourcePathBuilder.forThing(thingId).features().toString();
-        return get(thingsServiceUrl(version, path)).withLogging(LOGGER, "Features");
+        return get(dittoUrl(version, path)).withLogging(LOGGER, "Features");
     }
 
     /**
@@ -1033,7 +1028,7 @@ public abstract class IntegrationTest {
      */
     protected static DeleteMatcher deleteFeatures(final int version, final CharSequence thingId) {
         final String path = ResourcePathBuilder.forThing(thingId).features().toString();
-        return delete(thingsServiceUrl(version, path)).withLogging(LOGGER, "Features");
+        return delete(dittoUrl(version, path)).withLogging(LOGGER, "Features");
     }
 
     /**
@@ -1068,7 +1063,7 @@ public abstract class IntegrationTest {
             final String jsonString) {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).toString();
-        return put(thingsServiceUrl(version, path), jsonString).withLogging(LOGGER, "Feature");
+        return put(dittoUrl(version, path), jsonString).withLogging(LOGGER, "Feature");
     }
 
     /**
@@ -1084,7 +1079,7 @@ public abstract class IntegrationTest {
             final CharSequence featureId) {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).toString();
-        return get(thingsServiceUrl(version, path)).withLogging(LOGGER, "Feature");
+        return get(dittoUrl(version, path)).withLogging(LOGGER, "Feature");
     }
 
     /**
@@ -1099,7 +1094,7 @@ public abstract class IntegrationTest {
             final CharSequence featureId) {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).toString();
-        return delete(thingsServiceUrl(version, path)).withLogging(LOGGER, "Feature");
+        return delete(dittoUrl(version, path)).withLogging(LOGGER, "Feature");
     }
 
     /**
@@ -1117,7 +1112,7 @@ public abstract class IntegrationTest {
             final String jsonString) {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).definition().toString();
-        return put(thingsServiceUrl(version, path), jsonString).withLogging(LOGGER, "FeatureDefinition");
+        return put(dittoUrl(version, path), jsonString).withLogging(LOGGER, "FeatureDefinition");
     }
 
     /**
@@ -1132,7 +1127,7 @@ public abstract class IntegrationTest {
             final CharSequence featureId) {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).definition().toString();
-        return get(thingsServiceUrl(version, path)).withLogging(LOGGER, "FeatureDefinition");
+        return get(dittoUrl(version, path)).withLogging(LOGGER, "FeatureDefinition");
     }
 
     /**
@@ -1147,7 +1142,7 @@ public abstract class IntegrationTest {
             final CharSequence featureId) {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).definition().toString();
-        return delete(thingsServiceUrl(version, path)).withLogging(LOGGER, "FeatureDefinition");
+        return delete(dittoUrl(version, path)).withLogging(LOGGER, "FeatureDefinition");
     }
 
     /**
@@ -1165,7 +1160,7 @@ public abstract class IntegrationTest {
             final String jsonString) {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).properties().toString();
-        return put(thingsServiceUrl(version, path), jsonString).withLogging(LOGGER, "Properties");
+        return put(dittoUrl(version, path), jsonString).withLogging(LOGGER, "Properties");
     }
 
     /**
@@ -1180,7 +1175,7 @@ public abstract class IntegrationTest {
             final CharSequence featureId) {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).properties().toString();
-        return get(thingsServiceUrl(version, path)).withLogging(LOGGER, "Properties");
+        return get(dittoUrl(version, path)).withLogging(LOGGER, "Properties");
     }
 
     /**
@@ -1195,7 +1190,7 @@ public abstract class IntegrationTest {
             final CharSequence featureId) {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).properties().toString();
-        return delete(thingsServiceUrl(version, path)).withLogging(LOGGER, "Properties");
+        return delete(dittoUrl(version, path)).withLogging(LOGGER, "Properties");
     }
 
     /**
@@ -1218,7 +1213,7 @@ public abstract class IntegrationTest {
                 .feature(featureId)
                 .property(propertyJsonPointer)
                 .toString();
-        return put(thingsServiceUrl(version, path), jsonString).withLogging(LOGGER, "Property");
+        return put(dittoUrl(version, path), jsonString).withLogging(LOGGER, "Property");
     }
 
     /**
@@ -1239,7 +1234,7 @@ public abstract class IntegrationTest {
                 .feature(featureId)
                 .property(propertyJsonPointer)
                 .toString();
-        return get(thingsServiceUrl(version, path)).withLogging(LOGGER, "Property");
+        return get(dittoUrl(version, path)).withLogging(LOGGER, "Property");
     }
 
     /**
@@ -1260,7 +1255,7 @@ public abstract class IntegrationTest {
                 .feature(featureId)
                 .property(propertyJsonPointer)
                 .toString();
-        return delete(thingsServiceUrl(version, path)).withLogging(LOGGER, "Property");
+        return delete(dittoUrl(version, path)).withLogging(LOGGER, "Property");
     }
 
     /**
@@ -1276,7 +1271,7 @@ public abstract class IntegrationTest {
             final String jsonString) {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).desiredProperties().toString();
-        return put(thingsServiceUrl(TestConstants.API_V_2, path), jsonString).withLogging(LOGGER, "DesiredProperties");
+        return put(dittoUrl(TestConstants.API_V_2, path), jsonString).withLogging(LOGGER, "DesiredProperties");
     }
 
     /**
@@ -1290,7 +1285,7 @@ public abstract class IntegrationTest {
             final CharSequence featureId) {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).desiredProperties().toString();
-        return get(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "DesiredProperties");
+        return get(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "DesiredProperties");
     }
 
     /**
@@ -1304,7 +1299,7 @@ public abstract class IntegrationTest {
             final CharSequence featureId) {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).desiredProperties().toString();
-        return delete(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "DesiredProperties");
+        return delete(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "DesiredProperties");
     }
 
     /**
@@ -1325,7 +1320,7 @@ public abstract class IntegrationTest {
                 .feature(featureId)
                 .desiredProperty(propertyJsonPointer)
                 .toString();
-        return put(thingsServiceUrl(TestConstants.API_V_2, path), jsonString).withLogging(LOGGER, "DesiredProperty");
+        return put(dittoUrl(TestConstants.API_V_2, path), jsonString).withLogging(LOGGER, "DesiredProperty");
     }
 
     /**
@@ -1344,7 +1339,7 @@ public abstract class IntegrationTest {
                 .feature(featureId)
                 .desiredProperty(propertyJsonPointer)
                 .toString();
-        return get(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "DesiredProperty");
+        return get(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "DesiredProperty");
     }
 
     /**
@@ -1363,7 +1358,7 @@ public abstract class IntegrationTest {
                 .feature(featureId)
                 .desiredProperty(propertyJsonPointer)
                 .toString();
-        return delete(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "DesiredProperty");
+        return delete(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "DesiredProperty");
     }
 
     /**
@@ -1386,7 +1381,7 @@ public abstract class IntegrationTest {
      */
     protected static PutMatcher putPolicy(final CharSequence policyId, final JsonObject policyJson) {
         final String path = ResourcePathBuilder.forPolicy(policyId).toString();
-        final String thingsServiceUrl = thingsServiceUrl(TestConstants.API_V_2, path);
+        final String thingsServiceUrl = dittoUrl(TestConstants.API_V_2, path);
         final String jsonString = policyJson.toString();
 
         rememberForCleanUpLast(deletePolicy(policyId));
@@ -1415,14 +1410,14 @@ public abstract class IntegrationTest {
      */
     protected static PutMatcher putPolicyEntry(final CharSequence policyId, final PolicyEntry policyEntry) {
         final String path = ResourcePathBuilder.forPolicy(policyId).policyEntry(policyEntry.getLabel()).toString();
-        return put(thingsServiceUrl(TestConstants.API_V_2, path), policyEntry.toJsonString())
+        return put(dittoUrl(TestConstants.API_V_2, path), policyEntry.toJsonString())
                 .withLogging(LOGGER, "PolicyEntry");
     }
 
     protected static PutMatcher putPolicyImport(final CharSequence policyId, final PolicyImport policyImport) {
         final String path =
                 ResourcePathBuilder.forPolicy(policyId).policyImport(policyImport.getImportedPolicyId()).toString();
-        final String thingsServiceUrl = thingsServiceUrl(TestConstants.API_V_2, path);
+        final String thingsServiceUrl = dittoUrl(TestConstants.API_V_2, path);
         final String jsonString = policyImport.toJsonString();
 
         LOGGER.debug("PUTing Policy Imports JSON to URL '{}': {}", thingsServiceUrl, jsonString);
@@ -1438,7 +1433,7 @@ public abstract class IntegrationTest {
      */
     protected static PutMatcher putPolicyEntries(final CharSequence policyId, final JsonObject policyEntries) {
         final String path = ResourcePathBuilder.forPolicy(policyId).policyEntries().toString();
-        return put(thingsServiceUrl(TestConstants.API_V_2, path), policyEntries.toString())
+        return put(dittoUrl(TestConstants.API_V_2, path), policyEntries.toString())
                 .withLogging(LOGGER, "PolicyEntries");
     }
 
@@ -1450,7 +1445,7 @@ public abstract class IntegrationTest {
      */
     protected static GetMatcher getPolicyEntries(final CharSequence policyId) {
         final String path = ResourcePathBuilder.forPolicy(policyId).policyEntries().toString();
-        return get(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntries");
+        return get(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntries");
     }
 
     /**
@@ -1462,7 +1457,7 @@ public abstract class IntegrationTest {
      */
     protected static GetMatcher getPolicyEntrySubjects(final CharSequence policyId, final String label) {
         final String path = ResourcePathBuilder.forPolicy(policyId).subjects(label).toString();
-        return get(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntrySubjects");
+        return get(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntrySubjects");
     }
 
     /**
@@ -1476,7 +1471,7 @@ public abstract class IntegrationTest {
     protected static PutMatcher putPolicyEntrySubjects(final CharSequence policyId, final String label,
             final Subjects subjects) {
         final String path = ResourcePathBuilder.forPolicy(policyId).subjects(label).toString();
-        return put(thingsServiceUrl(TestConstants.API_V_2, path), subjects.toJsonString()).withLogging(LOGGER,
+        return put(dittoUrl(TestConstants.API_V_2, path), subjects.toJsonString()).withLogging(LOGGER,
                 "PolicyEntrySubjects");
     }
 
@@ -1491,7 +1486,7 @@ public abstract class IntegrationTest {
     protected static GetMatcher getPolicyEntrySubject(final CharSequence policyId, final String label,
             final String subjectId) {
         final String path = ResourcePathBuilder.forPolicy(policyId).subject(label, subjectId).toString();
-        return get(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntrySubject");
+        return get(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntrySubject");
     }
 
     /**
@@ -1506,7 +1501,7 @@ public abstract class IntegrationTest {
     protected static PutMatcher putPolicyEntrySubject(final CharSequence policyId, final String label,
             final String subjectId, final Subject subject) {
         final String path = ResourcePathBuilder.forPolicy(policyId).subject(label, subjectId).toString();
-        return put(thingsServiceUrl(TestConstants.API_V_2, path), subject.toJsonString()).withLogging(LOGGER,
+        return put(dittoUrl(TestConstants.API_V_2, path), subject.toJsonString()).withLogging(LOGGER,
                 "PolicyEntrySubject");
     }
 
@@ -1521,7 +1516,7 @@ public abstract class IntegrationTest {
     protected static DeleteMatcher deletePolicyEntrySubject(final CharSequence policyId, final String label,
             final String subjectId) {
         final String path = ResourcePathBuilder.forPolicy(policyId).subject(label, subjectId).toString();
-        return delete(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER,
+        return delete(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER,
                 "PolicyEntrySubject");
     }
 
@@ -1534,7 +1529,7 @@ public abstract class IntegrationTest {
      */
     protected static GetMatcher getPolicyEntryResources(final CharSequence policyId, final String label) {
         final String path = ResourcePathBuilder.forPolicy(policyId).resources(label).toString();
-        return get(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntryResources");
+        return get(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntryResources");
     }
 
     /**
@@ -1548,7 +1543,7 @@ public abstract class IntegrationTest {
     protected static PutMatcher putPolicyEntryResources(final CharSequence policyId, final String label,
             final Resources resources) {
         final String path = ResourcePathBuilder.forPolicy(policyId).resources(label).toString();
-        return put(thingsServiceUrl(TestConstants.API_V_2, path), resources.toJsonString()).withLogging(LOGGER,
+        return put(dittoUrl(TestConstants.API_V_2, path), resources.toJsonString()).withLogging(LOGGER,
                 "PolicyEntryResources");
     }
 
@@ -1564,7 +1559,7 @@ public abstract class IntegrationTest {
             final String resourcePath) {
         final String path =
                 ResourcePathBuilder.forPolicy(policyId).resource(label, resourcePath).toString();
-        return get(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntryResource");
+        return get(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntryResource");
     }
 
     /**
@@ -1580,7 +1575,7 @@ public abstract class IntegrationTest {
             final String resourcePath, final Resource resource) {
         final String path =
                 ResourcePathBuilder.forPolicy(policyId).resource(label, resourcePath).toString();
-        return put(thingsServiceUrl(TestConstants.API_V_2, path), resource.toJsonString()).withLogging(LOGGER,
+        return put(dittoUrl(TestConstants.API_V_2, path), resource.toJsonString()).withLogging(LOGGER,
                 "PolicyEntryResource");
     }
 
@@ -1596,7 +1591,7 @@ public abstract class IntegrationTest {
             final String resourcePath) {
         final String path =
                 ResourcePathBuilder.forPolicy(policyId).resource(label, resourcePath).toString();
-        return delete(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER,
+        return delete(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER,
                 "PolicyEntryResource");
     }
 
@@ -1608,7 +1603,7 @@ public abstract class IntegrationTest {
      */
     protected static GetMatcher getPolicy(final CharSequence policyId) {
         final String path = ResourcePathBuilder.forPolicy(policyId).toString();
-        return get(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "Policy");
+        return get(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "Policy");
     }
 
     /**
@@ -1619,7 +1614,7 @@ public abstract class IntegrationTest {
      */
     protected static DeleteMatcher deletePolicy(final CharSequence policyId) {
         final String path = ResourcePathBuilder.forPolicy(policyId).toString();
-        final String thingsServiceUrl = thingsServiceUrl(TestConstants.API_V_2, path);
+        final String thingsServiceUrl = dittoUrl(TestConstants.API_V_2, path);
 
         return delete(thingsServiceUrl).withLogging(LOGGER, "Policy");
     }
@@ -1632,7 +1627,7 @@ public abstract class IntegrationTest {
      */
     protected static GetMatcher getThingPolicy(final CharSequence thingId) {
         final String path = ResourcePathBuilder.forThing(thingId).toString();
-        return get(thingsServiceUrl(TestConstants.API_V_2, path))
+        return get(dittoUrl(TestConstants.API_V_2, path))
                 .withParam("fields", "_policy")
                 .withLogging(LOGGER, "ThingPolicy");
     }
@@ -1646,7 +1641,7 @@ public abstract class IntegrationTest {
      */
     protected static GetMatcher getPolicyEntry(final CharSequence policyId, final CharSequence policyLabel) {
         final String path = ResourcePathBuilder.forPolicy(policyId).policyEntry(policyLabel).toString();
-        return get(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntry");
+        return get(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntry");
     }
 
     /**
@@ -1658,7 +1653,7 @@ public abstract class IntegrationTest {
      */
     protected static DeleteMatcher deletePolicyEntry(final CharSequence policyId, final CharSequence policyLabel) {
         final String path = ResourcePathBuilder.forPolicy(policyId).policyEntry(policyLabel).toString();
-        return delete(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntry");
+        return delete(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "PolicyEntry");
     }
 
     /**
@@ -1672,7 +1667,7 @@ public abstract class IntegrationTest {
     protected static PostMatcher postPolicyAction(final CharSequence policyId, final String actionName,
             @Nullable final String payload) {
         final String path = ResourcePathBuilder.forPolicy(policyId).action(actionName).toString();
-        return post(thingsServiceUrl(TestConstants.API_V_2, path), payload)
+        return post(dittoUrl(TestConstants.API_V_2, path), payload)
                 .withLogging(LOGGER, "PolicyAction");
     }
 
@@ -1750,7 +1745,7 @@ public abstract class IntegrationTest {
         // add 0-timeoutInSeconds for immediate response
         final String path = thingPath + (direction == MessageDirection.TO ? HttpResource.INBOX : HttpResource.OUTBOX) +
                 HttpResource.MESSAGES + '/' + messageSubject;
-        final String thingsServiceUrl = thingsServiceUrl(version, path);
+        final String thingsServiceUrl = dittoUrl(version, path);
 
         return post(thingsServiceUrl, contentType, payload)
                 .withParam("timeout", (timeoutInSeconds != null ? timeoutInSeconds : "0"))
@@ -1835,7 +1830,7 @@ public abstract class IntegrationTest {
         final String path =
                 featurePath + (direction == MessageDirection.TO ? HttpResource.INBOX : HttpResource.OUTBOX) +
                         HttpResource.MESSAGES + '/' + messageSubject;
-        final String thingsServiceUrl = thingsServiceUrl(version, path);
+        final String thingsServiceUrl = dittoUrl(version, path);
 
         return post(thingsServiceUrl, contentType, payload).withLogging(LOGGER, "Message")
                 .withParam("timeout", timeoutInSeconds != null ? timeoutInSeconds : "0");

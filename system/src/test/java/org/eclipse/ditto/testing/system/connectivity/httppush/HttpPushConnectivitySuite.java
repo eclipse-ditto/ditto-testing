@@ -146,7 +146,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
 
     @After
     public void cleanUp() {
-        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution());
+        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
     }
 
     @Test
@@ -154,7 +154,8 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
     public void testHttpMethodAndBasicAuth() {
         final ConnectivityFactory factory =
                 cf.withTargetAddress(name -> "PATCH:/" + name);
-        final String connectionName = cf.disambiguate("HttpPushMethodInTargetAddress");
+        final String connectionName = cf.disambiguateConnectionName(
+                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),"HttpPushMethodInTargetAddress");
         factory.setupSingleConnection(connectionName).join();
         sendSignal(null, newCreateThing(connectionName, connectionName));
         final HttpRequest request = consumeResponse(null, connectionName);
@@ -168,14 +169,15 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
     public void testOAuth2() {
         // GIVEN: A connection is created with OAuth2 credentials
         final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
-        final String connectionName = cf.disambiguate("HttpPushWithOAuth2");
+        final String connectionName = cf.disambiguateConnectionName(
+                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),"HttpPushWithOAuth2");
 
-        final var suiteAuthClient = SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient();
+        final var authClient = SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient();
         final var credentials = OAuthClientCredentials.newBuilder()
-                .tokenEndpoint(suiteAuthClient.getTokenEndpoint())
-                .clientId(suiteAuthClient.getClientId())
-                .clientSecret(suiteAuthClient.getClientSecret())
-                .scope(suiteAuthClient.getScope().orElse(""))
+                .tokenEndpoint(authClient.getTokenEndpoint())
+                .clientId(authClient.getClientId())
+                .clientSecret(authClient.getClientSecret())
+                .scope(authClient.getScope().orElse(""))
                 .build();
 
         final Connection connection = cf.getSingleConnection(solution.getUsername(), connectionName)
@@ -207,7 +209,8 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
     @Connections(ConnectionCategory.NONE)
     public void testAzureHmacAuth() {
         final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
-        final String connectionName = cf.disambiguate("HttpPushWithAzHmacAuth");
+        final String connectionName = cf.disambiguateConnectionName(
+                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),"HttpPushWithAzHmacAuth");
 
         final String algorithm = "az-monitor-2016-04-01";
         final String workspaceId = "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
@@ -235,7 +238,8 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
     public void testAzureSaslAuth() {
         // GIVEN: A connection is created with az-sasl HMAC credentials
         final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
-        final String connectionName = cf.disambiguate("HttpPushWithAzSaslAuth");
+        final String connectionName = cf.disambiguateConnectionName(
+                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),"HttpPushWithAzSaslAuth");
         final String skn = "RootSharedAccessKeyPolicy";
         final String endpoint = "localhost";
 
@@ -270,7 +274,8 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
     @Connections(ConnectionCategory.NONE)
     public void testTunneledAzureHmacAuth() {
         final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
-        final String connectionName = cf.disambiguate("HttpPushWithTunneledAzHmacAuth");
+        final String connectionName = cf.disambiguateConnectionName(
+                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),"HttpPushWithTunneledAzHmacAuth");
 
         final String algorithm = "az-monitor-2016-04-01";
         final String workspaceId = "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
@@ -305,7 +310,8 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
                 "host");
 
         final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
-        final String connectionName = cf.disambiguate("HttpPushWithAwsHmacAuth");
+        final String connectionName = cf.disambiguateConnectionName(
+                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),"HttpPushWithAwsHmacAuth");
         // this is not actually consuming a response but the forwarded event via http
         final Connection singleConnectionWithAwsHmacAuth =
                 getSingleConnectionWithAwsHmacAuth(cf.getSingleConnection(solution.getUsername(), connectionName),
@@ -339,7 +345,8 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
                 "host");
 
         final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
-        final String connectionName = cf.disambiguate("HttpPushWithTunneledAwsHmacAuth");
+        final String connectionName = cf.disambiguateConnectionName(
+                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),"HttpPushWithTunneledAwsHmacAuth");
         // this is not actually consuming a response but the forwarded event via http
         final Connection singleConnectionWithAwsHmacAuth =
                 getSingleConnectionWithAwsHmacAuth(cf.getSingleConnectionWithTunnel(connectionName),
@@ -364,7 +371,8 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
     @Connections(ConnectionCategory.CONNECTION1)
     public void testNormalizedPayloadMapping() {
         final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
-        final String connectionName = cf.disambiguate("HttpPushNormalizedPayloadMapping");
+        final String connectionName = cf.disambiguateConnectionName(
+                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),"HttpPushNormalizedPayloadMapping");
         // include connectionName1 as a receiving connection to get thingCreated event.
         final CreateThing createThing =
                 attachFeatures(newTargetOnlyCreateThing(connectionName, cf.connectionName1),
@@ -422,7 +430,8 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
     @Connections(ConnectionCategory.CONNECTION1)
     public void testNormalizedPayloadMappingForMergeThing() {
         final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
-        final String connectionName = cf.disambiguate("HttpPushNormalizedPayloadMappingForMergeThing");
+        final String connectionName = cf.disambiguateConnectionName(
+                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),"HttpPushNormalizedPayloadMappingForMergeThing");
         // include connectionName1 as a receiving connection to get thingCreated event.
         final CreateThing createThing =
                 attachFeatures(newTargetOnlyCreateThing(connectionName, cf.connectionName1),
@@ -482,7 +491,8 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
 
         final String eventConsumer = initTargetsConsumer(cf.connectionName1, null);
         final ConnectivityFactory factory = cf.withTargetAddress(name -> "POST:/" + name);
-        final String connectionName = cf.disambiguate("SendLiveMessageViaHttpPushRespondViaWebsocketMessage");
+        final String connectionName = cf.disambiguateConnectionName(
+                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),"SendLiveMessageViaHttpPushRespondViaWebsocketMessage");
         factory.setupSingleConnection(connectionName).join();
 
         final CreateThing createThing = newTargetOnlyCreateThing(connectionName, cf.connectionName1);
@@ -497,7 +507,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
         final String correlationId = UUID.randomUUID().toString();
         final String messageSubject = "test";
 
-        final String url = thingsServiceUrl(TestConstants.API_V_2,
+        final String url = dittoUrl(TestConstants.API_V_2,
                 "/things/" + thingId + "/inbox/messages/" + messageSubject);
 
         final ListenableFuture<Response> postMessageResponse = client.preparePost(url)
@@ -535,7 +545,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
     /**
      * This test is required because we want to keep the workaround to explicitly declare the "live-response" label
      * as issued ack and make our service handle this as live message response.
-     * Therefore this test creates a special connection which declares "live-response" as issued ack.
+     * Therefor this test creates a special connection which declares "live-response" as issued ack.
      */
     @Test
     @Connections(ConnectionCategory.CONNECTION1)
@@ -544,7 +554,8 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
 
         final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
         final String respondingConnectionName =
-                cf.disambiguate("SendLiveMessageViaHttpPushRespondViaHttpResponseViaLiveResponseIssuedAck");
+                cf.disambiguateConnectionName(
+                        SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),"slmvhprvhrvlria");
         final Connection singleConnection = cf.getSingleConnection(solution.getUsername(), respondingConnectionName);
         final Connection connectionWithLiveResponseIssuedAck =
                 singleConnection.toBuilder()
@@ -572,7 +583,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
         final String correlationId = UUID.randomUUID().toString();
         final String messageSubject = "please-respond";
 
-        final String url = thingsServiceUrl(TestConstants.API_V_2,
+        final String url = dittoUrl(TestConstants.API_V_2,
                 "/things/" + thingId + "/inbox/messages/" + messageSubject);
 
         final HttpStatus responseHttpStatus = HttpStatus.MULTI_STATUS;
@@ -615,7 +626,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
         final String correlationId = UUID.randomUUID().toString();
         final String messageSubject = "please-respond";
 
-        final String url = thingsServiceUrl(TestConstants.API_V_2,
+        final String url = dittoUrl(TestConstants.API_V_2,
                 "/things/" + thingId + "/inbox/messages/" + messageSubject);
 
         final HttpStatus responseHttpStatus = HttpStatus.MULTI_STATUS;

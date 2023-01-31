@@ -14,7 +14,6 @@ package org.eclipse.ditto.testing.system.client.ack;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -22,7 +21,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 
 import org.assertj.core.api.SoftAssertions;
@@ -40,7 +38,6 @@ import org.eclipse.ditto.base.model.signals.acks.Acknowledgements;
 import org.eclipse.ditto.client.DittoClient;
 import org.eclipse.ditto.client.changes.ChangeAction;
 import org.eclipse.ditto.client.management.AcknowledgementsFailedException;
-import org.eclipse.ditto.client.messaging.AuthenticationException;
 import org.eclipse.ditto.client.options.Options;
 import org.eclipse.ditto.json.JsonArray;
 import org.eclipse.ditto.json.JsonObject;
@@ -315,21 +312,9 @@ public final class ClientAcknowledgementIT extends AbstractClientIT {
     }
 
     @Test
-    public void subscribeWithInvalidDeclaredAck() {
-        final AcknowledgementLabel acknowledgementLabel = AcknowledgementLabel.of("wrong:test");
-        final List<AcknowledgementLabel> wrongDeclaredAcknowledgements = List.of(acknowledgementLabel);
-        final List<AcknowledgementLabel> emptyAcks = List.of();
-        assertThatExceptionOfType(CompletionException.class)
-                .isThrownBy(() -> newDittoClientV2(userSubscriber, wrongDeclaredAcknowledgements, emptyAcks))
-                .withCauseInstanceOf(AuthenticationException.class)
-                .withMessageContaining(
-                        "{\"status\":400,\"error\":\"acknowledgement:label.invalid\",\"message\":\"Acknowledgement label <wrong:test> is invalid.\"");
-    }
-
-    @Test
     public void publishNotDeclaredAck() {
         final Adaptable notDeclaredAck = DittoProtocolAdapter.newInstance()
-                .toAdaptable(Acknowledgement.of(AcknowledgementLabel.of("not-declared"), ThingId.generateRandom(),
+                .toAdaptable(Acknowledgement.of(AcknowledgementLabel.of("not-declared"), ThingId.generateRandom("org.eclipse.ditto"),
                         HttpStatus.OK, DittoHeaders.empty()));
         client.sendDittoProtocol(notDeclaredAck)
                 .thenAccept(response -> assertThat(response.getPayload().getValue())

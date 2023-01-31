@@ -69,7 +69,7 @@ final class Amqp10TestServer {
     private Vertx vertx;
     private ProtonServer server;
 
-    // hub simulation
+    // Hono simulation
     private int sourceNotFoundAttempts = 0;
     private boolean initialConnection = false;
 
@@ -124,7 +124,7 @@ final class Amqp10TestServer {
                 if (!initialConnection) { // if there was no initial connection allow
                     this.openSender(sender);
                     initialConnection = true;
-                    LOGGER.info("Initial connection to HUB established.");
+                    LOGGER.info("Initial connection to Hono established.");
                 } else if (sourceAddress.startsWith(connectionName)) {
                     // after the client reconnected answer the first two link establishment requests with "NOT_FOUND"
                     if (++sourceNotFoundAttempts > 2) {
@@ -143,11 +143,6 @@ final class Amqp10TestServer {
                 this.openSender(sender);
             }
         };
-    }
-
-    boolean hasOpenConnection(final String remoteContainer) {
-        return openConnections.stream()
-                .anyMatch(conn -> remoteContainer.equals(conn.getRemoteContainer()));
     }
 
     /**
@@ -318,10 +313,11 @@ final class Amqp10TestServer {
                     .handler(log((delivery, msg) -> {
 
                         LOGGER.info("[{}] Received delivery at {} from {}: cor-id: {} - properties: {} - " +
-                                        "applicationProperties: {}",
+                                        "applicationProperties: {} - content: {}",
                                 connection.getContainer(),
                                 msg.getAddress(), connection.getRemoteHostname(), msg.getCorrelationId(),
-                                msg.getProperties(), msg.getApplicationProperties());
+                                msg.getProperties(), msg.getApplicationProperties(),
+                                msg.getBody());
                         delivery.disposition(new Accepted(), true);
                         final String address = msg.getAddress();
                         if (address != null) {
@@ -336,11 +332,11 @@ final class Amqp10TestServer {
                             LOGGER.warn("No address in message");
                         }
                     })).closeHandler(log(closeHandler -> {
-                final ProtonReceiver protonReceiver = closeHandler.result();
-                LOGGER.info("Receiver {} closed remotely.", protonReceiver.getName());
-                protonReceiver.close();
-                protonReceiver.free();
-            })).open();
+                        final ProtonReceiver protonReceiver = closeHandler.result();
+                        LOGGER.info("Receiver {} closed remotely.", protonReceiver.getName());
+                        protonReceiver.close();
+                        protonReceiver.free();
+                    })).open();
             LOGGER.info("[{}] Opening inbound link at {}", connection.getContainer(), targetAddress);
         })).senderOpenHandler(log(this.senderOpenHandler));
     }

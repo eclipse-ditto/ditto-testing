@@ -159,7 +159,7 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
 
         // WebSocket client consumes live commands:
         final ConnectivityTestWebsocketClient clientUser1 =
-                ConnectivityTestWebsocketClient.newInstance(thingsWsUrl(TestConstants.API_V_2),
+                ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2),
                         SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
         clientUser1.connect("sendWebsocketLiveCommandAnswersWithLiveResponse-" + UUID.randomUUID());
         clientUser1.startConsumingLiveCommands(liveCommand -> {
@@ -274,7 +274,7 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
         // WebSocket client consumes live commands:
 
         final DittoClient client =
-                getDittoClient(thingsWsUrl(TestConstants.API_V_2),
+                getDittoClient(dittoWsUrl(TestConstants.API_V_2),
                         SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
         final String messageSubject = UUID.randomUUID().toString();
         final String registrationId = "registration" + UUID.randomUUID();
@@ -665,7 +665,7 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
                 .correlationId(UUID.randomUUID().toString())
                 // the mapping is configured to read thingId from device_id header
                 .putHeader("device_id", thingId)
-                // add ttd header as hub would do
+                // add ttd header as Hono would do
                 .putHeader("ttd", String.valueOf(ttd))
                 .putHeader("creation-time", String.valueOf(System.currentTimeMillis()))
                 .build();

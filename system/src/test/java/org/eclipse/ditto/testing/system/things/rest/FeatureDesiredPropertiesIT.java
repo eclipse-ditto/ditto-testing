@@ -261,10 +261,7 @@ public final class FeatureDesiredPropertiesIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void putAndGetDesiredPropertyTwice() {
         final String location = postThing(TestConstants.API_V_2)
@@ -614,7 +611,7 @@ public final class FeatureDesiredPropertiesIT extends IntegrationTest {
 
         final String path = ResourcePathBuilder.forThing(thingId).feature(featureId).desiredProperties().toString();
         final String jsonString = "{}";
-        final String propertiesUrlWithDoubleSlash = thingsServiceUrl(TestConstants.API_V_2, path) + "//";
+        final String propertiesUrlWithDoubleSlash = dittoUrl(TestConstants.API_V_2, path) + "//";
         final String propertiesUrlWithDoubleSlashAndId =
                 propertiesUrlWithDoubleSlash + "bar";
 
@@ -665,7 +662,7 @@ public final class FeatureDesiredPropertiesIT extends IntegrationTest {
                 ResourcePathBuilder.forThing(thingId).feature(featureId).desiredProperty(propertyKey).toString();
         final String jsonString = "13";
 
-        put(thingsServiceUrl(TestConstants.API_V_2, path), jsonString)
+        put(dittoUrl(TestConstants.API_V_2, path), jsonString)
                 .disableUrlEncoding()
                 .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .expectingBody(containsCharSequence("Consecutive slashes in JSON pointers are not supported"))

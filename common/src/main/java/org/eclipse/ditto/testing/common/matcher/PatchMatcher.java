@@ -15,7 +15,6 @@ package org.eclipse.ditto.testing.common.matcher;
 import static org.eclipse.ditto.base.model.common.ConditionChecker.checkNotNull;
 
 import java.util.List;
-import java.util.function.LongConsumer;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
@@ -103,22 +102,12 @@ public final class PatchMatcher extends HttpVerbMatcher<PatchMatcher> {
     }
 
     @Override
-    protected void doLog(final Logger logger, final String path, final String entityType) {
+    protected void doLog(final Logger logger, final String path, @Nullable final String entityType) {
         if (logger.isDebugEnabled()) {
             logger.debug(PATCH_MESSAGE_TEMPLATE, entityType, path, contentType, payload);
         } else {
             logger.info(SHORT_MESSAGE_TEMPLATE, entityType, path, contentType);
         }
-    }
-
-    @Override
-    public PatchMatcher registerRequestSizeConsumer(@Nullable final LongConsumer requestSizeConsumer) {
-        if (null != requestSizeConsumer) {
-            final var headersSize = getHeaderBytes();
-            final var payloadSize = null != payload ? getBytes(payload) : 0;
-            requestSizeConsumer.accept(headersSize + payloadSize);
-        }
-        return getThis();
     }
 
 }

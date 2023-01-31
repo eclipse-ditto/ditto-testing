@@ -4,31 +4,29 @@
     <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
     <envs>
       <env name="INSTANCE_INDEX" value="1" />
-      <env name="CONNECTIVITY_HTTP_PROXY_ENABLED" value="false" />
-      <env name="CONNECTIVITY_HTTP_PROXY_HOST" value="localhost" />
-      <env name="CONNECTIVITY_HTTP_PROXY_PORT" value="3128" />
-      <env name="REMOTING_IDLE_CPU_LEVEL" value="2" />
       <env name="LOG_LEVEL" value="INFO" />
       <env name="LOG_LEVEL_APPLICATION" value="INFO" />
-      <env name="THINGS_USAGE_TRANSACTIONS_MIN_INTERVAL" value="1s" />
-      <env name="THINGS_USAGE_TRANSACTIONS_MAX_INTERVAL" value="2s" />
-      <env name="THINGS_USAGE_INCLUDED_MAPPING_DURATION" value="1m" />
-      <env name="THINGS_USAGE_INCLUDED_BYTES" value="2000" />
-      <env name="AMQP10_CONSUMER_THROTTLING_INTERVAL" value="100ms" />
+      <env name="AMQP10_CONSUMER_THROTTLING_ENABLED" value="true" />
+      <env name="AMQP10_CONSUMER_THROTTLING_INTERVAL" value="1s" />
       <env name="AMQP10_CONSUMER_THROTTLING_LIMIT" value="10" />
+      <env name="KAFKA_CONSUMER_THROTTLING_ENABLED" value="true" />
+      <env name="KAFKA_CONSUMER_THROTTLING_INTERVAL" value="1s" />
+      <env name="KAFKA_CONSUMER_THROTTLING_LIMIT" value="10" />
+      <env name="HONO_CONNECTION_URI" value="tcp://localhost:9092" />
+      <env name="HONO_CONNECTION_BOOTSTRAP_SERVERS" value="localhost:9092" />
+      <env name="HONO_CONNECTION_SASL_MECHANISM" value="PLAIN" />
+      <env name="HONO_CONNECTION_HONO_USERNAME" value="kafkaUsername" />
+      <env name="HONO_CONNECTION_HONO_PASSWORD" value="kafkaPassword" />
       <env name="CONNECTIVITY_HTTP_PUSH_MAX_QUEUE_SIZE" value="100" />
+      <env name="CONNECTIVITY_LOGGER_PUBLISHER_ENABLED" value="true" />
+      <env name="CONNECTIVITY_LOGGER_PUBLISHER_FLUENCY_HOST" value="localhost" />
       <env name="CONNECTIVITY_ALL_CLIENT_ACTORS_ON_ONE_NODE" value="true" />
       <env name="CONNECTIVITY_MQTT_RECONNECT_FOR_REDELIVERY" value="true" />
       <env name="CONNECTIVITY_MQTT_SEPARATE_PUBLISHER_CLIENT" value="true" />
-      <env name="CONNECTIVITY_CONNECTION_ALLOWED_HOSTNAMES" value="127.0.0.1,localhost,artemis,system-test-container,kafka,mqtt,rabbitmq,ssh,unknown,172.17.0.1,hono-endpoint" />
+      <env name="CONNECTIVITY_CONNECTION_ALLOWED_HOSTNAMES" value="127.0.0.1,localhost,artemis,system-test-container,kafka,mqtt,rabbitmq,ssh,unknown,oauth,172.17.0.1,hono-endpoint" />
       <env name="CONNECTIVITY_CONNECTION_BLOCKED_HOSTNAMES" value="127.0.0.1" />
       <env name="CONNECTION_SOURCE_NUMBER" value="10" />
-      <env name="USAGE21_COLLECTOR_DURATION_THRESHOLD" value="2s" />
-      <env name="USAGE21_COLLECTOR_INTERNAL_TICK_INTERVAL" value="1s" />
-      <env name="USAGE21_CONNECTIVITY_MESSAGE_CACHING_DURATION" value="2s" />
-      <env name="KAFKA_CONSUMER_THROTTLING_LIMIT" value="10" />
       <env name="CONNECTIVITY_HTTP_OAUTH2_ENFORCE_HTTPS" value="false" />
-      <env name="CONNECTIVITY_KAFKA_SOURCES_BLOCKED_HOSTNAMES" value="bosch-iot-suite.com" />
     </envs>
     <option name="MAIN_CLASS_NAME" value="org.eclipse.ditto.connectivity.service.ConnectivityService" />
     <module name="ditto-connectivity-service" />

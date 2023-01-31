@@ -41,18 +41,18 @@ public final class OAuthMockClient {
     /**
      * Returns a new instance of {@code OAuthMockClient}.
      *
-     * @param suiteAuthMockTokenUri URI of the token endpoint.
+     * @param oAuthMockTokenUri URI of the token endpoint.
      * @return the instance.
      * @throws NullPointerException if any argument is {@code null}.
      */
-    public static OAuthMockClient newInstance(final URI suiteAuthMockTokenUri) {
+    public static OAuthMockClient newInstance(final URI oAuthMockTokenUri) {
 
         try {
             return new OAuthMockClient(
-                    OAuthClient.newInstance(checkNotNull(suiteAuthMockTokenUri, "suiteAuthMockTokenUri"))
+                    OAuthClient.newInstance(checkNotNull(oAuthMockTokenUri, "oAuthMockTokenUri"))
             );
         } finally {
-            LOGGER.info("Initialised for token endpoint <{}>.", suiteAuthMockTokenUri);
+            LOGGER.info("Initialised for token endpoint <{}>.", oAuthMockTokenUri);
         }
     }
 

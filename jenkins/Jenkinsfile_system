@@ -134,7 +134,7 @@ spec:
                                          '--network-alias system-test-container ' +
                                          // Port for Http-push mock-server
                                          '--expose $HTTP_PUSH_MOCK_SERVER_PORT ' +
-                                         // Port for Amqp10Hub mock-servers
+                                         // Port for Amqp10Hono mock-servers
                                          '--expose 5887 ' +
                                          '--expose 5888 ' +
                                          "$EXTRA_DOCKER_ARGS"

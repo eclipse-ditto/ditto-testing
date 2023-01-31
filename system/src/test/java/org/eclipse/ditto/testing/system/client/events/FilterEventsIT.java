@@ -27,6 +27,7 @@ import org.eclipse.ditto.client.options.Options;
 import org.eclipse.ditto.json.JsonFieldSelector;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
+import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.system.client.AbstractClientIT;
@@ -62,7 +63,7 @@ public class FilterEventsIT extends AbstractClientIT {
     public void setUp() {
         LOGGER.info("-----> Running Test: {}", name.getMethodName());
 
-        interestingNamespace = serviceEnv.getDefaultNamespaceName();
+        interestingNamespace = ServiceEnvironment.createRandomDefaultNamespace();
         anotherNamespace = serviceEnv.getSecondaryNamespaceName();
         user = serviceEnv.getDefaultTestingContext().getOAuthClient();
         dittoClient = newDittoClient(user);

@@ -40,7 +40,10 @@ import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.testing.common.IntegrationTest;
+import org.eclipse.ditto.testing.common.ServiceEnvironment;
+import org.eclipse.ditto.testing.common.Solution;
 import org.eclipse.ditto.testing.common.TestConstants;
+import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.common.ws.ThingsWebsocketClient;
@@ -61,17 +64,22 @@ import io.restassured.response.Response;
  */
 public final class RequestedAcksIT extends IntegrationTest {
 
-    private static final AcknowledgementLabel
-            ws1Ack = AcknowledgementLabel.of(serviceEnv.getDefaultAuthUsername() + ":custom-ack");
-    private static final AcknowledgementLabel
-            ws2Ack = AcknowledgementLabel.of(serviceEnv.getDefaultAuthUsername() + ":another-ack");
-
     private static ThingsWebsocketClient websocketClient1;
     private static ThingsWebsocketClient websocketClient2;
+    private static TestingContext testingContext;
+
+    private static AcknowledgementLabel ws1Ack;
+    private static AcknowledgementLabel ws2Ack;
 
     @BeforeClass
     public static void setUpClients() {
-        final AuthClient client1 = serviceEnv.getDefaultTestingContext().getOAuthClient();
+        ServiceEnvironment.createSolutionWithRandomUsernameRandomNamespace();
+        final Solution solution = ServiceEnvironment.createSolutionWithRandomUsernameRandomNamespace();
+        testingContext = TestingContext.withGeneratedMockClient(solution, TEST_CONFIG);
+        final AuthClient client1 = testingContext.getOAuthClient();
+
+        ws1Ack = AcknowledgementLabel.of(testingContext.getSolution().getUsername() + ":custom-ack");
+        ws2Ack = AcknowledgementLabel.of(testingContext.getSolution().getUsername() + ":another-ack");
 
         websocketClient1 = newTestWebsocketClient(client1.getAccessToken(),
                 Map.of(DittoHeaderDefinition.DECLARED_ACKS.getKey(), String.format("[\"%s\"]", ws1Ack)),
@@ -97,6 +105,7 @@ public final class RequestedAcksIT extends IntegrationTest {
     @Test
     public void createThingRequestingTwinPersistedAcknowledgementAsQueryParam() {
         final Response response = postThing(TestConstants.API_V_2, JsonFactory.newObject())
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withParam(DittoHeaderDefinition.REQUESTED_ACKS.getKey(), DittoAcknowledgementLabel.TWIN_PERSISTED)
                 .expectingHttpStatus(CREATED)
                 .fire();
@@ -104,6 +113,7 @@ public final class RequestedAcksIT extends IntegrationTest {
         final String thingId = parseIdFromLocation(response.header("Location"));
 
         deleteThing(TestConstants.API_V_2, thingId)
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withParam(DittoHeaderDefinition.REQUESTED_ACKS.getKey(), DittoAcknowledgementLabel.TWIN_PERSISTED)
                 .expectingHttpStatus(NO_CONTENT)
                 .fire();
@@ -112,6 +122,7 @@ public final class RequestedAcksIT extends IntegrationTest {
     @Test
     public void createThingRequestingTwinPersistedAcknowledgementAsHeader() {
         final Response response = postThing(TestConstants.API_V_2, JsonFactory.newObject())
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                         DittoAcknowledgementLabel.TWIN_PERSISTED.toString())
                 .expectingHttpStatus(CREATED)
@@ -120,6 +131,7 @@ public final class RequestedAcksIT extends IntegrationTest {
         final String thingId = parseIdFromLocation(response.header("Location"));
 
         deleteThing(TestConstants.API_V_2, thingId)
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                         DittoAcknowledgementLabel.TWIN_PERSISTED.toString())
                 .expectingHttpStatus(NO_CONTENT)
@@ -129,6 +141,7 @@ public final class RequestedAcksIT extends IntegrationTest {
     @Test
     public void createThingRequestingEmptyAcknowledgements() {
         postThing(TestConstants.API_V_2, JsonFactory.newObject())
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(), "")
                 .expectingHttpStatus(CREATED)
                 .fire();
@@ -137,6 +150,7 @@ public final class RequestedAcksIT extends IntegrationTest {
     @Test
     public void createThingRequestingEmptyAcknowledgementsAndResponseRequiredFalse() {
         postThing(TestConstants.API_V_2, JsonFactory.newObject())
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(), "")
                 .withHeader(DittoHeaderDefinition.RESPONSE_REQUIRED.getKey(), false)
                 .expectingHttpStatus(ACCEPTED)
@@ -146,6 +160,7 @@ public final class RequestedAcksIT extends IntegrationTest {
     @Test
     public void createThingRequestingUnknownAcknowledgement() {
         postThing(TestConstants.API_V_2, JsonFactory.newObject())
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(), "unknown")
                 .withHeader(DittoHeaderDefinition.TIMEOUT.getKey(), "3")
                 .expectingHttpStatus(REQUEST_TIMEOUT) // resulting in 408 timeout
@@ -154,13 +169,14 @@ public final class RequestedAcksIT extends IntegrationTest {
 
     @Test
     public void createThingRequestingMultipleAcknowledgementsWhichArePartiallyFulfilled() {
-        final String thingId = serviceEnv.getDefaultNamespaceName() + ":" + UUID.randomUUID();
+        final String thingId = testingContext.getSolution().getDefaultNamespace() + ":" + UUID.randomUUID();
 
         final int timeoutInSeconds = 2;
         final String correlationId = "custom-" + UUID.randomUUID();
         final String notFulfilledAckLabel = "not-fulfilled";
         final Response response = putThing(TestConstants.API_V_2, Thing.newBuilder().setId(ThingId.of(thingId)).build(),
                 JsonSchemaVersion.V_2)
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withParam(DittoHeaderDefinition.CORRELATION_ID.getKey(), correlationId)
                 .withParam(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                         DittoAcknowledgementLabel.TWIN_PERSISTED + "," + notFulfilledAckLabel)
@@ -206,6 +222,7 @@ public final class RequestedAcksIT extends IntegrationTest {
                 .contains(JsonKey.of(DittoHeaderDefinition.CORRELATION_ID.getKey()), correlationId);
 
         deleteThing(TestConstants.API_V_2, thingId)
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withParam(DittoHeaderDefinition.REQUESTED_ACKS.getKey(), DittoAcknowledgementLabel.TWIN_PERSISTED)
                 .expectingHttpStatus(NO_CONTENT)
                 .fire();
@@ -214,6 +231,7 @@ public final class RequestedAcksIT extends IntegrationTest {
     @Test
     public void createThingRequestingPersistedAcknowledgementWithResponseRequiredFalse() {
         postThing(TestConstants.API_V_2, JsonFactory.newObject())
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                         DittoAcknowledgementLabel.TWIN_PERSISTED.toString())
                 .withHeader(DittoHeaderDefinition.RESPONSE_REQUIRED.getKey(), "false")
@@ -224,6 +242,7 @@ public final class RequestedAcksIT extends IntegrationTest {
     @Test
     public void createThingRequestingPersistedAcknowledgementWithTimeoutZero() {
         postThing(TestConstants.API_V_2, JsonFactory.newObject())
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                         DittoAcknowledgementLabel.TWIN_PERSISTED.toString())
                 .withHeader(DittoHeaderDefinition.TIMEOUT.getKey(), "0")
@@ -234,11 +253,11 @@ public final class RequestedAcksIT extends IntegrationTest {
     @Test
     @Category(Acceptance.class)
     public void modifyThingRequestingMultipleAcknowledgementsFulfilledViaWs() {
-        final String thingId = serviceEnv.getDefaultNamespaceName() + ":" + UUID.randomUUID();
+        final String thingId = testingContext.getSolution().getDefaultNamespace() + ":" + UUID.randomUUID();
 
         final ThingBuilder.FromScratch thingBuilder = Thing.newBuilder().setId(ThingId.of(thingId));
-        putThing(TestConstants.API_V_2, thingBuilder.build(),
-                JsonSchemaVersion.V_2)
+        putThing(TestConstants.API_V_2, thingBuilder.build(), JsonSchemaVersion.V_2)
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(CREATED)
                 .fire();
 
@@ -281,8 +300,8 @@ public final class RequestedAcksIT extends IntegrationTest {
 
         final Response updateResponse = putThing(TestConstants.API_V_2, thingBuilder
                         .setAttribute(JsonPointer.of("some"), JsonValue.of(42))
-                        .build(),
-                JsonSchemaVersion.V_2)
+                        .build(), JsonSchemaVersion.V_2)
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .withParam(DittoHeaderDefinition.CORRELATION_ID.getKey(), correlationId)
                 .withParam(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                         DittoAcknowledgementLabel.TWIN_PERSISTED + "," + ws1Ack + "," + ws2Ack)
@@ -332,6 +351,7 @@ public final class RequestedAcksIT extends IntegrationTest {
                 .contains(JsonKey.of(DittoHeaderDefinition.CORRELATION_ID.getKey()), correlationId);
 
         deleteThing(TestConstants.API_V_2, thingId)
+                .withJWT(testingContext.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(NO_CONTENT)
                 .fire();
     }

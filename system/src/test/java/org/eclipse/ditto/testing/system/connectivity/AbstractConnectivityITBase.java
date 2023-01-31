@@ -43,7 +43,9 @@ import org.eclipse.ditto.connectivity.model.Credentials;
 import org.eclipse.ditto.connectivity.model.SshTunnel;
 import org.eclipse.ditto.connectivity.model.UserPasswordCredentials;
 import org.eclipse.ditto.json.JsonFactory;
+import org.eclipse.ditto.json.JsonFieldSelector;
 import org.eclipse.ditto.json.JsonObject;
+import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.messages.model.Message;
 import org.eclipse.ditto.messages.model.MessageHeaders;
 import org.eclipse.ditto.messages.model.MessagesModelFactory;
@@ -108,8 +110,8 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
         MODS.put(id, mod);
     }
 
-    static String connectionAuthIdentifier(final String username) {
-        return String.format("%s:%s", SubjectIssuer.INTEGRATION, username);
+    static String connectionAuthIdentifier(final String username, final String suffix) {
+        return String.format("%s:%s:%s", SubjectIssuer.INTEGRATION, username, suffix);
     }
 
     protected static Subject connectionSubject(final String suffix) {
@@ -125,61 +127,89 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
 
     protected static ConnectionModelFactory connectionModelFactory;
 
+    protected final ConnectivityFactory cf;
+    protected AbstractConnectivityITBase(final ConnectivityFactory cf) {
+        this.cf = cf;
+    }
+
     @BeforeClass
     public static void init() {
-        RANDOM_NAMESPACE = "pap.th.ns1." + randomString();
-        RANDOM_NAMESPACE_2 = "pap.th.ns2." + randomString();
-        final Solution solution = serviceEnv.getDefaultTestingContext().getSolution();
+        RANDOM_NAMESPACE = "org.eclipse.ditto.ns1." + randomString();
+        RANDOM_NAMESPACE_2 = "org.eclipse.ditto.ns2." + randomString();
+        final Solution solution = serviceEnv.createSolution(RANDOM_NAMESPACE);
         SOLUTION_CONTEXT_WITH_RANDOM_NS = TestingContext.withGeneratedMockClient(solution, TEST_CONFIG);
         connectionModelFactory = new ConnectionModelFactory(AbstractConnectivityITBase::connectionAuthIdentifier);
     }
 
-    protected static Response deleteConnection(final Solution solution, final ConnectionId connectionId) {
+    protected static Response deleteConnection(final ConnectionId connectionId) {
         return connectionsClient().deleteConnection(connectionId)
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
     }
 
-    protected static List<Connection> getAllConnections(final Solution solution) {
+    protected static List<ConnectionId> getAllConnectionIds(final String connectionNamePrefixToMatch) {
+        final Response response = connectionsClient().getConnections(
+                        JsonFieldSelector.newInstance("id", "name")
+                )
+                .withDevopsAuth()
+                .fire();
+
+        return JsonFactory.newArray(response.body().asString()).stream()
+                .filter(JsonValue::isObject)
+                .map(JsonValue::asObject)
+                .filter(idAndName -> idAndName.getValue(Connection.JsonFields.NAME)
+                        .filter(name -> name.startsWith(connectionNamePrefixToMatch))
+                        .isPresent()
+                )
+                .map(idAndName -> ConnectionId.of(idAndName.getValueOrThrow(Connection.JsonFields.ID)))
+                .collect(Collectors.toList());
+    }
+
+    protected static List<Connection> getAllConnections(final String connectionNamePrefixToMatch) {
         final Response response = connectionsClient().getConnections()
                 .withDevopsAuth()
                 .fire();
 
         return JsonFactory.newArray(response.body().asString()).stream()
-                .map(jsonValue -> ConnectivityModelFactory.connectionFromJson(jsonValue.asObject()))
+                .filter(JsonValue::isObject)
+                .map(JsonValue::asObject)
+                .filter(connectionJson -> connectionJson.getValue(Connection.JsonFields.NAME)
+                        .filter(name -> name.startsWith(connectionNamePrefixToMatch))
+                        .isPresent()
+                )
+                .map(ConnectivityModelFactory::connectionFromJson)
                 .collect(Collectors.toList());
     }
 
-    protected static Connection getConnectionExistingByName(final Solution solution, final String connectionName) {
-        final List<Connection> allConnections = getAllConnections(solution);
+    protected static Connection getConnectionExistingByName(final String connectionName) {
+        final List<Connection> allConnections = getAllConnections(connectionName);
 
         return allConnections.stream()
                 .filter(conn -> connectionName.equals(conn.getName().orElse(null)))
                 .findAny()
                 .orElseThrow(() -> {
                     LOGGER.error("Connection with name <" + connectionName + "> does not " +
-                            "exist for user <" + solution.getUsername() + ">, existing were connections:\n{}",
-                            allConnections);
+                            "exist, existing were connections:\n{}", allConnections);
                     return new IllegalStateException("Connection with name <" + connectionName + "> does not " +
-                            "exist for user <" + solution.getUsername() + ">");
+                            "exist");
                 });
     }
 
-    protected static GetMatcher getConnectionMatcher(final Solution solution, final CharSequence connectionId) {
+    protected static GetMatcher getConnectionMatcher(final CharSequence connectionId) {
         return connectionsClient().getConnection(connectionId)
                 .withDevopsAuth();
     }
 
-    protected static void testConnectionWithErrorExpected(final Solution solution, final JsonObject connectionJson,
+    protected static void testConnectionWithErrorExpected(final JsonObject connectionJson,
             final String errorString) {
 
-        testConnection(solution, connectionJson)
+        testConnection(connectionJson)
                 .expectingBody(Matchers.containsString(errorString))
                 .fire();
     }
 
-    private static PostMatcher testConnection(final Solution solution, final JsonObject connection) {
+    private static PostMatcher testConnection(final JsonObject connection) {
         final JsonObject connectionJsonStrWithoutId = removeIdFromJson(connection);
 
         return connectionsClient().testConnection(connectionJsonStrWithoutId)
@@ -456,25 +486,19 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
         }
     }
 
-    private static void cleanupSingleConnectionById(final Solution solution, final ConnectionId connectionId) {
+    private static void cleanupSingleConnectionById(final ConnectionId connectionId) {
         LOGGER.info("Removing connection with ID <{}>", connectionId);
-        final Response response = deleteConnection(solution, connectionId);
+        final Response response = deleteConnection(connectionId);
         LOGGER.info("cleanupSingleConnection for connection with ID <{}>. Response: {}",
                 connectionId, response.getStatusLine());
     }
 
-    protected static void cleanupConnections(final Solution solution) {
-        LOGGER.info("Removing all connections for user <{}>", solution.getUsername());
-        final List<Connection> connections = getAllConnections(solution);
-        LOGGER.info("Will delete connections with names: <{}>", connections.stream()
-                .map(Connection::getName)
-                .collect(Collectors.toList()));
+    protected static void cleanupConnections(final String username) {
+        LOGGER.info("Removing all dynamic connections for solution username <{}>", username);
+        final List<ConnectionId> connectionIds = getAllConnectionIds(username);
+        LOGGER.info("Will delete connectionIds with IDs: <{}>", connectionIds);
 
-        final List<ConnectionId> connectionIds = connections.stream()
-                .map(Connection::getId)
-                .collect(Collectors.toList());
-
-        connectionIds.forEach(connectionId -> cleanupSingleConnectionById(solution, connectionId));
+        connectionIds.forEach(AbstractConnectivityITBase::cleanupSingleConnectionById);
     }
 
     private static Signal<?> constructMessageCommandOrResponse(final String payload, final MessageHeaders headers) {

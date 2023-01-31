@@ -14,7 +14,6 @@ package org.eclipse.ditto.testing.common.matcher;
 
 import static io.restassured.RestAssured.expect;
 import static java.util.Objects.requireNonNull;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.eclipse.ditto.base.model.common.ConditionChecker.argumentNotEmpty;
 import static org.eclipse.ditto.base.model.common.ConditionChecker.checkNotNull;
 
@@ -31,7 +30,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import java.util.function.LongConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -42,7 +40,6 @@ import org.awaitility.core.ConditionFactory;
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.HttpParameter;
-import org.eclipse.ditto.testing.common.UserNamePasswordCredentials;
 import org.hamcrest.CustomTypeSafeMatcher;
 import org.hamcrest.Matcher;
 import org.hamcrest.Matchers;
@@ -141,13 +138,6 @@ public abstract class HttpVerbMatcher<T extends HttpVerbMatcher> {
         return getThis();
     }
 
-    public T withParamsSingleValued(final Map<String, String> paramsSingleValued) {
-        checkNotNull(paramsSingleValued);
-
-        paramsSingleValued.forEach((key, value) -> parameters.put(key, Collections.singletonList(value)));
-        return getThis();
-    }
-
     /**
      * Returns a {@link Matcher} for checking if the actual {@link HttpStatus} is equal to the expected HTTP status.
      *
@@ -228,30 +218,6 @@ public abstract class HttpVerbMatcher<T extends HttpVerbMatcher> {
             }
         };
         return getThis();
-    }
-
-    /**
-     * Sets Basic Auth credentials.
-     *
-     * @param credentials the credentials to use.
-     * @return this instance to allow Method Chaining.
-     */
-    public T withBasicAuth(final UserNamePasswordCredentials credentials) {
-        requireNonNull(credentials);
-        return withBasicAuth(credentials.getUserName(), credentials.getPassword());
-    }
-
-    /**
-     * Sets Basic Auth credentials.
-     *
-     * @param credentials the credentials to use.
-     * @param preemptive whether preemptive authentication is enabled: this means that the authentication details are
-     * sent in the request header regardless if the server has challenged for authentication or not.
-     * @return this instance to allow Method Chaining.
-     */
-    public T withBasicAuth(final UserNamePasswordCredentials credentials, final boolean preemptive) {
-        requireNonNull(credentials);
-        return withBasicAuth(credentials.getUserName(), credentials.getPassword(), preemptive);
     }
 
     /**
@@ -350,22 +316,6 @@ public abstract class HttpVerbMatcher<T extends HttpVerbMatcher> {
     }
 
     /**
-     * Sets the specified Solution Secret authentication header.
-     *
-     * @param username the username
-     * @param secret the secret
-     * @return this instance to allow Method Chaining.
-     */
-    public T withSolutionAuthentication(final String username, final String secret) {
-        requireNonNull(username, "The username must not be null!");
-        requireNonNull(secret, "The secret must not be null!");
-
-        withBasicAuth(username, secret, true);
-
-        return getThis();
-    }
-
-    /**
      * Enables logging for this request. The actual logging is done in {@code doLog} method which is called before the
      * request is fired.
      *
@@ -373,7 +323,7 @@ public abstract class HttpVerbMatcher<T extends HttpVerbMatcher> {
      * @param entityType the type that is CRUDed with the request e.g. Thing, Policy, Acl,...
      * @return this instance to allow Method Chaining.
      */
-    public T withLogging(final Logger logger, final String entityType) {
+    public T withLogging(final Logger logger, @Nullable final String entityType) {
         this.logger = logger;
         this.entityType = entityType;
         return getThis();
@@ -459,23 +409,6 @@ public abstract class HttpVerbMatcher<T extends HttpVerbMatcher> {
         return getThis();
     }
 
-    public final T expectingErrorMessage(final String expectedErrorMessage) {
-        checkNotNull(expectedErrorMessage, "expected error message");
-        bodyMatchers.add(new BodyContainsErrorMessageMatcher(expectedErrorMessage));
-        return getThis();
-    }
-
-    /**
-     * Matches the expected HTTP content type against the actual.
-     *
-     * @param expectedContentType the content type the REST request is expected to return.
-     * @return this instance to allow Method Chaining.
-     */
-    public T expectingContentType(final ContentType expectedContentType) {
-        responseSpecification.contentType(String.valueOf(is(expectedContentType)));
-        return getThis();
-    }
-
     public T expectingHeaderIsNotPresent(final String headerName) {
         final Matcher matcher = Matchers.not(headerName);
         responseSpecification.header(headerName, matcher);
@@ -489,17 +422,6 @@ public abstract class HttpVerbMatcher<T extends HttpVerbMatcher> {
 
     public T expectingHeader(final String name, final Matcher matcher) {
         responseSpecification.header(name, matcher);
-        return getThis();
-    }
-
-    public T expectingLocationHeader(final String expectedLocation) {
-        return expectingLocationHeaderSatisfies(actualLocation ->
-                assertThat(actualLocation).isEqualTo(expectedLocation));
-    }
-
-    public T expectingLocationHeaderSatisfies(final Consumer<String> requirements) {
-        responseSpecification.header(HttpHeader.LOCATION.getName(), s -> s,
-                new SatisfiesMatcher<>(requirements));
         return getThis();
     }
 
@@ -545,13 +467,6 @@ public abstract class HttpVerbMatcher<T extends HttpVerbMatcher> {
     public T registerResponseConsumer(@Nullable final Consumer<Response> responseConsumer) {
         if (null != responseConsumer) {
             responseConsumers.add(responseConsumer);
-        }
-        return getThis();
-    }
-
-    public T registerRequestSizeConsumer(@Nullable final LongConsumer requestSizeConsumer) {
-        if (null != requestSizeConsumer) {
-            requestSizeConsumer.accept(getHeaderBytes());
         }
         return getThis();
     }
@@ -659,6 +574,6 @@ public abstract class HttpVerbMatcher<T extends HttpVerbMatcher> {
      * @param path the path of the HTTP resource.
      * @param entityType the entity type of the request which can be used in the log message e.g. Thing, Policy.
      */
-    protected abstract void doLog(Logger logger, String path, String entityType);
+    protected abstract void doLog(Logger logger, String path, @Nullable String entityType);
 
 }

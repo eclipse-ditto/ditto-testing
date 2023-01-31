@@ -32,6 +32,7 @@ import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.messages.model.MessageDirection;
 import org.eclipse.ditto.testing.common.IntegrationTest;
+import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
 import org.eclipse.ditto.testing.common.client.http.AsyncHttpClientFactory;
@@ -48,7 +49,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 /**
- * Integration tests for the SSE endpoint of Things entity: {@code /api/1/things} and {@code /api/2/things}.
+ * Integration tests for the SSE endpoint of Things entity at {@code /api/2/things}.
  */
 public final class ThingsServerSentEventIT extends IntegrationTest {
 
@@ -59,10 +60,8 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
     @BeforeClass
     public static void setupNamespaces() {
-        interestingNamespace = serviceEnv.getDefaultNamespaceName();
-        if (TEST_CONFIG.isLocalOrDockerTestEnvironment()) {
-            anotherNamespace = serviceEnv.getSecondaryNamespaceName();
-        }
+        interestingNamespace = ServiceEnvironment.createRandomDefaultNamespace();
+        anotherNamespace = serviceEnv.getSecondaryNamespaceName();
     }
 
 
@@ -81,28 +80,30 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
     public void thingCreation() {
         final int expectedMessagesCount = 1;
 
-        final SseTestDriver driver = createTestDriver(expectedMessagesCount, getDefaultPath());
+        final SseTestDriver driver = createTestDriver(expectedMessagesCount,
+                getDefaultPath("namespaces=" + interestingNamespace));
         driver.connect();
 
-        parseIdFromLocation(postThing(TestConstants.API_V_2)
+        final ThingId thingId = ThingId.generateRandom(interestingNamespace);
+        putThing(TestConstants.API_V_2, Thing.newBuilder().setId(thingId).build(), JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.CREATED)
-                .fire()
-                .header("Location"));
+                .fire();
 
         assertThat(driver.getMessages()).hasSize(expectedMessagesCount);
     }
 
     @Test
     public void featureModification() {
-        final String thingId = parseIdFromLocation(postThing(TestConstants.API_V_2)
+        final ThingId thingId = ThingId.generateRandom(interestingNamespace);
+        putThing(TestConstants.API_V_2, Thing.newBuilder().setId(thingId).build(), JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.CREATED)
-                .fire()
-                .header("Location"));
+                .fire();
 
         final String featureId = "foo";
 
         final int expectedMessagesCount = 1;
-        final SseTestDriver driver = createTestDriver(expectedMessagesCount, getDefaultPath());
+        final SseTestDriver driver = createTestDriver(expectedMessagesCount,
+                getDefaultPath("namespaces=" + interestingNamespace));
         driver.connect();
 
         final FeatureProperties featureProperties = FeatureProperties.newBuilder()
@@ -410,10 +411,10 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
     @Test
     public void featureCreationModificationDeletionEnsuringEventOrder() throws InterruptedException {
-        final String thingId = parseIdFromLocation(postThing(TestConstants.API_V_2)
+        final ThingId thingId = ThingId.generateRandom(interestingNamespace);
+        putThing(TestConstants.API_V_2, Thing.newBuilder().setId(thingId).build(), JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.CREATED)
-                .fire()
-                .header("Location"));
+                .fire();
 
         final String featureId = "foo";
         final String counterPointer = "counter";
@@ -429,7 +430,8 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
         final int expectedMessagesCount = 25;
         final CountDownLatch latch = new CountDownLatch(expectedMessagesCount);
-        final SseTestDriver driver = createTestDriver(expectedMessagesCount, getDefaultPath());
+        final SseTestDriver driver = createTestDriver(expectedMessagesCount,
+                getDefaultPath("namespaces=" + interestingNamespace));
         driver.connect();
 
         for (int i = 1; i <= expectedMessagesCount; i++) {
@@ -525,10 +527,10 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
     @Test
     public void singleFeatureModification() {
-        final String thingId = parseIdFromLocation(postThing(TestConstants.API_V_2)
+        final ThingId thingId = ThingId.generateRandom(interestingNamespace);
+        putThing(TestConstants.API_V_2, Thing.newBuilder().setId(thingId).build(), JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.CREATED)
-                .fire()
-                .header("Location"));
+                .fire();
 
         final String featureId = "foo";
 
@@ -565,10 +567,10 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
     @Test
     public void messageToThingInbox() {
-        final String thingId = parseIdFromLocation(postThing(TestConstants.API_V_2)
+        final ThingId thingId = ThingId.generateRandom(interestingNamespace);
+        putThing(TestConstants.API_V_2, Thing.newBuilder().setId(thingId).build(), JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.CREATED)
-                .fire()
-                .header("Location"));
+                .fire();
 
         final int expectedMessagesCount = 2;
         final var path = "/things/" + thingId + "/inbox/messages";
@@ -599,15 +601,16 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
     @Test
     public void messageToFeatureInbox() {
+        final ThingId thingId = ThingId.generateRandom(interestingNamespace);
         final var featureId = "foo";
         final var thing = Thing.newBuilder()
+                .setId(thingId)
                 .setFeature(Feature.newBuilder().withId(featureId).build())
                 .build();
 
-        final String thingId = parseIdFromLocation(postThing(TestConstants.API_V_2, thing.toJsonString())
+        putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.CREATED)
-                .fire()
-                .header("Location"));
+                .fire();
 
         final int expectedMessagesCount = 1;
         final var subject = "bumlux";
@@ -632,12 +635,12 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
     }
 
     private SseTestDriver createTestDriver(final int expectedMessagesCount, final String path) {
-        final String url = thingsServiceUrl(TestConstants.API_V_2, path);
+        final String url = dittoUrl(TestConstants.API_V_2, path);
         LOGGER.info("Opening SSE on url '{}'", url);
 
-        final String suiteAuthJWTToken = serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken();
+        final String authJWTToken = serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken();
 
-        return new SseTestDriver(client, url, suiteAuthJWTToken, expectedMessagesCount);
+        return new SseTestDriver(client, url, authJWTToken, expectedMessagesCount);
     }
 
     private String getDefaultPath() {

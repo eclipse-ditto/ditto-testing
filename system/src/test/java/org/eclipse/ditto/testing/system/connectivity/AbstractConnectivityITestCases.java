@@ -13,6 +13,7 @@
 package org.eclipse.ditto.testing.system.connectivity;
 
 import static io.restassured.RestAssured.expect;
+import static org.assertj.core.api.Assertions.fail;
 import static org.eclipse.ditto.json.assertions.DittoJsonAssertions.assertThat;
 import static org.eclipse.ditto.policies.api.Permission.READ;
 import static org.eclipse.ditto.policies.api.Permission.WRITE;
@@ -65,6 +66,11 @@ import org.eclipse.ditto.base.model.signals.acks.Acknowledgements;
 import org.eclipse.ditto.base.model.signals.commands.CommandResponse;
 import org.eclipse.ditto.base.model.signals.commands.ErrorResponse;
 import org.eclipse.ditto.base.model.signals.commands.exceptions.CommandTimeoutException;
+import org.eclipse.ditto.base.model.signals.commands.streaming.RequestFromStreamingSubscription;
+import org.eclipse.ditto.base.model.signals.commands.streaming.SubscribeForPersistedEvents;
+import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscriptionComplete;
+import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscriptionCreated;
+import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscriptionHasNext;
 import org.eclipse.ditto.connectivity.model.Connection;
 import org.eclipse.ditto.connectivity.model.ConnectivityModelFactory;
 import org.eclipse.ditto.connectivity.model.FilteredTopic;
@@ -107,7 +113,9 @@ import org.eclipse.ditto.protocol.Adaptable;
 import org.eclipse.ditto.protocol.JsonifiableAdaptable;
 import org.eclipse.ditto.protocol.ProtocolFactory;
 import org.eclipse.ditto.protocol.TopicPath;
+import org.eclipse.ditto.protocol.adapter.DittoProtocolAdapter;
 import org.eclipse.ditto.testing.common.HttpHeader;
+import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.ThingJsonProducer;
 import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
 import org.eclipse.ditto.testing.common.categories.RequireSource;
@@ -139,6 +147,7 @@ import org.eclipse.ditto.things.model.signals.events.AttributeCreated;
 import org.eclipse.ditto.things.model.signals.events.AttributeModified;
 import org.eclipse.ditto.things.model.signals.events.ThingCreated;
 import org.eclipse.ditto.things.model.signals.events.ThingDeleted;
+import org.eclipse.ditto.things.model.signals.events.ThingEvent;
 import org.eclipse.ditto.things.model.signals.events.ThingMerged;
 import org.eclipse.ditto.things.model.signals.events.ThingModified;
 import org.eclipse.ditto.thingsearch.model.signals.commands.subscription.CreateSubscription;
@@ -256,7 +265,9 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
     public void receiveSubjectDeletionNotification() {
         final var policyId = PolicyId.inNamespaceWithRandomName(serviceEnv.getDefaultNamespaceName());
         final var subjectId =
-                SubjectId.newInstance(connectionAuthIdentifier(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername()));
+                SubjectId.newInstance(
+                        connectionAuthIdentifier(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),
+                                TestingContext.DEFAULT_SCOPE));
         final var subjectExpiry = SubjectExpiry.newInstance(Instant.now().plus(Duration.ofSeconds(3600)));
         final var subjectAnnouncement = SubjectAnnouncement.of(DittoDuration.parseDuration("3599s"), true);
         final var subject =
@@ -339,7 +350,8 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .fire();
 
         final var connectionSubjectId =
-                SubjectId.newInstance(connectionAuthIdentifier(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername()));
+                SubjectId.newInstance(connectionAuthIdentifier(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),
+                        TestingContext.DEFAULT_SCOPE));
 
         getPolicyEntrySubject(policyId, "connection-target", connectionSubjectId.toString())
                 .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
@@ -982,6 +994,77 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
     @Connections({CONNECTION1})
     public void sendAndReceiveSearchProtocolMessages() {
         testSearchProtocol(cf.connectionName1);
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1})
+    public void sendAndReceiveStreamingProtocolMessagesForPersistedEvents() {
+        final String connectionName = cf.connectionName1;
+        LOGGER.info("Testing Streaming Subscription with connection: {}", connectionName);
+
+        // Given
+        final ThingId thingId = generateThingId();
+        final String featureId = "lamp";
+
+        final Policy policy = createNewPolicy(thingId, featureId, connectionName);
+        putPolicy(policy)
+                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withCorrelationId(UUID.randomUUID().toString())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setPolicyId(policy.getEntityId().orElseThrow())
+                .setFeature(featureId, FeatureProperties.newBuilder().build())
+                .build();
+        putThing(2, thing, JsonSchemaVersion.V_2)
+                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withCorrelationId(UUID.randomUUID().toString())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        final String correlationId = UUID.randomUUID().toString();
+        final DittoHeaders dittoHeaders = DittoHeaders.newBuilder()
+                .correlationId(correlationId)
+                .putHeader(DEVICE_ID_HEADER, thingId)
+                .build();
+        final SubscribeForPersistedEvents createSubscription =
+                SubscribeForPersistedEvents.of(thingId, JsonPointer.empty(), null, null, dittoHeaders);
+
+        final C eventConsumer = initResponseConsumer(connectionName, correlationId);
+        sendSignal(connectionName, createSubscription);
+        consumeAndAssertEvents(connectionName, eventConsumer, Arrays.asList(
+                e -> {
+                    LOGGER.info("Received: {}", e);
+                    assertThat(e).isInstanceOf(StreamingSubscriptionCreated.class);
+                    final String subscriptionId = ((StreamingSubscriptionCreated) e).getSubscriptionId();
+                    sendSignal(connectionName,
+                            RequestFromStreamingSubscription.of(thingId, JsonPointer.empty(), subscriptionId, 1L, dittoHeaders));
+                },
+                e -> {
+                    LOGGER.info("Received: {}", e);
+                    assertThat(e).isInstanceOf(StreamingSubscriptionHasNext.class);
+                    final StreamingSubscriptionHasNext subscriptionHasNext = (StreamingSubscriptionHasNext) e;
+                    final JsonValue item = subscriptionHasNext.getItem();
+                    assertThat(item.isObject()).isTrue();
+
+                    final Signal<?> historicalSignal = DittoProtocolAdapter.newInstance().fromAdaptable(
+                            ProtocolFactory.jsonifiableAdaptableFromJson(item.asObject()));
+
+                    assertThat(historicalSignal).isInstanceOf(ThingEvent.class);
+                    final ThingEvent<?> thingEvent = (ThingEvent<?>) historicalSignal;
+                    if (thingEvent.getRevision() == 1L) {
+                        assertThat(thingEvent).isInstanceOf(ThingCreated.class);
+                    } else {
+                        fail("Only expected the creation event!");
+                    }
+                },
+                e -> {
+                    LOGGER.info("Received: {}", e);
+                    assertThat(e).isInstanceOf(StreamingSubscriptionComplete.class);
+                }));
     }
 
     private void testSearchProtocol(final String connectionName) {

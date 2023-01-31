@@ -15,7 +15,6 @@ package org.eclipse.ditto.testing.common.matcher;
 import static org.eclipse.ditto.base.model.common.ConditionChecker.checkNotNull;
 
 import java.util.List;
-import java.util.function.LongConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -110,9 +109,11 @@ public final class PostMatcher extends HttpVerbMatcher<PostMatcher> {
     }
 
     @Override
-    protected void doLog(final Logger logger, final String path, final String entityType) {
+    protected void doLog(final Logger logger, final String path, @Nullable final String entityType) {
         if (!logger.isDebugEnabled()) {
-            logger.info(SHORT_MESSAGE_TEMPLATE, entityType, path, contentType);
+            logger.info(SHORT_MESSAGE_TEMPLATE,
+                    entityType != null ? entityType : (payload != null ? new String(payload) : "?"),
+                    path, contentType);
             return;
         }
         @Nullable final String payloadToLog;
@@ -141,16 +142,6 @@ public final class PostMatcher extends HttpVerbMatcher<PostMatcher> {
             return "text".equals(lowerCaseContentType.substring(0, 4)) ||
                     lowerCaseContentType.matches("application/(json|xml)");
         }
-    }
-
-    @Override
-    public PostMatcher registerRequestSizeConsumer(@Nullable final LongConsumer requestSizeConsumer) {
-        if (null != requestSizeConsumer) {
-            final var headersSize = getHeaderBytes();
-            final var payloadSize = null != payload ? payload.length : 0;
-            requestSizeConsumer.accept(headersSize + payloadSize);
-        }
-        return getThis();
     }
 
 }

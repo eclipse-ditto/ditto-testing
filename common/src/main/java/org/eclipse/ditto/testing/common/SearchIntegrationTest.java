@@ -13,8 +13,6 @@
 package org.eclipse.ditto.testing.common;
 
 import static java.util.Objects.requireNonNull;
-import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.newCursorOption;
-import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.newSizeOption;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,10 +40,8 @@ import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.testing.common.categories.Search;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
-import org.eclipse.ditto.testing.common.matcher.StatusCodeSuccessfulMatcher;
 import org.eclipse.ditto.testing.common.matcher.search.SearchMatcher;
 import org.eclipse.ditto.testing.common.matcher.search.SearchProperties;
-import org.eclipse.ditto.testing.common.matcher.search.SearchResponseExtractors;
 import org.eclipse.ditto.things.model.Attributes;
 import org.eclipse.ditto.things.model.Feature;
 import org.eclipse.ditto.things.model.FeatureDefinition;
@@ -61,8 +57,6 @@ import org.junit.BeforeClass;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import io.restassured.response.Response;
 
 /**
  * Abstract base class for search integration tests.
@@ -207,86 +201,6 @@ public abstract class SearchIntegrationTest extends IntegrationTest {
         return RandomStringUtils.randomAlphabetic(10);
     }
 
-    protected static void deleteTestDataOfAllApiVersions() {
-        apiVersion2.forEach(SearchIntegrationTest::deleteAllTestData);
-    }
-
-    protected static void deleteAllTestData(final JsonSchemaVersion version) {
-        if (!TEST_CONFIG.isLocalOrDockerTestEnvironment()) {
-            /*
-             Deletion of test data is only required for cloud environments because it's possible that there is stale
-             data of a previous acceptance test run. For Systemtests the mongo DB is always empty initially and entities
-             are remembered for deletion (see IntegrationTest#rememberForCleanUp).
-             */
-            LOGGER.info("Deleting all test data with version {}", version);
-            final List<AuthClient> suiteAuthClients = new ArrayList<>();
-            suiteAuthClients.add(serviceEnv.getDefaultTestingContext().getOAuthClient());
-            suiteAuthClients.forEach(client -> deleteAllTestDataForClient(version, client));
-            LOGGER.info("Deletion was successful for version {}", version);
-        }
-    }
-
-    private static void deleteAllTestDataForClient(final JsonSchemaVersion version, final AuthClient client) {
-        boolean hasNext = true;
-        String cursor = null;
-        while (hasNext) {
-            final SearchMatcher searchRequest = searchThings(version)
-                    .option(newSizeOption(MAX_PAGE_SIZE))
-                    .returnIdsOnly(true);
-
-            if (cursor != null) {
-                searchRequest.option(newCursorOption(cursor));
-            }
-
-            final String response = searchRequest
-                    .withJWT(client.getAccessToken())
-                    .fire()
-                    .asString();
-            final SearchResult result = SearchResponseExtractors.asSearchResult(response);
-
-            final JsonArray itemsArray = result.getItems();
-            final Set<String> thingIds = extractThingIds(itemsArray);
-
-            LOGGER.debug("Deleting things: ids={}, client={}", thingIds, client.getClientId());
-            thingIds.forEach(thingId ->
-                    {
-                        final Response deleteThingResponse =
-                                deleteThing(version.toInt(), thingId)
-                                        .withJWT(client.getAccessToken())
-                                        .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
-                                                DittoAcknowledgementLabel.SEARCH_PERSISTED.toString())
-                                        .fire();
-
-                        deletePolicy(thingId)
-                                .withJWT(client.getAccessToken())
-                                .fire();
-
-                        if (!StatusCodeSuccessfulMatcher.isHttpStatusSuccessful(deleteThingResponse.statusCode())) {
-                            LOGGER.warn(String.format("Failed to delete thing %s.", thingId));
-                            if (LOGGER.isWarnEnabled()) {
-                                deleteThingResponse.prettyPrint();
-                            }
-                        }
-                    }
-            );
-
-            // back-off to give search updater a chance to catch up
-            hasNext = result.getCursor().isPresent();
-            if (hasNext) {
-                cursor = result.getCursor().get();
-                backOff(200L);
-            }
-        }
-    }
-
-    private static void backOff(final long sleepMilliseconds) {
-        try {
-            Thread.sleep(sleepMilliseconds);
-        } catch (final Exception e) {
-            throw new AssertionError(e);
-        }
-    }
-
     /**
      * Create a Thing with random ID and wait until it is in search index.
      *
@@ -295,9 +209,9 @@ public abstract class SearchIntegrationTest extends IntegrationTest {
      * @return Thing ID of the created thing.
      */
     protected static ThingId persistThingAndWaitTillAvailable(final Thing thing, final JsonSchemaVersion version,
-            final AuthClient suiteAuthClient) {
+            final AuthClient authClient) {
         final String thingJson = thing.toJsonString(version, FieldType.regularOrSpecial());
-        return persistThingsAndWaitTillAvailable(thingJson, 1, version, suiteAuthClient).iterator().next();
+        return persistThingsAndWaitTillAvailable(thingJson, 1, version, authClient).iterator().next();
     }
 
     /**
@@ -308,29 +222,29 @@ public abstract class SearchIntegrationTest extends IntegrationTest {
      * @return Thing ID of the created thing.
      */
     protected ThingId persistThingAndWaitTillAvailable(final Thing thing, final Policy policy,
-            final AuthClient suiteAuthClient) {
+            final AuthClient authClient) {
         final String jsonString =
                 thing.toJson().toBuilder().set(Policy.INLINED_FIELD_NAME, policy.toJson()).build().toString();
-        return persistThingsAndWaitTillAvailable(jsonString, 1, JsonSchemaVersion.V_2, suiteAuthClient).iterator()
+        return persistThingsAndWaitTillAvailable(jsonString, 1, JsonSchemaVersion.V_2, authClient).iterator()
                 .next();
     }
 
     protected static Set<ThingId> persistThingsAndWaitTillAvailable(final String thingJson, final long n,
-            final JsonSchemaVersion version, final AuthClient suiteAuthClient) {
+            final JsonSchemaVersion version, final AuthClient authClient) {
 
-        return persistThingsAndWaitTillAvailable(thingJson, suiteAuthClient, n, version);
+        return persistThingsAndWaitTillAvailable(thingJson, authClient, n, version);
     }
 
     public static Set<ThingId> persistThingsAndWaitTillAvailable(final Function<Long, Thing> thingBuilder,
             final long n, final JsonSchemaVersion version) {
 
-        final AuthClient suiteAuthClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
+        final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
 
-        return persistThingsAndWaitTillAvailable(thingBuilder, suiteAuthClient, n, version);
+        return persistThingsAndWaitTillAvailable(thingBuilder, authClient, n, version);
     }
 
     public static Set<ThingId> persistThingsAndWaitTillAvailable(final Function<Long, Thing> thingBuilder,
-            final AuthClient suiteAuthClient, final long n, final JsonSchemaVersion version) {
+            final AuthClient authClient, final long n, final JsonSchemaVersion version) {
         if (n == 0) {
             return new LinkedHashSet<>();
         }
@@ -347,7 +261,7 @@ public abstract class SearchIntegrationTest extends IntegrationTest {
                     .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                             DittoAcknowledgementLabel.SEARCH_PERSISTED.toString())
                     .withHeader(DittoHeaderDefinition.TIMEOUT.getKey(), "30s")
-                    .withJWT(suiteAuthClient.getAccessToken())
+                    .withJWT(authClient.getAccessToken())
                     .expectingStatusCodeSuccessful()
                     .fire();
             logProgress("Successfully persisted Thing", i, n);
@@ -357,7 +271,7 @@ public abstract class SearchIntegrationTest extends IntegrationTest {
     }
 
     private static Set<ThingId> persistThingsAndWaitTillAvailable(final String thingJson,
-            final AuthClient suiteAuthClient,
+            final AuthClient authClient,
             final long n, final JsonSchemaVersion version) {
         if (n == 0) {
             return new LinkedHashSet<>();
@@ -375,7 +289,7 @@ public abstract class SearchIntegrationTest extends IntegrationTest {
                     .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                             DittoAcknowledgementLabel.SEARCH_PERSISTED.toString())
                     .withHeader(DittoHeaderDefinition.TIMEOUT.getKey(), "30s")
-                    .withJWT(suiteAuthClient.getAccessToken())
+                    .withJWT(authClient.getAccessToken())
                     .expectingStatusCodeSuccessful()
                     .fire();
             if (n == 1) {

@@ -32,6 +32,7 @@ import org.eclipse.ditto.protocol.JsonifiableAdaptable;
 import org.eclipse.ditto.protocol.ProtocolFactory;
 import org.eclipse.ditto.protocol.adapter.DittoProtocolAdapter;
 import org.eclipse.ditto.testing.common.HttpHeader;
+import org.eclipse.ditto.testing.common.TestSolutionResource;
 import org.eclipse.ditto.testing.common.ThingJsonProducer;
 import org.eclipse.ditto.testing.common.composite_resources.HttpToAmqpResource;
 import org.eclipse.ditto.testing.common.conditions.DockerEnvironment;
@@ -83,13 +84,18 @@ public final class LiveHttpChannelAmqpIT {
     private static final int DEVICE_TIMEOUT = 5;
     private static final TimeUnit DEVICE_TIMEOUT_UNIT = TimeUnit.SECONDS;
 
+
     @ClassRule(order = 0)
-    public static final HttpToAmqpResource HTTP_TO_AMQP_RESOURCE = HttpToAmqpResource.newInstance(TEST_CONFIG);
+    public static final TestSolutionResource TEST_SOLUTION_RESOURCE = TestSolutionResource.newInstance(TEST_CONFIG);
 
     @ClassRule(order = 1)
+    public static final HttpToAmqpResource HTTP_TO_AMQP_RESOURCE = HttpToAmqpResource.newInstance(TEST_CONFIG,
+            TEST_SOLUTION_RESOURCE);
+
+    @ClassRule(order = 2)
     public static final PolicyWithConnectionSubjectResource POLICY_WITH_CONNECTION_SUBJECT_RESOURCE =
-            PolicyWithConnectionSubjectResource.newInstance(HTTP_TO_AMQP_RESOURCE.getPoliciesHttpClientResource(),
-                    CONNECTION_NAME);
+            PolicyWithConnectionSubjectResource.newInstance(TEST_SOLUTION_RESOURCE,
+                    HTTP_TO_AMQP_RESOURCE.getPoliciesHttpClientResource(), CONNECTION_NAME);
 
 
     private static URI thingsBaseUri;

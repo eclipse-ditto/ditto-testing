@@ -70,7 +70,7 @@ public final class JwtAuthenticationIT extends AbstractClientIT {
 
     @Category({Acceptance.class})
     @Test
-    public void authenticationWithSuiteAuth() throws ExecutionException, InterruptedException {
+    public void authenticationWithOAuth() throws ExecutionException, InterruptedException {
         dittoClient = buildClient(() -> {
             final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
             return ImmutableJsonWebToken.fromToken(authClient.getAccessToken());

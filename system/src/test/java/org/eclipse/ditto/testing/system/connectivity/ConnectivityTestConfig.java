@@ -22,11 +22,11 @@ public final class ConnectivityTestConfig extends CommonTestConfig {
     private static final String PROPERTY_CONNECTIVITY_AMQP10_HOSTNAME = CONNECTIVITY_PREFIX + "amqp10.hostname";
     private static final String PROPERTY_CONNECTIVITY_AMQP10_TUNNEL = CONNECTIVITY_PREFIX + "amqp10.tunnel";
     private static final String PROPERTY_CONNECTIVITY_AMQP10_PORT = CONNECTIVITY_PREFIX + "amqp10.port";
-    private static final String PROPERTY_CONNECTIVITY_AMQP10_HUB_HOSTNAME = CONNECTIVITY_PREFIX + "amqp10.hub.hostname";
-    private static final String PROPERTY_CONNECTIVITY_AMQP10_HUB_TUNNEL = CONNECTIVITY_PREFIX + "amqp10.hub.tunnel";
-    private static final String PROPERTY_CONNECTIVITY_AMQP10_HUB_PORT = CONNECTIVITY_PREFIX + "amqp10.hub.port";
-    private static final String PROPERTY_CONNECTIVITY_AMQP10_HUB_CONGESTION_PORT =
-            CONNECTIVITY_PREFIX + "amqp10.hub.congestion-port";
+    private static final String PROPERTY_CONNECTIVITY_AMQP10_HONO_HOSTNAME = CONNECTIVITY_PREFIX + "amqp10.hono.hostname";
+    private static final String PROPERTY_CONNECTIVITY_AMQP10_HONO_TUNNEL = CONNECTIVITY_PREFIX + "amqp10.hono.tunnel";
+    private static final String PROPERTY_CONNECTIVITY_AMQP10_HONO_PORT = CONNECTIVITY_PREFIX + "amqp10.hono.port";
+    private static final String PROPERTY_CONNECTIVITY_AMQP10_HONO_CONGESTION_PORT =
+            CONNECTIVITY_PREFIX + "amqp10.hono.congestion-port";
     private static final String PROPERTY_CONNECTIVITY_HTTP_HOSTNAME = CONNECTIVITY_PREFIX + "http.hostname";
     private static final String PROPERTY_CONNECTIVITY_HTTP_TUNNEL = CONNECTIVITY_PREFIX + "http.tunnel";
     private static final String PROPERTY_CONNECTIVITY_MQTT_HOSTNAME = CONNECTIVITY_PREFIX + "mqtt.hostname";
@@ -68,20 +68,20 @@ public final class ConnectivityTestConfig extends CommonTestConfig {
         return conf.getInt(PROPERTY_CONNECTIVITY_AMQP10_PORT);
     }
 
-    public String getAmqp10HubHostName() {
-        return conf.getString(PROPERTY_CONNECTIVITY_AMQP10_HUB_HOSTNAME);
+    public String getAmqp10HonoHostName() {
+        return conf.getString(PROPERTY_CONNECTIVITY_AMQP10_HONO_HOSTNAME);
     }
 
-    public String getAmqp10HubTunnel() {
-        return conf.getString(PROPERTY_CONNECTIVITY_AMQP10_HUB_TUNNEL);
+    public String getAmqp10HonoTunnel() {
+        return conf.getString(PROPERTY_CONNECTIVITY_AMQP10_HONO_TUNNEL);
     }
 
-    public int getAmqp10HubPort() {
-        return conf.getInt(PROPERTY_CONNECTIVITY_AMQP10_HUB_PORT);
+    public int getAmqp10HonoPort() {
+        return conf.getInt(PROPERTY_CONNECTIVITY_AMQP10_HONO_PORT);
     }
 
-    public int getAmqp10HubCongestionPort() {
-        return conf.getInt(PROPERTY_CONNECTIVITY_AMQP10_HUB_CONGESTION_PORT);
+    public int getAmqp10HonoCongestionPort() {
+        return conf.getInt(PROPERTY_CONNECTIVITY_AMQP10_HONO_CONGESTION_PORT);
     }
 
     public String getHttpHostName() {

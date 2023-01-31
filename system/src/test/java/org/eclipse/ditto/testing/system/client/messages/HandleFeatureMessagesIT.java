@@ -90,10 +90,7 @@ public final class HandleFeatureMessagesIT extends AbstractClientIT {
     public void tearDown() {
         shutdownClient(dittoClient);
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void testReceiveFeatureMessages() throws InterruptedException, TimeoutException, ExecutionException {
         final CountDownLatch latch = new CountDownLatch(MESSAGE_COUNT);
@@ -120,10 +117,7 @@ public final class HandleFeatureMessagesIT extends AbstractClientIT {
 
         assertTrue("Did not receive message within timeout.", latch.await(LATCH_TIMEOUT, TimeUnit.SECONDS));
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void testFeatureDoesNotReceiveMessagesOfOtherFeatures()
             throws InterruptedException, TimeoutException, ExecutionException {
@@ -154,10 +148,7 @@ public final class HandleFeatureMessagesIT extends AbstractClientIT {
         assertTrue("Did not receive message within timeout.", latch1.await(LATCH_TIMEOUT, TimeUnit.SECONDS));
         assertEquals(MESSAGE_COUNT, latch2.getCount());
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void testGlobalHandlerReceivesFeatureMessagesSentForFeature()
             throws InterruptedException, TimeoutException, ExecutionException {

@@ -210,7 +210,7 @@ public class RetrieveThingsIT extends AbstractClientIT {
                         .proxyConfiguration(proxyConfiguration())
                         .build());
         final DittoClient dittoClientWithBlockedSolution =
-                ClientFactory.newClient(thingsWsUrl(2),
+                ClientFactory.newClient(dittoWsUrl(2),
                         JsonSchemaVersion.V_2,
                         authenticationProvider,
                         proxyConfiguration(), Collections.emptyList(), Collections.emptyList(), null);

@@ -15,7 +15,7 @@ package org.eclipse.ditto.testing.common.composite_resources;
 import java.text.MessageFormat;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import org.eclipse.ditto.base.model.auth.AuthorizationContext;
 import org.eclipse.ditto.base.model.auth.AuthorizationSubject;
@@ -74,10 +74,12 @@ public final class HttpToAmqpResource implements TestRule {
         this.amqpConnectionResource = amqpConnectionResource;
     }
 
-    public static HttpToAmqpResource newInstance(final TestConfig testConfig) {
+    public static HttpToAmqpResource newInstance(final TestConfig testConfig,
+            final TestSolutionResource testSolutionResource) {
         return newInstance(
                 testConfig,
-                (amqpClientResource, testSolutionResource) -> {
+                testSolutionResource,
+                amqpClientResource -> {
                     final var authorizationContext = AuthorizationContext.newInstance(
                             DittoAuthorizationContextType.PRE_AUTHENTICATED_CONNECTION,
                             AuthorizationSubject.newInstance(
@@ -117,22 +119,22 @@ public final class HttpToAmqpResource implements TestRule {
 
     public static HttpToAmqpResource newInstance(
             final TestConfig testConfig,
-            final BiFunction<AmqpClientResource, TestSolutionResource, Connection> connectionSupplier
+            final TestSolutionResource testSolutionResource,
+            final Function<AmqpClientResource, Connection> connectionSupplier
     ) {
-        final var testSolutionResource = TestSolutionResource.newInstance(testConfig);
-        final var solutionsHttpClientResource =
+        final var connectionsHttpClientResource =
                 ConnectionsHttpClientResource.newInstance(testConfig);
         final var amqpClientResource = AmqpClientResource.newInstance(AmqpConfig.of(testConfig));
 
         return new HttpToAmqpResource(
                 testConfig,
                 testSolutionResource,
-                solutionsHttpClientResource,
+                connectionsHttpClientResource,
                 amqpClientResource,
                 ConnectionResource.newInstance(
                         testConfig.getTestEnvironment(),
-                        solutionsHttpClientResource,
-                        () -> connectionSupplier.apply(amqpClientResource, testSolutionResource)
+                        connectionsHttpClientResource,
+                        () -> connectionSupplier.apply(amqpClientResource)
                 )
         );
     }

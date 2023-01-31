@@ -27,7 +27,7 @@ services:
       - ALLOW_ANONYMOUS_LOGIN=yes
 
   artemis:
-    image: vromero/activemq-artemis:2.13.0-alpine
+    image: vromero/activemq-artemis:2.16.0-alpine
     networks:
       - test
     expose:
@@ -67,8 +67,6 @@ services:
       KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
       ALLOW_PLAINTEXT_LISTENER: "yes"
       KAFKA_TLS_CLIENT_AUTH: "none"
-
-
     volumes:
       - ./kafka/kafka_jaas.conf:/opt/bitnami/kafka/config/kafka_jaas.conf
 
@@ -116,7 +114,7 @@ services:
     command: mongod --storageEngine wiredTiger
 
   policies:
-    image: ${COMPOSE_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-policies:${DITTO_VERSION:-nightly}
+    image: ${DITTO_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-policies:${DITTO_VERSION:-nightly}
     depends_on:
       - mongodb
     networks:
@@ -136,11 +134,12 @@ services:
       - POLICY_SUBJECT_EXPIRY_GRANULARITY=5s # configure to 5 seconds in order to test for invalidation in system test
       - POLICY_SUBJECT_DELETION_ANNOUNCEMENT_GRANULARITY=1s
       - CLEANUP_ENABLED=false
+      - CLEANUP_HISTORY_RETENTION_DURATION=0d
       - CLEANUP_TIMER_THRESHOLD=10s
       - CLEANUP_CREDITS_PER_BATCH=400
 
   things:
-    image: ${COMPOSE_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-things:${DITTO_VERSION:-nightly}
+    image: ${DITTO_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-things:${DITTO_VERSION:-nightly}
     depends_on:
       - mongodb
       - policies
@@ -151,7 +150,6 @@ services:
       - TZ=Europe/Berlin
       - INSTANCE_INDEX=1
       - BIND_HOSTNAME=things
-      - REMOTING_IDLE_CPU_LEVEL=2
       - JAVA_TOOL_OPTIONS=-Xms${THINGS_MEMORY:-1g} -Xmx${THINGS_MEMORY:-1g} -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=things ${TEST_JAVA_OPTIONS}
       - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
       - LOG_LEVEL=INFO
@@ -159,11 +157,12 @@ services:
       - THING_SNAPSHOT_INTERVAL=${THING_SNAPSHOT_INTERVAL:-1s}
       - THING_SNAPSHOT_THRESHOLD=1
       - CLEANUP_ENABLED=false
+      - CLEANUP_HISTORY_RETENTION_DURATION=0d
       - CLEANUP_TIMER_THRESHOLD=10s
       - CLEANUP_CREDITS_PER_BATCH=400
 
   things-search:
-    image: ${COMPOSE_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-things-search:${DITTO_VERSION:-nightly}
+    image: ${DITTO_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-things-search:${DITTO_VERSION:-nightly}
     depends_on:
       - mongodb
       - policies
@@ -175,7 +174,6 @@ services:
       - TZ=Europe/Berlin
       - INSTANCE_INDEX=1
       - BIND_HOSTNAME=things-search
-      - REMOTING_IDLE_CPU_LEVEL=2
       - JAVA_TOOL_OPTIONS=-Xms${THINGS_SEARCH_MEMORY:-1g} -Xmx${THINGS_SEARCH_MEMORY:-1g} -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=things-search ${TEST_JAVA_OPTIONS} ${THINGS_SEARCH_JAVA_OPTIONS}
       - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
       - LOG_LEVEL=INFO
@@ -191,7 +189,7 @@ services:
       - MONGO_DB_CONNECTION_POOL_SIZE=100
 
   connectivity:
-    image: ${COMPOSE_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-connectivity:${DITTO_VERSION:-nightly}
+    image: ${DITTO_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-connectivity:${DITTO_VERSION:-nightly}
     depends_on:
       - mongodb
       - policies
@@ -202,7 +200,6 @@ services:
       - TZ=Europe/Berlin
       - INSTANCE_INDEX=1
       - BIND_HOSTNAME=connectivity
-      - REMOTING_IDLE_CPU_LEVEL=2
       - JAVA_TOOL_OPTIONS=-Xms${CONNECTIVITY_MEMORY:-1g} -Xmx${CONNECTIVITY_MEMORY:-1g} -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=connectivity ${TEST_JAVA_OPTIONS} -Dditto.connectivity.connection.snapshot.threshold=1 -Dakka.cluster.sharding.updating-state-timeout=10s
       - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
       - LOG_LEVEL=INFO
@@ -225,6 +222,7 @@ services:
       - CONNECTIVITY_CONNECTION_ENCRYPTION_POINTERS.6=/credentials/parameters/sharedKey
       - CONNECTIVITY_CONNECTION_ENCRYPTION_POINTERS.7=/credentials/clientSecret
       - CONNECTIVITY_HTTP_PUSH_MAX_QUEUE_SIZE=100
+      - CONNECTIVITY_LOGGER_PUBLISHER_ENABLED=true
       - CONNECTIVITY_LOGGER_PUBLISHER_FLUENCY_HOST=fluentbit
       - CONNECTIVITY_CONNECTION_ALLOWED_HOSTNAMES=127.0.0.1,localhost,artemis,system-test-container,kafka,mqtt,rabbitmq,ssh,unknown,oauth
       - CONNECTIVITY_CONNECTION_BLOCKED_HOSTNAMES=127.0.0.1
@@ -233,16 +231,18 @@ services:
       - CONNECTIVITY_MQTT_SEPARATE_PUBLISHER_CLIENT=true
       - CONNECTION_SOURCE_NUMBER=10
       - CLEANUP_ENABLED=false
+      - CLEANUP_HISTORY_RETENTION_DURATION=0d
       - CLEANUP_TIMER_THRESHOLD=10s
       - CLEANUP_CREDITS_PER_BATCH=400
       - CONNECTIVITY_HTTP_OAUTH2_ENFORCE_HTTPS=false
-      - CONNECTIVITY_KAFKA_SOURCES_BLOCKED_HOSTNAMES=bosch-iot-suite.com
       - HONO_CONNECTION_URI=tcp://kafka:9092
       - HONO_CONNECTION_BOOTSTRAP_SERVERS=kafka:9092
       - HONO_CONNECTION_SASL_MECHANISM=PLAIN
+      - HONO_CONNECTION_HONO_USERNAME=kafkaUsername
+      - HONO_CONNECTION_HONO_PASSWORD=kafkaPassword
 
   gateway:
-    image: ${COMPOSE_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-gateway:${DITTO_VERSION:-nightly}
+    image: ${DITTO_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-gateway:${DITTO_VERSION:-nightly}
     depends_on:
       - policies
     networks:
@@ -254,7 +254,6 @@ services:
       - TZ=Europe/Berlin
       - INSTANCE_INDEX=1
       - BIND_HOSTNAME=gateway
-      - REMOTING_IDLE_CPU_LEVEL=2
       - JAVA_TOOL_OPTIONS=-Xms${GATEWAY_MEMORY:-1g} -Xmx${GATEWAY_MEMORY:-1g} -Dconfig.override_with_env_vars=true -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=gateway ${TEST_JAVA_OPTIONS}
       - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
       - LOG_LEVEL=INFO
@@ -266,6 +265,7 @@ services:
       - ENABLE_PRE_AUTHENTICATION=true
       - OAUTH_PROTOCOL=http
       - CONFIG_FORCE_ditto_gateway_authentication_oauth_openid__connect__issuers_ditto_issuer=oauth:9900/ditto
+      - CONFIG_FORCE_ditto_gateway_authentication_oauth_openid__connect__issuers_dummy_issuer=oauth:9900/dummy
       - GATEWAY_WEBSOCKET_THROTTLING_ENABLED=true
       - GATEWAY_WEBSOCKET_THROTTLING_INTERVAL=1s
       - GATEWAY_WEBSOCKET_THROTTLING_LIMIT=100
@@ -274,6 +274,7 @@ services:
       - GATEWAY_SSE_THROTTLING_ENABLED=true
       - GATEWAY_SSE_THROTTLING_INTERVAL=1s
       - GATEWAY_SSE_THROTTLING_LIMIT=100
+      - 'OAUTH_TOKEN_INTEGRATION_SUBJECT=integration:{{jwt:sub}}:{{jwt:aud}}'
 
   ssh:
     image: ghcr.io/linuxserver/openssh-server:8.6_p1-r3-ls72

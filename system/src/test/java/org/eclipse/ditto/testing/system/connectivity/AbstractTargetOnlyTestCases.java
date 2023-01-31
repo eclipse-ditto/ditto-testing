@@ -51,7 +51,7 @@ public abstract class AbstractTargetOnlyTestCases<C, M> extends AbstractConnecti
 
     @BeforeClass
     public static void setUpWebsocketClient() {
-        websocketClient = ConnectivityTestWebsocketClient.newInstance(thingsWsUrl(TestConstants.API_V_2),
+        websocketClient = ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2),
                 SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
         websocketClient.connect("kafka-source-replacement-websocket-" + UUID.randomUUID());
     }

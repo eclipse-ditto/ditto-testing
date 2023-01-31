@@ -22,7 +22,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -32,24 +31,19 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.awaitility.Awaitility;
 import org.eclipse.ditto.base.model.common.HttpStatus;
-import org.eclipse.ditto.connectivity.model.Connection;
 import org.eclipse.ditto.connectivity.model.ConnectionType;
 import org.eclipse.ditto.connectivity.model.ConnectivityModelFactory;
 import org.eclipse.ditto.connectivity.model.Enforcement;
 import org.eclipse.ditto.json.JsonFactory;
-import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonPointer;
-import org.eclipse.ditto.testing.common.client.ConnectionsClient;
 import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityITBase;
 import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityITestCases;
 import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityWorker;
-import org.eclipse.ditto.testing.system.connectivity.ConnectionCategory;
 import org.eclipse.ditto.testing.system.connectivity.Connections;
 import org.eclipse.ditto.testing.system.connectivity.ConnectivityFactory;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingBuilder;
 import org.eclipse.ditto.things.model.ThingId;
-import org.hamcrest.Matchers;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -194,7 +188,7 @@ public final class KafkaConnectivitySuite extends
                         LOGGER.error("Got error closing kafka consumer.", e);
                     }
                 });
-        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution());
+        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
     }
 
     private static String getConnectionUri(final boolean tunnel, final boolean basicAuth) {
@@ -266,29 +260,4 @@ public final class KafkaConnectivitySuite extends
         assertThat(delay).isGreaterThan(expectedDelay * (1.0 - timingTolerance));
     }
 
-    @Test
-    @Connections(ConnectionCategory.NONE)
-    public void testRejectKafkaSources() {
-        final var username = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername();
-        final String connectionName = UUID.randomUUID().toString();
-        final Connection connection = connectionModelFactory.buildConnectionModelWithHeaderMapping(
-                username,
-                connectionName,
-                ConnectionType.KAFKA,
-                // bosch-iot-suite.com must be configured as blocked via env variable CONNECTIVITY_KAFKA_SOURCES_BLOCKED_HOSTNAMES
-                "tcp://bosch-iot-suite.com:9092",
-                Map.of("bootstrapServers", "bosch-iot-suite.com:" + KAFKA_SERVICE_PORT),
-                "topic1",
-                "topic2");
-
-        final JsonObject connectionWithoutId = ConnectivityFactory.removeIdFromJson(connection.toJson());
-
-        ConnectionsClient.getInstance()
-                .postConnection(connectionWithoutId)
-                .withDevopsAuth()
-                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
-                .expectingErrorCode("connectivity:connection.configuration.invalid")
-                .expectingBody(Matchers.containsString("not allowed to declare any sources"))
-                .fire();
-    }
 }

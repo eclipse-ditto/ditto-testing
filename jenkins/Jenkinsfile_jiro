@@ -1,0 +1,168 @@
+#!groovy
+pipeline {
+    agent {
+        kubernetes {
+            defaultContainer 'docker-compose'
+            yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: docker-compose
+    image: docker/compose:latest
+    command:
+    - cat
+    tty: true
+    resources:
+      limits:
+        memory: "8Gi"
+        cpu: "2"
+      requests:
+        memory: "8Gi"
+        cpu: "2"
+"""
+        }
+    }
+    options {
+        disableConcurrentBuilds()
+        skipDefaultCheckout()
+    }
+    parameters {
+        string(name: 'EXTRA_MAVEN_ARGS',
+               defaultValue: '',
+               description: 'E.g. use -Dditto-client.version=0-SNAPSHOT when you do not have a ditto-client feature branch ' +
+                       'or to only run a single test class: -Dit.test=[test-class] -DfailIfNoTests=false<br> More infos: <a ' +
+                       'href="http://maven.apache.org/surefire/maven-failsafe-plugin/examples/single-test' +
+                       '.html">failsafe-docs</a>')
+        string(name: 'DITTO_VERSION',
+               defaultValue: env.BRANCH_NAME ? "0-${env.BRANCH_NAME.replace('%2F', '-').replace('/', '-')}-SNAPSHOT" : 'nightly',
+               description: 'The version to use. If no feature-branch exists, use "nightly"'
+        )
+        string(name: 'M2_REPO',
+               defaultValue: '/home/jenkins/agent/workspace/.m2',
+               description: 'The (local) Maven repository to use'
+        )
+        string(name: 'DOCKER_REGISTRY',
+               defaultValue: 'docker.io',
+               description: 'The Docker registry to use'
+        )
+        booleanParam(name: 'IS_RELEASE',
+                     defaultValue: false,
+                     description: 'Will change the DisplayName, mark build as "Keep forever" ' +
+                             '. Only used for Releases.')
+    }
+    environment {
+        COMPOSE_PROJECT_NAME  = "$JOB_NAME-$BUILD_NUMBER"
+        DOCKER_NETWORK = "$JOB_NAME-$BUILD_NUMBER"
+        TEST_JAVA_OPTIONS = '-XX:+UseContainerSupport -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -Dakka.cluster.failure-detector.acceptable-heartbeat-pause=20s'
+        MAVEN_OPTS='-Xmx1400M'
+        JAVA_TOOL_OPTIONS = '-Duser.home=/home/jenkins/agent/workspace/'
+        NODE_LABEL = "${params.IS_RELEASE == true ? 'system-test-tag' : 'system-test' }"
+        HTTP_PUSH_MOCK_SERVER_PORT = 8080
+        EXTRA_DOCKER_ARGS = '--memory="6g" --cpus="8.0"'
+        FORK_COUNT = '6'
+    }
+    stages {
+        stage('Clean workspace and create local maven repo') {
+            steps {
+                cleanWs()
+                sh '''
+                    echo Create local maven repo
+                    mkdir -p $M2_REPO
+                '''
+            }
+        }
+        stage('Checkout scm') {
+            steps {
+                checkout scm
+            }
+        }
+        stage('Preparation') {
+            steps{
+                sh '''
+                    echo environments for docker-compose
+                    echo COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME
+                    echo DOCKER_REGISTRY=$DOCKER_REGISTRY
+                    echo DITTO_VERSION=$DITTO_VERSION
+                    echo DOCKER_NETWORK=$DOCKER_NETWORK
+                '''
+                sh '''
+                    echo delete compose override to avoid port binding
+                    rm docker/docker-compose.override.yml
+                '''
+            }
+        }
+        stage('Run module: system') {
+            stages {
+                stage('Start docker environment') {
+                    steps {
+                        sh '''
+                            cd docker
+                            TAG=system ./start.sh
+                        '''
+                    }
+                }
+                stage('Run tests') {
+                    agent {
+                        docker {
+                            label "$NODE_LABEL"
+                            args "-v $M2_REPO:/root/.m2:z " +
+                                         '--network=$DOCKER_NETWORK ' +
+                                         '--network-alias system-test-container ' +
+                                         // Port for Http-push mock-server
+                                         '--expose $HTTP_PUSH_MOCK_SERVER_PORT ' +
+                                         // Port for Amqp10Hono mock-servers
+                                         '--expose 5887 ' +
+                                         '--expose 5888 ' +
+                                         "$EXTRA_DOCKER_ARGS"
+                            image 'maven:3.8-openjdk-17'
+                            registryUrl "https://$DOCKER_REGISTRY/"
+                            reuseNode true
+                        }
+                    }
+                    environment {
+                        MAVEN_OPTS="-Xmx1400M"
+                    }
+                    steps {
+                        sh """
+                        mvn verify -am -amd --batch-mode --errors --update-snapshots \
+                            --projects=:system \
+                            -Dtest.environment=docker-compose \
+                            -Drevision=$DITTO_VERSION \
+                            -DforkCount=$FORK_COUNT -DreuseForks=false \
+                            ${EXTRA_MAVEN_ARGS ?: ''}
+                        """
+                    }
+                    post {
+                        always {
+                            junit 'system*/target/failsafe-reports/**/*.xml'
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    sh '''
+                        docker ps
+                        cd docker
+                        ./stop.sh
+                    '''
+                }
+            }
+        }
+        stage('Set displayName and keep forever') {
+            when {
+                environment name: 'IS_RELEASE', value: 'true'
+            }
+            steps {
+                script {
+                    if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
+                        echo 'Set displayName and mark build as keep forever'
+                        currentBuild.keepLog = true
+                        currentBuild.displayName = DITTO_VERSION
+                    }
+                }
+            }
+        }
+    }
+}

@@ -88,7 +88,7 @@ public final class QueryThingsWithNamespacesIT extends VersionedSearchIntegratio
         return searchThings(apiVersion).filter(idsFilter(Arrays.asList(thingId1, thingId2)));
     }
 
-    private ThingId createThingInNamespace(final String namespace, final AuthClient suiteAuthClient) {
+    private ThingId createThingInNamespace(final String namespace, final AuthClient authClient) {
         final ThingId thingId = ThingId.of(idGenerator(namespace).withRandomName());
         final ThingBuilder.FromScratch thingBuilder = Thing.newBuilder().setId(thingId);
 
@@ -101,7 +101,7 @@ public final class QueryThingsWithNamespacesIT extends VersionedSearchIntegratio
                 .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
                 .build();
 
-        return persistThingAndWaitTillAvailable(thing, policy, suiteAuthClient);
+        return persistThingAndWaitTillAvailable(thing, policy, authClient);
     }
 
 }

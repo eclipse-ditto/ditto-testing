@@ -70,9 +70,9 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
         persistThingsAndWaitTillAvailable(i -> createRandomThing(createThingId("user1")), 10);
         persistThingAndWaitTillAvailable(createThing1());
         persistThingAndWaitTillAvailable(createThing2());
-        final AuthClient suiteAuthClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
+        final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
         persistThingsAndWaitTillAvailable(i -> createRandomThing(createThingId("user2")),
-                suiteAuthClient, 4, V_2);
+                authClient, 4, V_2);
     }
 
     private static Thing createThing1() {

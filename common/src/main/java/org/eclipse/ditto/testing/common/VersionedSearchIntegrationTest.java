@@ -69,12 +69,6 @@ public abstract class VersionedSearchIntegrationTest extends SearchIntegrationTe
      */
     private void initOncePerParam() {
         if (lastVersion != apiVersion) {
-            // for better local testing, clear the data also before the test (not only after)
-            if (lastVersion != null) {
-                deleteAllTestData(lastVersion);
-            } else {
-                deleteTestDataOfAllApiVersions();
-            }
             lastVersion = apiVersion;
 
             /*

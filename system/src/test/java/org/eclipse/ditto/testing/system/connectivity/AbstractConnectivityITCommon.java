@@ -84,10 +84,8 @@ public abstract class AbstractConnectivityITCommon<C, M> extends AbstractConnect
     @Rule
     public ConnectionsWatcher connectionsWatcher = new ConnectionsWatcher();
 
-    protected final ConnectivityFactory cf;
-
     protected AbstractConnectivityITCommon(final ConnectivityFactory cf) {
-        this.cf = cf;
+        super(cf);
     }
 
     protected abstract String targetAddressForTargetPlaceHolderSubstitution();

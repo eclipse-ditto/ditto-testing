@@ -30,23 +30,23 @@ public final class AccessTokenSuppliers {
         throw new AssertionError();
     }
 
-    public static AccessTokenSupplier<JsonWebToken> getCachingSuiteAuthMockJwtSupplier(
+    public static AccessTokenSupplier<JsonWebToken> getCachingAuthMockJwtSupplier(
             final OAuthMockConfig oAuthMockConfig,
             final Solution solution) {
         return CachingJwtSupplier.of(OAuthMockAccessTokenSupplier.newInstance(oAuthMockConfig, solution));
     }
 
-    public static AccessTokenSupplier<JsonWebToken> getCachingSuiteAuthJwtSupplier(final URI suiteAuthTokenEndpointUri,
+    public static AccessTokenSupplier<JsonWebToken> getCachingAuthJwtSupplier(final URI oAuthTokenEndpointUri,
             final CharSequence clientId,
             final CharSequence clientSecret,
             final CharSequence clientScope) {
 
         ConditionChecker.argumentNotEmpty(clientScope, "clientScope");
 
-        final var suiteAuthClient = OAuthClient.newInstance(suiteAuthTokenEndpointUri);
+        final var authClient = OAuthClient.newInstance(oAuthTokenEndpointUri);
         final var clientCredentials = ClientCredentials.of(clientId, clientSecret);
 
-        return CachingJwtSupplier.of(() -> suiteAuthClient.getAccessToken(clientCredentials, clientScope));
+        return CachingJwtSupplier.of(() -> authClient.getAccessToken(clientCredentials, clientScope));
     }
 
     // Add here missing suppliers as required.

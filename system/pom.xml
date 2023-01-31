@@ -27,7 +27,7 @@
     <name>Eclipse Ditto :: Testing :: System</name>
 
     <properties>
-        <!-- List of simple class names of categories to skip, e. g., -Dskip.categories=Hub,SuiteAuth -->
+        <!-- List of simple class names of categories to skip, e. g., -Dskip.categories=Foo,Bar -->
         <skip.categories>None</skip.categories>
         <testgroup.acceptance>org.eclipse.ditto.testing.common.categories.Acceptance</testgroup.acceptance>
         <included.groups/>

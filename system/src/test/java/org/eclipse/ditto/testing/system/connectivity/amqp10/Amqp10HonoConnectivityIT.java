@@ -83,16 +83,16 @@ import io.restassured.response.Response;
 
 /**
  * Integration tests for Connectivity of AMQP1.0 connections against
- * a low-performance AmqpServer in the same JVM capable of emulating Hub behavior.
+ * a low-performance AmqpServer in the same JVM capable of emulating Eclipse Hono behavior.
  */
 @RunIf(DockerEnvironment.class)
-public class Amqp10HubConnectivityIT extends AbstractConnectivityITCommon<BlockingQueue<Message>, Message> {
+public class Amqp10HonoConnectivityIT extends AbstractConnectivityITCommon<BlockingQueue<Message>, Message> {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Amqp10HubConnectivityIT.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Amqp10HonoConnectivityIT.class);
     private static final long WAIT_TIMEOUT_MS = 10_000L;
 
-    private static final String AMQP10_HUB_HOSTNAME = CONFIG.getAmqp10HubHostName();
-    private static final int AMQP10_HUB_PORT = CONFIG.getAmqp10HubPort();
+    private static final String AMQP10_HONO_HOSTNAME = CONFIG.getAmqp10HonoHostName();
+    private static final int AMQP10_HONO_PORT = CONFIG.getAmqp10HonoPort();
     private static final ConnectionType AMQP10_TYPE = ConnectionType.AMQP_10;
     private static final Enforcement AMQP_ENFORCEMENT =
             ConnectivityModelFactory.newEnforcement("{{ header:device_id }}",
@@ -106,8 +106,7 @@ public class Amqp10HubConnectivityIT extends AbstractConnectivityITCommon<Blocki
 
     private final Amqp10ConnectivityWorker connectivityWorker;
 
-    private String hubConnectionName;
-    private String connectionToBeDeletedName;
+    private String honoConnectionName;
 
     private String targetAddressForTargetPlaceholderSubstitution;
 
@@ -119,16 +118,16 @@ public class Amqp10HubConnectivityIT extends AbstractConnectivityITCommon<Blocki
     private static final ConcurrentMap<String, Session> jmsSessions = new ConcurrentSkipListMap<>();
     private static final ConcurrentMap<String, MessageListener> jmsMessageListeners = new ConcurrentSkipListMap<>();
 
-    public Amqp10HubConnectivityIT() {
+    public Amqp10HonoConnectivityIT() {
         super(ConnectivityFactory.of(
-                "AmqpHub",
+                "AmqpHono",
                 connectionModelFactory,
                 () -> SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(),
                 AMQP10_TYPE,
-                Amqp10HubConnectivityIT::getAmqpUri,
+                Amqp10HonoConnectivityIT::getAmqpUri,
                 () -> Collections.singletonMap("jms.closeTimeout", "0"),
-                Amqp10HubConnectivityIT::defaultTargetAddress,
-                Amqp10HubConnectivityIT::defaultSourceAddress,
+                Amqp10HonoConnectivityIT::defaultTargetAddress,
+                Amqp10HonoConnectivityIT::defaultSourceAddress,
                 id -> AMQP_ENFORCEMENT,
                 () -> SSH_TUNNEL_CONFIG,
                 SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient()));
@@ -137,8 +136,8 @@ public class Amqp10HubConnectivityIT extends AbstractConnectivityITCommon<Blocki
                 () -> jmsSenders,
                 () -> jmsReceivers,
                 () -> jmsSessions,
-                Amqp10HubConnectivityIT::defaultTargetAddress,
-                Amqp10HubConnectivityIT::defaultSourceAddress,
+                Amqp10HonoConnectivityIT::defaultTargetAddress,
+                Amqp10HonoConnectivityIT::defaultSourceAddress,
                 java.time.Duration.ofMillis(WAIT_TIMEOUT_MS));
     }
 
@@ -149,22 +148,21 @@ public class Amqp10HubConnectivityIT extends AbstractConnectivityITCommon<Blocki
 
     @Before
     public void setupConnectivity() throws Exception {
-        hubConnectionName = UUID.randomUUID().toString();
-        connectionToBeDeletedName = UUID.randomUUID().toString();
+        honoConnectionName = UUID.randomUUID().toString();
         sourceAddress = cf.disambiguate("testSource");
         targetAddress = cf.disambiguate("testTarget");
         targetAddressForTargetPlaceholderSubstitution =
                 String.format("%s%s", defaultTargetAddress(cf.connectionNameWithAuthPlaceholderOnHEADER_ID),
                         ConnectivityConstants.TARGET_SUFFIX);
 
-        amqp10Server = new Amqp10TestServer(AMQP10_HUB_PORT);
+        amqp10Server = new Amqp10TestServer(AMQP10_HONO_PORT);
         amqp10Server.startServer();
 
         LOGGER.info("Creating connections..");
         cf.setUpConnections(connectionsWatcher.getConnections());
 
         for (final String connectionName :
-                cf.allConnectionNames(targetAddressForTargetPlaceholderSubstitution, hubConnectionName)) {
+                cf.allConnectionNames(targetAddressForTargetPlaceholderSubstitution, honoConnectionName)) {
             connectAsClient(connectionName);
         }
     }
@@ -184,7 +182,7 @@ public class Amqp10HubConnectivityIT extends AbstractConnectivityITCommon<Blocki
                 }
             });
             jmsConnections.clear();
-            cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution());
+            cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
         } finally {
             amqp10Server.stopServer();
             amqp10Server = null;
@@ -196,14 +194,14 @@ public class Amqp10HubConnectivityIT extends AbstractConnectivityITCommon<Blocki
     public void testConnectionWithInvalidSourceAddress() throws Exception {
 
         // instruct the amqp 1.0 test server to simulate unknown sources link
-        amqp10Server.enableHonoBehaviour(hubConnectionName);
+        amqp10Server.enableHonoBehaviour(honoConnectionName);
 
-        cf.setupSingleConnection(hubConnectionName).get();
+        cf.setupSingleConnection(honoConnectionName).get();
 
         // execute simple test to verify connection is working
-        sendSingleCommandAndEnsureEventIsProduced(hubConnectionName, cf.connectionName2);
+        sendSingleCommandAndEnsureEventIsProduced(honoConnectionName, cf.connectionName2);
 
-        // stop "HUB"
+        // stop "Hono"
         amqp10Server.stopProtonServer()
                 .thenAccept(unused -> LOGGER.info("AMQP1.0 server is stopped."))
                 .get(WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -213,39 +211,37 @@ public class Amqp10HubConnectivityIT extends AbstractConnectivityITCommon<Blocki
 
         // restart required test clients
         connectAsClient(cf.connectionName2);
-        connectAsClient(hubConnectionName);
+        connectAsClient(honoConnectionName);
 
         // wait at most one minute until connection is established again
         Awaitility.await()
                 .atMost(Duration.ofMinutes(1))
                 .pollInterval(Duration.ofSeconds(10))
                 .untilAsserted(() -> {
-                    final Connection connection =
-                            getConnectionExistingByName(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(),
-                                    hubConnectionName);
+                    final Connection connection = getConnectionExistingByName(honoConnectionName);
                     final ConnectivityStatus connectionStatus = connection.getConnectionStatus();
                     LOGGER.info("ConnectionStatus: {}", connectionStatus);
                     assertThat(connectionStatus.getName()).isEqualTo(ConnectivityStatus.OPEN.getName());
                 });
 
         // execute simple test to verify connection is working
-        sendSingleCommandAndEnsureEventIsProduced(hubConnectionName, cf.connectionName2);
+        sendSingleCommandAndEnsureEventIsProduced(honoConnectionName, cf.connectionName2);
     }
 
     /**
      * Verifies using a target address with placeholders allows the user to send messages for edge
      * devices to the gateway device instead of the edge device. This is needed since the edge devices in this scenario
-     * aren't registered in hub but only known to the gateway.
+     * aren't registered in Hono but only known to the gateway.
      */
     @Test
     @Connections(ConnectionCategory.CONNECTION2)
     public void messageToEdgeDeviceIsSentToGatewayDevice() throws Exception {
         // instruct the amqp 1.0 test server to simulate unknown sources link
-        amqp10Server.enableHonoBehaviour(hubConnectionName);
+        amqp10Server.enableHonoBehaviour(honoConnectionName);
 
-        setupSingleConnectionWithGatewayTarget(hubConnectionName).get();
+        setupSingleConnectionWithGatewayTarget(honoConnectionName).get();
 
-        sendSingleCommandAndEnsureEventIsReceivedOnGatewayTarget(cf.connectionName2, hubConnectionName);
+        sendSingleCommandAndEnsureEventIsReceivedOnGatewayTarget(cf.connectionName2, honoConnectionName);
     }
 
     private void sendSingleCommandAndEnsureEventIsReceivedOnGatewayTarget(final String sendingConnection,
@@ -388,7 +384,7 @@ public class Amqp10HubConnectivityIT extends AbstractConnectivityITCommon<Blocki
     private void connectAsClient(final String connectionName, final String targetAddress)
             throws JMSException, NamingException {
 
-        final String uri = "amqp://" + AMQP10_HUB_HOSTNAME + ":" + AMQP10_HUB_PORT;
+        final String uri = "amqp://" + AMQP10_HONO_HOSTNAME + ":" + AMQP10_HONO_PORT;
 
         final Context ctx = createContext(connectionName, uri);
         final JmsConnectionFactory cf = (JmsConnectionFactory) ctx.lookup(connectionName);
@@ -446,7 +442,7 @@ public class Amqp10HubConnectivityIT extends AbstractConnectivityITCommon<Blocki
 
     private CompletableFuture<Response> setupSingleConnectionWithGatewayTarget(final String connectionName) {
         LOGGER.info("Creating an AMQP1.0 connection with name <{}> to <{}:{}> in Ditto Connectivity",
-                connectionName, AMQP10_HUB_HOSTNAME, AMQP10_HUB_PORT);
+                connectionName, AMQP10_HONO_HOSTNAME, AMQP10_HONO_PORT);
         final Connection connection = connectionModelFactory.buildConnectionModel(
                 SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),
                 connectionName,
@@ -470,7 +466,7 @@ public class Amqp10HubConnectivityIT extends AbstractConnectivityITCommon<Blocki
     }
 
     private static String getAmqpUri(final boolean tunnel, final boolean basicAuth) {
-        final String host = tunnel ? CONFIG.getAmqp10HubTunnel() : CONFIG.getAmqp10HubHostName();
-        return "amqp://" + host + ":" + CONFIG.getAmqp10HubPort();
+        final String host = tunnel ? CONFIG.getAmqp10HonoTunnel() : CONFIG.getAmqp10HonoHostName();
+        return "amqp://" + host + ":" + CONFIG.getAmqp10HonoPort();
     }
 }

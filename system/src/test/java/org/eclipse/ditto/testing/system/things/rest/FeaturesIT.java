@@ -733,7 +733,7 @@ public final class FeaturesIT extends IntegrationTest {
 
         final String path = ResourcePathBuilder.forThing(thingId).features().toString();
         final String jsonString = "{}";
-        final String featuresUrlWithDoubleSlash = thingsServiceUrl(TestConstants.API_V_2, path) + "//";
+        final String featuresUrlWithDoubleSlash = dittoUrl(TestConstants.API_V_2, path) + "//";
         final String featuresUrlWithDoubleSlashAndId =
                 featuresUrlWithDoubleSlash + "foo";
 

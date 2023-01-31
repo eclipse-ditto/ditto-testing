@@ -43,20 +43,23 @@ final class HttpPushConnectionFactory {
 
     static Connection getHttpPushConnection(final String httpPushServerName,
             final int httpPushServerPort,
+            final CharSequence username,
             final CharSequence connectionName,
             final CharSequence signalTargetTopic,
             final AcknowledgementLabel... declaredSourceAckLabels) {
 
         ConditionChecker.checkNotNull(httpPushServerName, "httpPushServerName");
         ConditionChecker.checkNotNull(httpPushServerPort, "httpPushServerPort");
+        ConditionChecker.argumentNotEmpty(username, "username");
         ConditionChecker.argumentNotEmpty(connectionName, "connectionName");
         ConditionChecker.argumentNotEmpty(signalTargetTopic, "signalTargetTopic");
         ConditionChecker.checkNotNull(declaredSourceAckLabels, "declaredSourceAckLabels");
 
         final var authorizationContext =
                 AuthorizationContext.newInstance(DittoAuthorizationContextType.PRE_AUTHENTICATED_CONNECTION,
-                        AuthorizationSubject.newInstance(MessageFormat.format("{0}:{1}",
+                        AuthorizationSubject.newInstance(MessageFormat.format("{0}:{1}:{2}",
                                 SubjectIssuer.INTEGRATION,
+                                username,
                                 connectionName)));
 
         // This ID will be discarded anyway by posting the connection to Solutions.

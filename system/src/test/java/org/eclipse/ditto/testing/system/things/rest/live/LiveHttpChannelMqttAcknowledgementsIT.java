@@ -99,13 +99,14 @@ public final class LiveHttpChannelMqttAcknowledgementsIT {
 
     @ClassRule(order = 2)
     public static final PolicyWithConnectionSubjectResource POLICY_WITH_CONNECTION_SUBJECT_RESOURCE =
-            PolicyWithConnectionSubjectResource.newInstance(POLICIES_HTTP_CLIENT_RESOURCE,
-                    CONNECTION_NAME);
+            PolicyWithConnectionSubjectResource.newInstance(TEST_SOLUTION_RESOURCE,
+                    POLICIES_HTTP_CLIENT_RESOURCE, CONNECTION_NAME);
 
     @ClassRule(order = 2)
     public static final ConnectionResource MQTT_SOLUTION_CONNECTION_RESOURCE =
             ConnectionResource.newInstance(TEST_CONFIG.getTestEnvironment(),
                     CONNECTIONS_CLIENT_RESOURCE, () -> MqttConnectionFactory.getMqttConnection(MQTT_CONFIG.getTcpUri(),
+                            TEST_SOLUTION_RESOURCE.getTestUsername(),
                             CONNECTION_NAME,
                             SIGNAL_TARGET_TOPIC,
                             SIGNAL_SOURCE_TOPIC,

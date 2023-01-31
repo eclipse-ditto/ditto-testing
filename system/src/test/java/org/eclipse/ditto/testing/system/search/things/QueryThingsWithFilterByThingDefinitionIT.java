@@ -109,30 +109,21 @@ public class QueryThingsWithFilterByThingDefinitionIT extends SearchIntegrationT
                 .expectingBody(isEqualTo(toThingResult(thing1Id, thing4Id)))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void queryByEqNull() {
         search(definition().eq(null))
                 .expectingBody(isEqualTo(toThingResult(thing3Id)))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void queryByNeString() {
         search(definition().ne(THING1_DEFINITION_VALUE))
                 .expectingBody(isEqualTo(toThingResult(thing2Id, thing3Id)))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void queryByNeNull() {
         search(definition().ne(null))

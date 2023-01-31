@@ -116,8 +116,8 @@ public final class ConditionAmqpIT {
 
     @ClassRule(order = 2)
     public static final PolicyWithConnectionSubjectResource POLICY_WITH_CONNECTION_SUBJECT_RESOURCE =
-            PolicyWithConnectionSubjectResource.newInstance(POLICIES_HTTP_CLIENT_RESOURCE,
-                    CONNECTION_NAME);
+            PolicyWithConnectionSubjectResource.newInstance(TEST_SOLUTION_RESOURCE,
+                    POLICIES_HTTP_CLIENT_RESOURCE, CONNECTION_NAME);
 
     private static ThingsHttpClient thingsHttpClient;
     private static DittoProtocolClient dittoProtocolClient;
@@ -641,7 +641,8 @@ public final class ConditionAmqpIT {
 
     private static AuthorizationSubject getAuthorizationSubject(final String connectionName) {
 
-        return AuthorizationSubject.newInstance(MessageFormat.format("integration:{0}",
+        return AuthorizationSubject.newInstance(MessageFormat.format("integration:{0}:{1}",
+                TEST_SOLUTION_RESOURCE.getTestSolution().getUsername(),
                 connectionName));
     }
 

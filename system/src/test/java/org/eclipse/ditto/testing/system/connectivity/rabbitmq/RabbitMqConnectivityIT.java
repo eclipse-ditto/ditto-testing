@@ -132,7 +132,7 @@ public class RabbitMqConnectivityIT extends
                 LOGGER.debug("Close failed, but can be ignored ({}).", e.getMessage());
             }
         }
-        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution());
+        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
     }
 
     private void deleteQueues() {

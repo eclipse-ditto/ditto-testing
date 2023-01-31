@@ -15,6 +15,8 @@ package org.eclipse.ditto.testing.common;
 import static java.util.Objects.requireNonNull;
 import static org.eclipse.ditto.testing.common.IntegrationTest.TEST_CONFIG;
 
+import java.util.UUID;
+
 import org.apache.commons.lang3.RandomStringUtils;
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.connectivity.model.signals.commands.ConnectivityCommand;
@@ -99,6 +101,23 @@ public final class ServiceEnvironment {
         return TESTING_CONTEXT;
     }
 
+    public Solution createSolution(final CharSequence namespace) {
+
+        final String randomUsername = "user-" + UUID.randomUUID();
+        return new Solution(randomUsername, "password", namespace.toString());
+    }
+
+    public static Solution createSolutionWithRandomUsernameRandomNamespace() {
+
+        final String randomNamespace = "org.eclipse.ditto.ns.random." + randomString();
+        final String randomUsername = "user-" + UUID.randomUUID();
+        return new Solution(randomUsername, "password", randomNamespace);
+    }
+
+    public static String randomString() {
+        return RandomStringUtils.randomAlphabetic(1) + RandomStringUtils.randomAlphanumeric(10);
+    }
+
     public TestingContext getTestingContext2() {
         return TESTING_CONTEXT2;
     }
@@ -153,7 +172,4 @@ public final class ServiceEnvironment {
 
     }
 
-    public String getUnauthorizedAccessToken() {
-        return "";
-    }
 }

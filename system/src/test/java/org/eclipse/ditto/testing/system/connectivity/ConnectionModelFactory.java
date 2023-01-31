@@ -107,7 +107,7 @@ public final class ConnectionModelFactory {
     @FunctionalInterface
     public interface ConnectionAuthIdentifierFactory {
 
-        String createIdentifier(String username);
+        String createIdentifier(String username, String suffix);
     }
 
     /**
@@ -137,7 +137,7 @@ public final class ConnectionModelFactory {
             final String targetAddress,
             final Collection<String> additionalAuthSubjects) {
 
-        final String authSubject = authIdentifier.createIdentifier(username);
+        final String authSubject = authIdentifier.createIdentifier(username, connectionName);
         final List<String> allAuthSubjects = new ArrayList<>();
         allAuthSubjects.add(authSubject);
         allAuthSubjects.addAll(additionalAuthSubjects);
@@ -207,7 +207,7 @@ public final class ConnectionModelFactory {
             final Map<String, String> specificConfig,
             final String sourceAddress) {
 
-        final String authSubject = authIdentifier.createIdentifier(username);
+        final String authSubject = authIdentifier.createIdentifier(username, connectionName);
         final List<String> allAuthSubjects = new ArrayList<>();
         allAuthSubjects.add(authSubject);
         final List<Source> sources = List.of(buildSource(appendSuffix(connectionName, sourceAddress, SOURCE1_SUFFIX),
@@ -226,7 +226,7 @@ public final class ConnectionModelFactory {
             final String connectionName,
             final Map<String, String> specificConfig) {
 
-        final String authSubject = authIdentifier.createIdentifier(username);
+        final String authSubject = authIdentifier.createIdentifier(username, connectionName);
         final List<String> allAuthSubjects = new ArrayList<>();
         allAuthSubjects.add(authSubject);
         final List<Source> sources = List.of(
@@ -248,7 +248,7 @@ public final class ConnectionModelFactory {
             final Map<String, String> specificConfig, final String sourceAddress,
             final String targetAddress, final AuthClient client) {
 
-        final String integrationSubject = authIdentifier.createIdentifier(username);
+        final String integrationSubject = authIdentifier.createIdentifier(username, connectionId);
         final AuthorizationContext authorizationContext =
                 AuthorizationModelFactory.newAuthContext(DittoAuthorizationContextType.UNSPECIFIED,
                         AuthorizationModelFactory.newAuthSubject(integrationSubject));
@@ -435,7 +435,7 @@ public final class ConnectionModelFactory {
             final String targetAddress) {
 
         final String authSubjectWithPlaceholder = String.format("integration:%s:{{header:%s}}", username, HEADER_ID);
-        final String authSubject = authIdentifier.createIdentifier(username);
+        final String authSubject = authIdentifier.createIdentifier(username, connectionName);
 
         final HeaderMapping headerMapping;
         if (connectionTypeSupportsHeaders(connectionType)) {
@@ -485,7 +485,7 @@ public final class ConnectionModelFactory {
                 .map(ConnectivityModelFactory::newFilteredTopic)
                 .collect(Collectors.toSet());
 
-        final String authSubject = authIdentifier.createIdentifier(username);
+        final String authSubject = authIdentifier.createIdentifier(username, connectionName);
         final List<Source> sources = Optional.ofNullable(sourceAddress)
                 .map(address -> buildSource(address, authSubject))
                 .map(Collections::singletonList)
@@ -508,7 +508,7 @@ public final class ConnectionModelFactory {
             final String targetAddress,
             final Enforcement enforcement) {
 
-        final String authSubject = authIdentifier.createIdentifier(username);
+        final String authSubject = authIdentifier.createIdentifier(username, connectionName);
 
         final List<Source> sources = Optional.ofNullable(sourceAddress)
                 .map(address -> sourceBuilder(address, authSubject)
@@ -533,7 +533,7 @@ public final class ConnectionModelFactory {
             @Nullable final String sourceAddress,
             final String targetAddress) {
 
-        final String authSubject = authIdentifier.createIdentifier(username);
+        final String authSubject = authIdentifier.createIdentifier(username, connectionName);
         final HeaderMapping headerMapping = getHeaderMappingForConnectionWithHeaderMapping();
         final List<Source> sources = Optional.ofNullable(sourceAddress)
                 .map(address -> ConnectivityModelFactory.newSourceBuilder()
@@ -604,7 +604,7 @@ public final class ConnectionModelFactory {
             final Topic topic,
             Topic... additionalTopics) {
 
-        final String authSubject = authIdentifier.createIdentifier(username);
+        final String authSubject = authIdentifier.createIdentifier(username, connectionName);
         final List<Source> sources = Optional.ofNullable(sourceAddress)
                 .map(address -> ConnectivityModelFactory.newSourceBuilder()
                         .address(address)

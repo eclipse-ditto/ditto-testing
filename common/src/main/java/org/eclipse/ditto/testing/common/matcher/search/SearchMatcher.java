@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import org.eclipse.ditto.base.model.common.HttpStatus;
@@ -167,7 +168,7 @@ public final class SearchMatcher extends AbstractGetMatcher<SearchMatcher> {
     }
 
     @Override
-    protected void doLog(final Logger logger, final String path, final String entityType) {
+    protected void doLog(final Logger logger, final String path, @Nullable final String entityType) {
         logger.info(GET_MESSAGE_TEMPLATE, path, parameters.get(PARAM_FILTER), parameters.get(PARAM_OPTION));
     }
 

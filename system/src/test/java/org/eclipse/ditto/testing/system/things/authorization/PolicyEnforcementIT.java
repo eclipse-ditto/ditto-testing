@@ -90,10 +90,8 @@ public final class PolicyEnforcementIT extends IntegrationTest {
     @BeforeClass
     public static void initTestFixture() {
         defaultClientSubjectId = serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject().getId();
-        if (TEST_CONFIG.isLocalOrDockerTestEnvironment()) {
-            client2SubjectId = serviceEnv.getTestingContext2().getOAuthClient().getSubject().getId();
-            client3SubjectId = serviceEnv.getTestingContext3().getOAuthClient().getSubject().getId();
-        }
+        client2SubjectId = serviceEnv.getTestingContext2().getOAuthClient().getSubject().getId();
+        client3SubjectId = serviceEnv.getTestingContext3().getOAuthClient().getSubject().getId();
     }
 
     /**

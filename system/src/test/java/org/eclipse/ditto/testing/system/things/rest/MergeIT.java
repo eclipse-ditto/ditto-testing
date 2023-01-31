@@ -91,7 +91,7 @@ public class MergeIT extends IntegrationTest {
 
     @Test
     public void mergeWithInvalidContentType() {
-        patchThing(TestConstants.API_V_2, TestConstants.CONTENT_TYPE_APPLICATION_JSON, ThingId.generateRandom(),
+        patchThing(TestConstants.API_V_2, TestConstants.CONTENT_TYPE_APPLICATION_JSON, ThingId.generateRandom("org.eclipse.ditto"),
                 Thing.JsonFields.ATTRIBUTES.getPointer(), JsonObject.empty())
                 .expectingHttpStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
                 .expectingErrorCode("mediatype.unsupported")
@@ -100,7 +100,7 @@ public class MergeIT extends IntegrationTest {
 
     @Test
     public void mergeWithNullThing() {
-        patchThing(TestConstants.API_V_2, ThingId.generateRandom(), JsonPointer.empty(), JsonFactory.nullLiteral())
+        patchThing(TestConstants.API_V_2, ThingId.generateRandom("org.eclipse.ditto"), JsonPointer.empty(), JsonFactory.nullLiteral())
                 .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .expectingErrorCode("things:merge.invalid")
                 .fire();
@@ -108,7 +108,7 @@ public class MergeIT extends IntegrationTest {
 
     @Test
     public void mergeEmptyThing() {
-        patchThing(TestConstants.API_V_2, ThingId.generateRandom(), JsonPointer.empty(), JsonObject.empty())
+        patchThing(TestConstants.API_V_2, ThingId.generateRandom("org.eclipse.ditto"), JsonPointer.empty(), JsonObject.empty())
                 .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .expectingErrorCode("things:merge.invalid")
                 .fire();

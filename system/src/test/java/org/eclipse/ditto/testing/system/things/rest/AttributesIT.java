@@ -472,7 +472,7 @@ public final class AttributesIT extends IntegrationTest {
 
         final String path = ResourcePathBuilder.forThing(thingId).attributes().toString();
         final String jsonString = "{}";
-        final String attributesUrlWithDoubleSlash = thingsServiceUrl(TestConstants.API_V_2, path) + "//";
+        final String attributesUrlWithDoubleSlash = dittoUrl(TestConstants.API_V_2, path) + "//";
         final String attributesUrlWithDoubleSlashAndId =
                 attributesUrlWithDoubleSlash + "bar";
 
@@ -521,7 +521,7 @@ public final class AttributesIT extends IntegrationTest {
         final String path = ResourcePathBuilder.forThing(thingId).attribute(propertyKey).toString();
         final String jsonString = "13";
 
-        put(thingsServiceUrl(TestConstants.API_V_2, path), jsonString)
+        put(dittoUrl(TestConstants.API_V_2, path), jsonString)
                 .disableUrlEncoding()
                 .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .expectingBody(containsCharSequence("Consecutive slashes in JSON pointers are not supported"))

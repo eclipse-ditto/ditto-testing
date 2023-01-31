@@ -116,7 +116,7 @@ public final class RestConnectionsIT extends IntegrationTest {
                 .build();
 
         putThingWithPolicy(API_V_2, thing, policy, JsonSchemaVersion.V_2)
-                .withDevopsAuth()
+                .withJWT(serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -159,7 +159,7 @@ public final class RestConnectionsIT extends IntegrationTest {
 
     public RestConnectionsIT() {
         final ConnectionModelFactory connectionModelFactory =
-                new ConnectionModelFactory((username) -> integrationSubject);
+                new ConnectionModelFactory((username, suffix) -> integrationSubject);
         connectivityFactory = ConnectivityFactory.of("Rest",
                 connectionModelFactory,
                 () -> testingContext.getSolution(),
@@ -186,7 +186,7 @@ public final class RestConnectionsIT extends IntegrationTest {
 
         connectionsClient().getConnection(connectionId)
                 .withDevopsAuth()
-                .expectingBody(containsConnectionIdsFromConnection(Collections.singletonList(connectionId)))
+                .expectingBody(contains(connection.toBuilder().set("id", connectionId).build()))
                 .fire();
     }
 
@@ -206,7 +206,7 @@ public final class RestConnectionsIT extends IntegrationTest {
         final var username = testingContext.getSolution().getUsername();
         final AuthorizationContext authContext = AuthorizationContext.newInstance(
                 DittoAuthorizationContextType.PRE_AUTHENTICATED_CONNECTION,
-                AuthorizationSubject.newInstance("integration:" + username + ":test"));
+                AuthorizationSubject.newInstance("integration:" + username + ":" + TestingContext.DEFAULT_SCOPE));
         final JsonObject connection = TestConstants.Connections.buildConnection().toBuilder()
                 .set(Connection.JsonFields.TARGETS, JsonArray.of(ConnectivityModelFactory.newTargetBuilder()
                                 .address("amqp/target1")
@@ -236,7 +236,7 @@ public final class RestConnectionsIT extends IntegrationTest {
         final var username = testingContext.getSolution().getUsername();
         final AuthorizationContext authContext = AuthorizationContext.newInstance(
                 DittoAuthorizationContextType.PRE_AUTHENTICATED_CONNECTION,
-                AuthorizationSubject.newInstance("integration:" + username + ":test"));
+                AuthorizationSubject.newInstance("integration:" + username + ":" + TestingContext.DEFAULT_SCOPE));
         final JsonObject connection = TestConstants.Connections.buildConnection().toBuilder()
                 .set(Connection.JsonFields.TARGETS, JsonArray.of(ConnectivityModelFactory.newTargetBuilder()
                         .address("amqp/target1")
@@ -260,7 +260,7 @@ public final class RestConnectionsIT extends IntegrationTest {
         final var username = testingContext.getSolution().getUsername();
         final AuthorizationContext authContext = AuthorizationContext.newInstance(
                 DittoAuthorizationContextType.PRE_AUTHENTICATED_CONNECTION,
-                AuthorizationSubject.newInstance("integration:" + username + ":test"));
+                AuthorizationSubject.newInstance("integration:" + username + ":" + TestingContext.DEFAULT_SCOPE));
         final JsonObject connection = TestConstants.Connections.buildConnection().toBuilder()
                 .set(Connection.JsonFields.SOURCES,
                         JsonArray.of(ConnectivityModelFactory.newSourceBuilder()
@@ -279,7 +279,7 @@ public final class RestConnectionsIT extends IntegrationTest {
     }
 
     @Test
-    public void createConnectionByPutShouldNotWork() {
+    public void createConnectionByPutWorks() {
         // WHEN
         final String connectionName = UUID.randomUUID().toString();
         final JsonObject connection = TestConstants.Connections.buildConnection("0", connectionName);
@@ -287,7 +287,7 @@ public final class RestConnectionsIT extends IntegrationTest {
         connectionsClient()
                 .putConnection(connectionName, connection)
                 .withDevopsAuth()
-                .expectingHttpStatus(HttpStatus.NOT_FOUND) // Creating via PUT should not be supported
+                .expectingHttpStatus(HttpStatus.CREATED) // Creating via PUT is supported
                 .fire();
     }
 
@@ -354,7 +354,8 @@ public final class RestConnectionsIT extends IntegrationTest {
                                 .set(Target.JsonFields.TOPICS,
                                         JsonArray.of(JsonValue.of(Topic.CONNECTION_ANNOUNCEMENTS.toString())))
                                 .set(Source.JsonFields.AUTHORIZATION_CONTEXT,
-                                        JsonArray.of(JsonValue.of("integration:0:test")))
+                                        JsonArray.of(JsonValue.of("integration:" +
+                                                testingContext.getSolution().getUsername() + ":" + TestingContext.DEFAULT_SCOPE)))
                                 .build()));
 
         connectionsClient()
@@ -413,7 +414,7 @@ public final class RestConnectionsIT extends IntegrationTest {
 
     private void updateThing() {
         putAttribute(API_V_2, thingId, "foo", "\"bar\"")
-                .withDevopsAuth()
+                .withJWT(serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED, HttpStatus.NO_CONTENT)
                 .fire();
     }

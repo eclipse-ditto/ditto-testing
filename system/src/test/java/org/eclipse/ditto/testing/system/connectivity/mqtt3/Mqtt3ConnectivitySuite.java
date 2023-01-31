@@ -191,7 +191,9 @@ public final class Mqtt3ConnectivitySuite
                         SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient())
                 .withMaxClientCount(1));
 
-        mqttCustomConnectionName = cf.disambiguate("Mqtt3Custom");
+        mqttCustomConnectionName = cf.disambiguateConnectionName(
+                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(), "Mqtt3Custom"
+        );
         connectivityWorker = new Mqtt3ConnectivityWorker(LOGGER, Mqtt3ConnectivitySuite::getTargetTopic,
                 () -> mqttClient, cf.connectionNameWithEnforcementEnabled, Duration.ofMillis(WAIT_TIMEOUT_MS));
     }
@@ -200,7 +202,7 @@ public final class Mqtt3ConnectivitySuite
 
     @BeforeClass
     public static void setUpWebsocketClient() {
-        websocketClient = ConnectivityTestWebsocketClient.newInstance(thingsWsUrl(TestConstants.API_V_2),
+        websocketClient = ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2),
                 SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
         websocketClient.connect("mqtt-websocket-" + UUID.randomUUID());
     }
@@ -242,7 +244,7 @@ public final class Mqtt3ConnectivitySuite
     @After
     public void cleanup() {
         disconnectClient();
-        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution());
+        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
     }
 
     @Override
@@ -326,7 +328,7 @@ public final class Mqtt3ConnectivitySuite
     @Test
     @Connections(ConnectionCategory.NONE)
     public void testSslFailureDueToUnidentifiedClient() {
-        testConnectionWithErrorExpected(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(),
+        testConnectionWithErrorExpected(
                 getMqttOverSslConnection(String.valueOf(UUID.randomUUID()), CONFIG.getMqttCACrt(), null, null),
                 ConnectionUnavailableException.ERROR_CODE);
     }
@@ -422,8 +424,7 @@ public final class Mqtt3ConnectivitySuite
         final String connectionName = UUID.randomUUID().toString();
         final JsonObject connectionStr = getMqttOverSslConnection(connectionName, caCrt, clientCrt, clientKey);
 
-        testConnectionWithErrorExpected(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(), connectionStr,
-                ConnectionFailedException.ERROR_CODE);
+        testConnectionWithErrorExpected(connectionStr, ConnectionFailedException.ERROR_CODE);
     }
 
 

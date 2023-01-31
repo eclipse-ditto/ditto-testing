@@ -33,6 +33,7 @@ import org.eclipse.ditto.connectivity.model.ConnectionType;
 import org.eclipse.ditto.connectivity.model.ConnectivityModelFactory;
 import org.eclipse.ditto.connectivity.model.ConnectivityStatus;
 import org.eclipse.ditto.connectivity.model.Topic;
+import org.eclipse.ditto.testing.common.TestSolutionResource;
 import org.eclipse.ditto.testing.common.client.ditto_protocol.options.Option;
 import org.eclipse.ditto.testing.common.composite_resources.HttpToAmqpResource;
 import org.eclipse.ditto.testing.common.conditions.DockerEnvironment;
@@ -71,7 +72,7 @@ public final class Amqp10MessageAnnotationsIT {
                 bytePayload,
                 contentType
             ) {
-                const deviceId = headers["amqp.message.annotation:iothub-connection-device-id"];
+                const deviceId = headers["amqp.message.annotation:connection-device-id"];
                 const deviceIdParts = deviceId.split(":");
                 
                 // Assuming, that content-type is always 'application/json'.
@@ -92,14 +93,18 @@ public final class Amqp10MessageAnnotationsIT {
             }""";
 
     @ClassRule(order = 0)
+    public static final TestSolutionResource TEST_SOLUTION_RESOURCE = TestSolutionResource.newInstance(TEST_CONFIG);
+
+    @ClassRule(order = 1)
     public static final HttpToAmqpResource HTTP_TO_AMQP_RESOURCE = HttpToAmqpResource.newInstance(
             TEST_CONFIG,
-            (amqpClientResource, testSolutionResource) -> {
+            TEST_SOLUTION_RESOURCE,
+            amqpClientResource -> {
                 final var authorizationContext = AuthorizationContext.newInstance(
                         DittoAuthorizationContextType.PRE_AUTHENTICATED_CONNECTION,
                         AuthorizationSubject.newInstance(
                                 MessageFormat.format("integration:{0}:{1}",
-                                        testSolutionResource.getTestUsername(),
+                                        TEST_SOLUTION_RESOURCE.getTestUsername(),
                                         amqpClientResource.getConnectionName())
                         )
                 );
@@ -130,7 +135,7 @@ public final class Amqp10MessageAnnotationsIT {
             }
     );
 
-    @ClassRule(order = 1)
+    @ClassRule(order = 2)
     public static final ConnectionResource LISTENER_APP_CONNECTION_RESOURCE =
             ConnectionResource.newInstance(
                     TEST_CONFIG.getTestEnvironment(),
@@ -140,7 +145,8 @@ public final class Amqp10MessageAnnotationsIT {
                         final var authorizationContext = AuthorizationContext.newInstance(
                                 DittoAuthorizationContextType.PRE_AUTHENTICATED_CONNECTION,
                                 AuthorizationSubject.newInstance(
-                                        MessageFormat.format("integration:{1}",
+                                        MessageFormat.format("integration:{0}:{1}",
+                                                getTestSolutionUsername(),
                                                 amqpClientResource.getConnectionName())
                                 )
                         );
@@ -200,7 +206,7 @@ public final class Amqp10MessageAnnotationsIT {
                 Option.newInstance(
                         AmqpClientOptionDefinitions.Send.MESSAGE_ANNOTATION_HEADER,
                         new AmqpClientOptionDefinitions.MessageAnnotationHeader(
-                                "iothub-connection-device-id",
+                                "connection-device-id",
                                 thingId.toString()
                         )
                 )
@@ -225,7 +231,7 @@ public final class Amqp10MessageAnnotationsIT {
     }
 
     private static ThingId getThingId() {
-        return ThingId.generateRandom();
+        return ThingId.generateRandom("org.eclipse.ditto");
     }
 
     private static Attributes getThingAttributes() {
@@ -236,4 +242,8 @@ public final class Amqp10MessageAnnotationsIT {
                 .build();
     }
 
+    private static String getTestSolutionUsername() {
+        final var testSolutionResource = HTTP_TO_AMQP_RESOURCE.getTestSolutionResource();
+        return testSolutionResource.getTestUsername();
+    }
 }

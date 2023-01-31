@@ -74,17 +74,12 @@ public abstract class AbstractClientIT extends IntegrationTest {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractClientIT.class);
 
-    /* should not be required with the hub anymore - increase if any timing issues should occur */
-    private static final long WAIT_BEFORE_TEST_MILLISECONDS =
-            Long.parseLong(System.getProperty("client.wait.before.test.ms", 5000 + ""));
-
-    public static final String MANAGED_DATA_ERROR_RESPONSE = "Managed data volume is exceeded for this subscription.";
-
     protected static final int DEFAULT_MAX_THING_SIZE = 1024 * 100;
     protected static final int DEFAULT_MAX_MESSAGE_SIZE = 1024 * 250;
 
-    public static final int TIMEOUT_SECONDS = 60;
+    public static final int TIMEOUT_SECONDS = 30;
     public static final int LATCH_TIMEOUT = TIMEOUT_SECONDS;
+    public static final int NEGATIVE_LATCH_TIMEOUT = TIMEOUT_SECONDS / 5;
 
     protected static final String BINARY_PAYLOAD_RESOURCE = "BinaryMessagePayload.jpg";
 
@@ -94,47 +89,47 @@ public abstract class AbstractClientIT extends IntegrationTest {
     @Rule
     public JUnitSoftAssertions softly = new JUnitSoftAssertions();
 
-    protected static DittoClient newDittoClient(final AuthClient suiteAuthClient) {
-        return newDittoClient(suiteAuthClient, Collections.emptyList(), Collections.emptyList());
+    protected static DittoClient newDittoClient(final AuthClient authClient) {
+        return newDittoClient(authClient, Collections.emptyList(), Collections.emptyList());
     }
 
-    protected static DittoClient newDittoClientV2(final AuthClient suiteAuthClient) {
-        return newDittoClientV2(suiteAuthClient, Collections.emptyList(), Collections.emptyList());
+    protected static DittoClient newDittoClientV2(final AuthClient authClient) {
+        return newDittoClientV2(authClient, Collections.emptyList(), Collections.emptyList());
     }
 
-    protected static DittoClient newDittoClientV2(final AuthClient suiteAuthClient,
+    protected static DittoClient newDittoClientV2(final AuthClient authClient,
             final Collection<AcknowledgementLabel> declaredTwinAcknowledgements,
             final Collection<AcknowledgementLabel> declaredLiveAcknowledgements) {
 
-        final AuthenticationProvider<WebSocket> authenticationProvider = suiteAuthProvider(suiteAuthClient);
+        final AuthenticationProvider<WebSocket> authenticationProvider = authProvider(authClient);
         return newDittoClientV2(authenticationProvider, declaredTwinAcknowledgements, declaredLiveAcknowledgements,
                 null);
     }
 
-    protected static DittoClient newDittoClientV2(final AuthClient suiteAuthClient,
+    protected static DittoClient newDittoClientV2(final AuthClient authClient,
             final Collection<AcknowledgementLabel> declaredTwinAcknowledgements,
             final Collection<AcknowledgementLabel> declaredLiveAcknowledgements,
             final Consumer<Throwable> errorHandler) {
 
-        final AuthenticationProvider<WebSocket> authenticationProvider = suiteAuthProvider(suiteAuthClient);
+        final AuthenticationProvider<WebSocket> authenticationProvider = authProvider(authClient);
         return newDittoClientV2(authenticationProvider, declaredTwinAcknowledgements, declaredLiveAcknowledgements,
                 errorHandler);
     }
 
-    protected static DittoClient newDittoClient(final AuthClient suiteAuthClient,
+    protected static DittoClient newDittoClient(final AuthClient authClient,
             final Collection<AcknowledgementLabel> declaredTwinAcknowledgements,
             final Collection<AcknowledgementLabel> declaredLiveAcknowledgements) {
 
-        final AuthenticationProvider<WebSocket> authenticationProvider = suiteAuthProvider(suiteAuthClient);
+        final AuthenticationProvider<WebSocket> authenticationProvider = authProvider(authClient);
         return newDittoClient(authenticationProvider, declaredTwinAcknowledgements, declaredLiveAcknowledgements);
     }
 
-    private static AuthenticationProvider<WebSocket> suiteAuthProvider(final AuthClient suiteAuthClient) {
+    private static AuthenticationProvider<WebSocket> authProvider(final AuthClient authClient) {
         return AuthenticationProviders.clientCredentials(ClientCredentialsAuthenticationConfiguration.newBuilder()
-                .clientId(suiteAuthClient.getClientId())
-                .clientSecret(suiteAuthClient.getClientSecret())
-                .tokenEndpoint(suiteAuthClient.getTokenEndpoint())
-                .scopes(scopeStringToList(suiteAuthClient.getScope().orElseThrow()))
+                .clientId(authClient.getClientId())
+                .clientSecret(authClient.getClientSecret())
+                .tokenEndpoint(authClient.getTokenEndpoint())
+                .scopes(scopeStringToList(authClient.getScope().orElseThrow()))
                 .proxyConfiguration(proxyConfiguration())
                 .build());
     }
@@ -160,7 +155,7 @@ public abstract class AbstractClientIT extends IntegrationTest {
             final JsonSchemaVersion schemaVersion,
             final Collection<AcknowledgementLabel> declaredTwinAcknowledgements,
             final Collection<AcknowledgementLabel> declaredLiveAcknowledgements) {
-        return ClientFactory.newClient(thingsWsUrl(schemaVersion.toInt()), schemaVersion, authenticationProvider,
+        return ClientFactory.newClient(dittoWsUrl(schemaVersion.toInt()), schemaVersion, authenticationProvider,
                 proxyConfiguration(), declaredTwinAcknowledgements, declaredLiveAcknowledgements, null);
     }
 
@@ -168,7 +163,7 @@ public abstract class AbstractClientIT extends IntegrationTest {
             final Collection<AcknowledgementLabel> declaredTwinAcknowledgements,
             final Collection<AcknowledgementLabel> declaredLiveAcknowledgements,
             final Consumer<Throwable> errorHandler) {
-        return ClientFactory.newClient(thingsWsUrl(2), JsonSchemaVersion.V_2, authenticationProvider,
+        return ClientFactory.newClient(dittoWsUrl(2), JsonSchemaVersion.V_2, authenticationProvider,
                 proxyConfiguration(), declaredTwinAcknowledgements, declaredLiveAcknowledgements, errorHandler);
     }
 
@@ -245,7 +240,7 @@ public abstract class AbstractClientIT extends IntegrationTest {
     }
 
     protected void awaitLatchFalse(final CountDownLatch latch) throws InterruptedException {
-        Assertions.assertThat(latch.await(LATCH_TIMEOUT, TimeUnit.SECONDS))
+        Assertions.assertThat(latch.await(NEGATIVE_LATCH_TIMEOUT, TimeUnit.SECONDS))
                 .withFailMessage("Latch should not reach zero before timeout.")
                 .isFalse();
     }

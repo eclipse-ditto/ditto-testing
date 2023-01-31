@@ -19,9 +19,10 @@ import static org.eclipse.ditto.base.model.common.HttpStatus.FORBIDDEN;
 import static org.eclipse.ditto.base.model.common.HttpStatus.NOT_FOUND;
 import static org.eclipse.ditto.base.model.common.HttpStatus.NO_CONTENT;
 import static org.eclipse.ditto.base.model.common.HttpStatus.OK;
+import static org.eclipse.ditto.base.model.common.HttpStatus.UNAUTHORIZED;
 import static org.eclipse.ditto.policies.api.Permission.EXECUTE;
 import static org.eclipse.ditto.testing.common.TestConstants.Policy.ARBITRARY_SUBJECT_TYPE;
-import static org.eclipse.ditto.testing.common.TestConstants.Policy.SUITE_AUTH_SUBJECT_TYPE;
+import static org.eclipse.ditto.testing.common.TestConstants.Policy.DITTO_AUTH_SUBJECT_TYPE;
 import static org.eclipse.ditto.things.api.Permission.READ;
 import static org.eclipse.ditto.things.api.Permission.WRITE;
 
@@ -56,6 +57,7 @@ import org.eclipse.ditto.policies.model.Subjects;
 import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.ResourcePathBuilder;
 import org.eclipse.ditto.testing.common.TestConstants;
+import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
 import org.eclipse.ditto.testing.common.matcher.PostMatcher;
@@ -70,16 +72,6 @@ import io.restassured.response.ResponseBody;
  * Integration Tests for /policy resources and implicit Policy management via /things (e.g. creation).
  */
 public final class PolicyIT extends IntegrationTest {
-
-    @Test
-    public void createMinimalPolicyWithWrongNamespace() {
-        final PolicyId policyId = PolicyId.of(serviceEnv.getTesting2NamespaceName(), "policyIdWithWrongNamespace");
-        final Policy policyToPut = buildMinimalPolicy(policyId);
-
-        putPolicy(policyId, policyToPut)
-                .expectingHttpStatus(BAD_REQUEST)
-                .fire();
-    }
 
     @Test
     @Category(Acceptance.class)
@@ -456,7 +448,7 @@ public final class PolicyIT extends IntegrationTest {
     public void putPolicyWithSubjectIdPlaceholder() {
         final PolicyId policyId = PolicyId.of(idGenerator().withName("putPolicyWithSubjectIdPlaceholder"));
         final Subject subject =
-                Subject.newInstance(TestConstants.REQUEST_SUBJECT_ID_PLACEHOLDER, SUITE_AUTH_SUBJECT_TYPE);
+                Subject.newInstance(TestConstants.REQUEST_SUBJECT_ID_PLACEHOLDER, DITTO_AUTH_SUBJECT_TYPE);
         final Policy policyWithPlaceholder = buildMinimalPolicy(policyId, subject);
 
         putPolicy(policyId, policyWithPlaceholder)
@@ -474,7 +466,7 @@ public final class PolicyIT extends IntegrationTest {
     public void putPolicyWithLegacySubjectIdPlaceholder() {
         final PolicyId policyId = PolicyId.of(idGenerator().withName("putPolicyWithLegacySubjectIdPlaceholder"));
         final Subject subject =
-                Subject.newInstance("${request.subjectId}", SUITE_AUTH_SUBJECT_TYPE);
+                Subject.newInstance("${request.subjectId}", DITTO_AUTH_SUBJECT_TYPE);
         final Policy policyWithPlaceholder = buildMinimalPolicy(policyId, subject);
 
         putPolicy(policyId, policyWithPlaceholder)
@@ -538,7 +530,7 @@ public final class PolicyIT extends IntegrationTest {
 
         final SubjectId expectedSubjectId = SubjectId.newInstance(String.format("integration:%s:%s",
                 serviceEnv.getTestingContext2().getSolution().getUsername(),
-                serviceEnv.getTestingContext2().getOAuthClient().getClientId()));
+                TestingContext.DEFAULT_SCOPE));
         assertThat(activatedSubjects.getSubject(expectedSubjectId)).isNotEmpty();
         final Subject activatedSubject = activatedSubjects.getSubject(expectedSubjectId).orElseThrow();
         assertThat(activatedSubject.getExpiry()).isNotEmpty();
@@ -582,7 +574,7 @@ public final class PolicyIT extends IntegrationTest {
 
         final SubjectId expectedSubjectId = SubjectId.newInstance(String.format("integration:%s:%s",
                 serviceEnv.getTestingContext2().getSolution().getUsername(),
-                serviceEnv.getTestingContext2().getOAuthClient().getClientId()));
+                TestingContext.DEFAULT_SCOPE));
         assertThat(activatedSubjects.getSubject(expectedSubjectId)).isNotEmpty();
         final Subject activatedSubject = activatedSubjects.getSubject(expectedSubjectId).orElseThrow();
         assertThat(activatedSubject.getExpiry()).isNotEmpty();
@@ -629,7 +621,7 @@ public final class PolicyIT extends IntegrationTest {
         postPolicy(policyId, "entries/activate/actions/activateTokenIntegration")
                 .withBasicAuth(serviceEnv.getDefaultAuthUsername(),
                         serviceEnv.getDefaultTestingContext().getSolution().getSecret())
-                .expectingHttpStatus(BAD_REQUEST)
+                .expectingHttpStatus(UNAUTHORIZED)
                 .fire();
 
         // no EXECUTE grant on target entry
@@ -710,7 +702,7 @@ public final class PolicyIT extends IntegrationTest {
     private static PostMatcher postPolicy(final CharSequence policyId, final String pathAfterPolicyId,
             @Nullable final String jsonPayload) {
         final String path = ResourcePathBuilder.forPolicy(policyId) + "/" + pathAfterPolicyId;
-        final String thingsServiceUrl = thingsServiceUrl(TestConstants.API_V_2, path);
+        final String thingsServiceUrl = dittoUrl(TestConstants.API_V_2, path);
         LOGGER.debug("POSTing URL '{}'", thingsServiceUrl);
         return post(thingsServiceUrl, jsonPayload).withLogging(LOGGER, "Policy");
     }

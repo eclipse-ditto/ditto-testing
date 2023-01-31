@@ -12,6 +12,7 @@
  */
 package org.eclipse.ditto.testing.common.matcher;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import org.slf4j.Logger;
@@ -40,7 +41,7 @@ public final class GetMatcher extends AbstractGetMatcher<GetMatcher> {
     }
 
     @Override
-    protected void doLog(final Logger logger, final String path, final String entityType) {
+    protected void doLog(final Logger logger, final String path, @Nullable final String entityType) {
         logger.info(GET_MESSAGE_TEMPLATE, entityType, path);
     }
 

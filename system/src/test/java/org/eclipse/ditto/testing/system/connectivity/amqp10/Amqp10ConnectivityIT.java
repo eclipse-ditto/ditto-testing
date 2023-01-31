@@ -144,7 +144,7 @@ public class Amqp10ConnectivityIT extends AbstractConnectivityITestCases<Blockin
         closeEntryValuesAndRemoveEntries(JMS_RECEIVERS);
         closeEntryValuesAndRemoveEntries(JMS_SESSIONS);
         closeEntryValuesAndRemoveEntries(JMS_CONNECTIONS);
-        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution());
+        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
     }
 
     private static <T extends AutoCloseable> void closeEntryValuesAndRemoveEntries(final Map<String, T> map) {

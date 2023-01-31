@@ -177,7 +177,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
 
         // WebSocket client consumes live commands:
         final ConnectivityTestWebsocketClient clientUser1 =
-                ConnectivityTestWebsocketClient.newInstance(thingsWsUrl(TestConstants.API_V_2),
+                ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2),
                         SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
         clientUser1.connect("sendWebsocketLiveCommandAnswersWithLiveResponse-" + UUID.randomUUID());
         clientUser1.startConsumingLiveCommands(liveCommand -> {
@@ -258,7 +258,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
 
         // WebSocket client consumes live commands:
         final var clientUser1 =
-                ConnectivityTestWebsocketClient.newInstance(thingsWsUrl(TestConstants.API_V_2),
+                ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2),
                         SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
         clientUser1.connect("sendWebsocketLiveChannelConditionCommandAnswersWithLiveResponse-" + UUID.randomUUID());
         clientUser1.startConsumingLiveCommands(liveCommand -> {
@@ -813,7 +813,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
     }
 
     private static ConnectivityTestWebsocketClient initiateWebSocketClient(final AuthClient client) {
-        return ConnectivityTestWebsocketClient.newInstance(thingsWsUrl(TestConstants.API_V_2), client.getAccessToken());
+        return ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2), client.getAccessToken());
     }
 
 }

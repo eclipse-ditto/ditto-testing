@@ -62,14 +62,10 @@ public final class AuthorizationV2IT extends SearchIntegrationTest {
     @Before
     public void setUp() {
         final TestingContext testingContext =
-                TestingContext.withGeneratedMockClient(serviceEnv.getDefaultTestingContext().getSolution(),
-                        TEST_CONFIG);
+                TestingContext.withGeneratedMockClient(serviceEnv.getTestingContext2().getSolution(), TEST_CONFIG);
         secondClientForDefaultSolution = testingContext.getOAuthClient();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void userCannotReadThingFromOtherUserWithoutAnyPermissions() {
         // prepare: create thing as USER_1
@@ -87,10 +83,7 @@ public final class AuthorizationV2IT extends SearchIntegrationTest {
                 .expectingBody(isEmpty())
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void userCanReadThingFromOtherUserIfHeHasReadPermissionOnSearchedAttribute() {
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
@@ -112,10 +105,7 @@ public final class AuthorizationV2IT extends SearchIntegrationTest {
                 .expectingBody(isEqualTo(toThingResult(thingId)))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void userCanReadThingFromOtherUserIfHeHasReadPermissionOnSearchedFeatureProperty() {
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
@@ -137,10 +127,7 @@ public final class AuthorizationV2IT extends SearchIntegrationTest {
                 .expectingBody(isEqualTo(toThingResult(thingId)))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void userCanReadThingFromOtherUserIfHeHasReadPermissionOnSearchedFeaturePropertyAndAttributeByAnd() {
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
@@ -169,10 +156,7 @@ public final class AuthorizationV2IT extends SearchIntegrationTest {
                 .expectingBody(isEqualTo(toThingResult(thingId)))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void userCannotReadThingFromOtherUserIfHeHasReadPermissionOnSearchedFeaturePropertyOnlyButNotOnAttribute() {
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
@@ -200,10 +184,7 @@ public final class AuthorizationV2IT extends SearchIntegrationTest {
                 .expectingBody(isEmpty())
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void userCanReadThingFromOtherUserIfHeHasReadPermissionOnSearchedFeaturePropertyAndNotAttributeByOr() {
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
@@ -233,10 +214,7 @@ public final class AuthorizationV2IT extends SearchIntegrationTest {
                 .expectingBody(isEqualTo(toThingResult(thingId)))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void userCanReadThingFromOtherUserAfterPolicyUpdate() {
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
@@ -269,10 +247,7 @@ public final class AuthorizationV2IT extends SearchIntegrationTest {
                 .expectingBody(isEqualTo(toThingResult(thingId)))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void userCannotReadThingFromOtherUserAfterPolicyUpdate() {
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());

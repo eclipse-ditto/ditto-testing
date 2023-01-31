@@ -55,7 +55,7 @@ public final class OAuthMockResource extends ExternalResourcePlus implements Acc
     @Override
     protected void before(final Description description) throws Throwable {
         super.before(description);
-        accessTokenSupplier = AccessTokenSuppliers.getCachingSuiteAuthMockJwtSupplier(oAuthMockConfig,
+        accessTokenSupplier = AccessTokenSuppliers.getCachingAuthMockJwtSupplier(oAuthMockConfig,
                 testSolutionSupplierRule.getTestSolution());
     }
 

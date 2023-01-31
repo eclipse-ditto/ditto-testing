@@ -17,6 +17,7 @@ import static org.eclipse.ditto.base.model.common.ConditionChecker.checkNotNull;
 
 import java.net.URI;
 import java.text.MessageFormat;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -123,12 +124,21 @@ public final class ConnectionsHttpClient {
     private RequestSpecification getBasicRequestSpec(final CorrelationId correlationId,
             final Set<Integer> expectedStatusCodes,
             final Filter[] filters) {
+        return getBasicRequestSpec(correlationId, expectedStatusCodes, filters, Set.of());
+    }
 
+    private RequestSpecification getBasicRequestSpec(final CorrelationId correlationId,
+            final Set<Integer> expectedStatusCodes,
+            final Filter[] filters,
+            final Set<Integer> additionalIgnoredStatusCodes) {
+
+        final var combinedStatusCodes = new HashSet<>(expectedStatusCodes);
+        combinedStatusCodes.addAll(additionalIgnoredStatusCodes);
         final var correlationIdHeader = correlationId.toHeader();
         final var requestSpecification = new RequestSpecBuilder()
                 .setBaseUri(connectionsBaseUri)
                 .addHeader(correlationIdHeader.getName(), correlationIdHeader.getValue())
-                .addFilter(new ResponseLoggingFilter(Matchers.not(Matchers.in(expectedStatusCodes))))
+                .addFilter(new ResponseLoggingFilter(Matchers.not(Matchers.in(combinedStatusCodes))))
                 .addFilters(List.of(filters))
                 .build();
 
@@ -257,7 +267,7 @@ public final class ConnectionsHttpClient {
         final var expectedStatusCode = HttpStatus.SC_OK;
 
         final var response = RestAssured
-                .given(getBasicRequestSpec(correlationId, Set.of(expectedStatusCode), filter))
+                .given(getBasicRequestSpec(correlationId, Set.of(expectedStatusCode), filter, Set.of(HttpStatus.SC_NOT_FOUND)))
                 .when()
                 .get("/connections/{connectionId}/status", connectionId.toString());
 

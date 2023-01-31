@@ -74,8 +74,8 @@ public class Amqp10PublisherCongestionIT extends AbstractConnectivityITCommon<Bl
     private static final Logger LOGGER = LoggerFactory.getLogger(Amqp10PublisherCongestionIT.class);
     private static final long WAIT_TIMEOUT_MS = 10_000L;
 
-    private static final String AMQP10_HUB_HOSTNAME = CONFIG.getAmqp10HubHostName();
-    private static final int AMQP10_HUB_CONGESTION_PORT = CONFIG.getAmqp10HubCongestionPort();
+    private static final String AMQP10_HONO_HOSTNAME = CONFIG.getAmqp10HonoHostName();
+    private static final int AMQP10_HONO_CONGESTION_PORT = CONFIG.getAmqp10HonoCongestionPort();
     private static final ConnectionType AMQP10_TYPE = ConnectionType.AMQP_10;
     private static final Enforcement AMQP_ENFORCEMENT =
             ConnectivityModelFactory.newEnforcement("{{ header:device_id }}",
@@ -99,7 +99,7 @@ public class Amqp10PublisherCongestionIT extends AbstractConnectivityITCommon<Bl
 
     public Amqp10PublisherCongestionIT() {
         super(ConnectivityFactory.of(
-                "AmqpHub",
+                "AmqpHono",
                 connectionModelFactory,
                 () -> SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(),
                 AMQP10_TYPE,
@@ -130,7 +130,7 @@ public class Amqp10PublisherCongestionIT extends AbstractConnectivityITCommon<Bl
         sourceAddress = cf.disambiguate("testSource");
         targetAddress = cf.disambiguate("testTarget");
 
-        amqp10Server = new Amqp10TestServer(AMQP10_HUB_CONGESTION_PORT, 0);
+        amqp10Server = new Amqp10TestServer(AMQP10_HONO_CONGESTION_PORT, 0);
         amqp10Server.startServer();
 
         LOGGER.info("Creating connections..");
@@ -156,7 +156,7 @@ public class Amqp10PublisherCongestionIT extends AbstractConnectivityITCommon<Bl
                 }
             });
             jmsConnections.clear();
-            cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution());
+            cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
         } finally {
             amqp10Server.stopServer();
             amqp10Server = null;
@@ -219,7 +219,7 @@ public class Amqp10PublisherCongestionIT extends AbstractConnectivityITCommon<Bl
     private void connectAsClient(final String connectionName, final String targetAddress)
             throws JMSException, NamingException {
 
-        final String uri = "amqp://" + AMQP10_HUB_HOSTNAME + ":" + AMQP10_HUB_CONGESTION_PORT;
+        final String uri = "amqp://" + AMQP10_HONO_HOSTNAME + ":" + AMQP10_HONO_CONGESTION_PORT;
 
         final Context ctx = createContext(connectionName, uri);
         final JmsConnectionFactory cf = (JmsConnectionFactory) ctx.lookup(connectionName);
@@ -283,7 +283,7 @@ public class Amqp10PublisherCongestionIT extends AbstractConnectivityITCommon<Bl
     }
 
     private static String getAmqpUri(final boolean tunnel, final boolean basicAuth) {
-        final String host = tunnel ? CONFIG.getAmqp10HubTunnel() : CONFIG.getAmqp10HubHostName();
-        return "amqp://" + host + ":" + AMQP10_HUB_CONGESTION_PORT;
+        final String host = tunnel ? CONFIG.getAmqp10HonoTunnel() : CONFIG.getAmqp10HonoHostName();
+        return "amqp://" + host + ":" + AMQP10_HONO_CONGESTION_PORT;
     }
 }

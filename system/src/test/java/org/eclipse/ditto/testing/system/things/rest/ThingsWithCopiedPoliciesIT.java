@@ -78,17 +78,11 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
 
     @Before
     public void setUp() {
-        if (TEST_CONFIG.isLocalOrDockerTestEnvironment()) {
-            final TestingContext testingContext =
-                    TestingContext.withGeneratedMockClient(serviceEnv.getDefaultTestingContext().getSolution(),
-                            TEST_CONFIG);
-            secondClientForDefaultSolution = testingContext.getOAuthClient();
-        }
+        final TestingContext testingContext =
+                TestingContext.withGeneratedMockClient(serviceEnv.getTestingContext2().getSolution(), TEST_CONFIG);
+        secondClientForDefaultSolution = testingContext.getOAuthClient();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void postThingWithCopiedPolicyFromId() {
         final PolicyId policyId = PolicyId.of(idGenerator().withPrefixedRandomName("postThingWithCopiedPolicyFromId"));
@@ -111,10 +105,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .expectingBody(containsOnly(expectedPolicy))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void postThingWithCopiedPolicyFromIdFailsIfCreatedThingWouldNotBeAccessible() {
         final PolicyId policyId = PolicyId.of(idGenerator()
@@ -141,10 +132,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .expectingErrorCode("things:thing.notmodifiable")
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void postThingWithCopiedPolicyFromIdFailsIfPolicyNotAccessible() {
         final PolicyId policyId = PolicyId.of(
@@ -167,10 +155,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .expectingErrorCode("policies:policy.notfound")
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     @Category(Acceptance.class)
     public void postThingWithCopiedPolicyFromThingRef() {
@@ -195,10 +180,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .expectingBody(containsOnly(expectedPolicy))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void postThingWithCopiedPolicyFromThingRefFailsIfPolicyNotAccessible() {
         final PolicyId policyId = PolicyId.of(idGenerator()
@@ -223,10 +205,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .expectingErrorCode("policies:policy.notfound")
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void postThingWithCopiedPolicyFromRefFailsIfThingNotAccessible() {
         final PolicyId policyId = PolicyId.of(
@@ -250,10 +229,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .fire();
     }
 
-
-    /**
-     *
-     */
+    
     @Test
     public void putNewThingWithCopiedPolicyFromId() {
         final PolicyId policyId = PolicyId.of(
@@ -278,10 +254,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .expectingBody(containsOnly(expectedPolicy))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void putThingWithCopiedPolicyFromIdFailsIfCreatedThingWouldNotBeAccessible() {
         final PolicyId policyId = PolicyId.of(idGenerator().withPrefixedRandomName(
@@ -310,10 +283,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .expectingErrorCode("things:thing.notmodifiable")
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void putThingWithCopiedPolicyFromIdFailsIfPolicyNotAccessible() {
         final PolicyId policyId = PolicyId.of(
@@ -338,10 +308,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .expectingErrorCode("policies:policy.notfound")
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void putNewThingWithCopiedPolicyFromThingRef() {
         final PolicyId policyId = PolicyId.of(
@@ -368,10 +335,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .expectingBody(containsOnly(expectedPolicy))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void putThingWithCopiedPolicyFromThingRefFailsIfPolicyNotAccessible() {
         final PolicyId policyId = PolicyId.of(
@@ -397,10 +361,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .expectingErrorCode("policies:policy.notfound")
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void putThingWithCopiedPolicyFromRefFailsIfThingNotAccessible() {
         final PolicyId policyId = PolicyId.of(
@@ -524,10 +485,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .expectingErrorCode("placeholder:placeholder.reference.notsupported")
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void postThingWithCopiedPolicyFromIdFailsWithOnlyReadAccessOnPolicy() {
         final PolicyId policyId = PolicyId.of(idGenerator().withPrefixedRandomName("postThingWithCopiedPolicyFromId"));
@@ -559,10 +517,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .expectingErrorCode("policies:policy.notcreatable")
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void postThingWithCopiedPolicyFromIdAndOnlyReadAccess() {
         final PolicyId policyId = PolicyId.of(idGenerator().withPrefixedRandomName("postThingWithCopiedPolicyFromId"));

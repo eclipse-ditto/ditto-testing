@@ -82,10 +82,7 @@ public final class QueryThingsWithMultipleFieldsIT extends AbstractQueryManyThin
                 .filter(searchFilter)
                 .options(sortOption, sizeOption);
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void queryOneThingWhichExistsInThingsStore() {
         searchBuilder(idFilter(thingIdFromStore1), false, apiVersion)
@@ -98,10 +95,7 @@ public final class QueryThingsWithMultipleFieldsIT extends AbstractQueryManyThin
                 }))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void queryMultipleThingsWhichExistInThingsStore() {
         searchBuilder(idsFilter(thingIdsInStore), false, apiVersion)
@@ -117,10 +111,7 @@ public final class QueryThingsWithMultipleFieldsIT extends AbstractQueryManyThin
                 }))
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void queryWithIdFieldOnly() {
         // prepare

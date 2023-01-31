@@ -27,6 +27,7 @@ import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.policies.model.SubjectType;
 import org.eclipse.ditto.testing.common.ServiceEnvironment;
+import org.eclipse.ditto.testing.common.TestSolutionSupplierRule;
 import org.eclipse.ditto.testing.common.correlationid.CorrelationId;
 import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
@@ -40,15 +41,18 @@ public final class PolicyWithConnectionSubjectResource extends ExternalResource 
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PolicyWithConnectionSubjectResource.class);
 
+    private final TestSolutionSupplierRule testSolutionSupplierRule;
     private final PoliciesHttpClientResource policiesClientResource;
     private final String connectionName;
 
     private PolicyId policyId;
     private Policy policy;
 
-    private PolicyWithConnectionSubjectResource(final PoliciesHttpClientResource policiesClientResource,
+    private PolicyWithConnectionSubjectResource(final TestSolutionSupplierRule testSolutionSupplierRule,
+            final PoliciesHttpClientResource policiesClientResource,
             final String connectionName) {
 
+        this.testSolutionSupplierRule = testSolutionSupplierRule;
         this.policiesClientResource = policiesClientResource;
         this.connectionName = connectionName;
 
@@ -56,10 +60,13 @@ public final class PolicyWithConnectionSubjectResource extends ExternalResource 
         policy = null;
     }
 
-    public static PolicyWithConnectionSubjectResource newInstance(final PoliciesHttpClientResource policiesClientResource,
+    public static PolicyWithConnectionSubjectResource newInstance(
+            final TestSolutionSupplierRule testSolutionSupplierRule,
+            final PoliciesHttpClientResource policiesClientResource,
             final String connectionName) {
 
         return new PolicyWithConnectionSubjectResource(
+                checkNotNull(testSolutionSupplierRule, "testSolutionSupplierRule"),
                 checkNotNull(policiesClientResource, "policiesClientResource"),
                 ConditionChecker.argumentNotEmpty(connectionName, "connectionName")
         );
@@ -102,8 +109,9 @@ public final class PolicyWithConnectionSubjectResource extends ExternalResource 
     }
 
     private AuthorizationSubject getAuthorizationSubject() {
+        final var testSolution = testSolutionSupplierRule.getTestSolution();
         return AuthorizationSubject.newInstance(MessageFormat.format("integration:{0}:{1}",
-                "0",
+                testSolution.getUsername(),
                 connectionName));
     }
 

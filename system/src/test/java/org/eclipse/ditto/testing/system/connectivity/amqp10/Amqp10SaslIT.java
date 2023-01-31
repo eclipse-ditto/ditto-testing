@@ -67,14 +67,14 @@ public class Amqp10SaslIT extends AbstractConnectivityITCommon<BlockingQueue<Mes
 
     @Before
     public void setupConnectivity() throws Exception {
-        amqp10Server = new Amqp10TestServer(CONFIG.getAmqp10HubPort());
+        amqp10Server = new Amqp10TestServer(CONFIG.getAmqp10HonoPort());
         amqp10Server.startServer();
     }
 
     @After
     public void cleanupConnectivity() throws Exception {
         try {
-            cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution());
+            cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
         } finally {
             amqp10Server.stopServer();
             amqp10Server = null;
@@ -86,7 +86,8 @@ public class Amqp10SaslIT extends AbstractConnectivityITCommon<BlockingQueue<Mes
     public void azSaslPlain() {
         // WHEN: An open AMQP connection is created with HMAC credentials with the algorithm "az-sasl".
         final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
-        final String connectionName = cf.disambiguate("AmqpWithAzSaslAuth");
+        final String connectionName = cf.disambiguateConnectionName(
+                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(), "AmqpWithAzSaslAuth");
         final String skn = "RootSharedAccessKeyPolicy";
         final String endpointWithoutAzureSuffix = "localhost";
         final String endpoint = endpointWithoutAzureSuffix + ".azure-devices.net";
@@ -135,7 +136,7 @@ public class Amqp10SaslIT extends AbstractConnectivityITCommon<BlockingQueue<Mes
     }
 
     private static String getAmqpUri(final boolean tunnel, final boolean basicAuth) {
-        final String host = tunnel ? CONFIG.getAmqp10HubTunnel() : CONFIG.getAmqp10HubHostName();
-        return "amqp://" + host + ":" + CONFIG.getAmqp10HubPort();
+        final String host = tunnel ? CONFIG.getAmqp10HonoTunnel() : CONFIG.getAmqp10HonoHostName();
+        return "amqp://" + host + ":" + CONFIG.getAmqp10HonoPort();
     }
 }

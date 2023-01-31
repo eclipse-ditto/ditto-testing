@@ -273,6 +273,6 @@ public class HandleClaimMessagesIT extends AbstractClientIT {
     }
 
     private static String claimUrl(final ThingId thingId) {
-        return MessageFormat.format("{0}/things/{1}/inbox/claim", thingsServiceUrl(2), thingId);
+        return MessageFormat.format("{0}/things/{1}/inbox/claim", dittoUrl(2), thingId);
     }
 }

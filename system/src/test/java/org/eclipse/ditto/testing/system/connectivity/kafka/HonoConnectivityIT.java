@@ -150,7 +150,7 @@ public final class HonoConnectivityIT extends
 
     @Before
     public void setupConnectivity() throws Exception {
-        tenantId = "hubTenantId";
+        tenantId = "honoTenantId";
 
         LOGGER.info("Preparing Kafka at {}:{}", KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT);
 
@@ -201,7 +201,7 @@ public final class HonoConnectivityIT extends
                         LOGGER.error("Got error closing kafka consumer.", e);
                     }
                 });
-        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution());
+        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
     }
 
     private static String getConnectionUri(final boolean tunnel, final boolean basicAuth) {
@@ -260,9 +260,8 @@ public final class HonoConnectivityIT extends
                 username,
                 connectionName,
                 ConnectionType.HONO,
-                // bosch-iot-suite.com must be configured as blocked via env variable CONNECTIVITY_KAFKA_SOURCES_BLOCKED_HOSTNAMES
-                "tcp://bosch-iot-suite.com:9092",
-                Map.of("bootstrapServers", "bosch-iot-suite.com:" + KAFKA_TEST_PORT),
+                "tcp://" + KAFKA_TEST_HOSTNAME + ":9092",
+                Map.of("bootstrapServers", KAFKA_TEST_HOSTNAME +":" + KAFKA_TEST_PORT),
                 parameter.equals("badSource") ? "topic1" : "events",
                 parameter.equals("badTarget") ? "topic2" : "command");
 

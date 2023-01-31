@@ -47,15 +47,15 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 /**
- * Integration test for the authorization of Suite Auth JSON Web Tokens at the API Gateway.
+ * Integration test for the authorization of OAuth JSON Web Tokens at the API Gateway.
  */
-public final class GatewaySuiteAuthJWTAuthorizationIT extends IntegrationTest {
+public final class GatewayOAuthJWTAuthorizationIT extends IntegrationTest {
 
     @Test
     @Category({Acceptance.class})
-    public void postThingWithSuiteAuthToken() throws IllegalStateException {
-        final AuthClient suiteAuthClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
-        final String jwtToken = suiteAuthClient.getAccessToken();
+    public void postThingWithOAuthToken() throws IllegalStateException {
+        final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
+        final String jwtToken = authClient.getAccessToken();
 
         final String location = postThing(TestConstants.API_V_2)
                 .withJWT(jwtToken)
@@ -71,7 +71,7 @@ public final class GatewaySuiteAuthJWTAuthorizationIT extends IntegrationTest {
                 Resource.newInstance(PoliciesResourceType.policyResource("/"), readWriteGranted),
                 Resource.newInstance(PoliciesResourceType.thingResource("/"), readWriteGranted));
         final PolicyEntry policyEntry = PoliciesModelFactory.newPolicyEntry(
-                "SUITE-AUTH-CLIENT", Subjects.newInstance(suiteAuthClient.getSubject()), resources);
+                "O-AUTH-CLIENT", Subjects.newInstance(authClient.getSubject()), resources);
 
         // add permissions user for clean up process
         putPolicyEntry(thingId, policyEntry)
@@ -88,14 +88,14 @@ public final class GatewaySuiteAuthJWTAuthorizationIT extends IntegrationTest {
     @Test
     @Category({Acceptance.class})
     public void refreshJwtViaWebSocket() throws InterruptedException {
-        final AuthClient suiteAuthClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
+        final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
         final ThingsWebsocketClient thingsWebsocketClient =
-                newTestWebsocketClient(suiteAuthClient.getAccessToken(), Collections.emptyMap(),
+                newTestWebsocketClient(authClient.getAccessToken(), Collections.emptyMap(),
                         TestConstants.API_V_2);
 
         thingsWebsocketClient.connect("refreshJwtViaWebSocket-" + UUID.randomUUID());
 
-        thingsWebsocketClient.refresh(suiteAuthClient.getAccessToken());
+        thingsWebsocketClient.refresh(authClient.getAccessToken());
 
         Thread.sleep(1000L);
 
@@ -106,12 +106,12 @@ public final class GatewaySuiteAuthJWTAuthorizationIT extends IntegrationTest {
 
     @Test
     public void enrichMessagesViaWebSocketWithJwtAsQueryParameter() {
-        final AuthClient suiteAuthClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
-        final AuthClient suiteAuthClient2 = TestingContext.withGeneratedMockClient(
+        final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
+        final AuthClient authClient2 = TestingContext.withGeneratedMockClient(
                 serviceEnv.getTestingContext2().getSolution(), TEST_CONFIG).getOAuthClient();
 
-        final String wsJwtToken = suiteAuthClient.getAccessToken();
-        final String restJwtToken = suiteAuthClient2.getAccessToken();
+        final String wsJwtToken = authClient.getAccessToken();
+        final String restJwtToken = authClient2.getAccessToken();
         final ThingsWebsocketClient thingsWebsocketClient = newTestWebsocketClient(wsJwtToken, Collections.emptyMap(),
                 TestConstants.API_V_2, ThingsWebsocketClient.JwtAuthMethod.QUERY_PARAM);
         thingsWebsocketClient.connect("enrichMessagesViaWebSocketWithJwtAsQueryParameter-" + UUID.randomUUID());
@@ -145,7 +145,7 @@ public final class GatewaySuiteAuthJWTAuthorizationIT extends IntegrationTest {
                 Resource.newInstance(PoliciesResourceType.policyResource("/"), readWriteGranted),
                 Resource.newInstance(PoliciesResourceType.thingResource("/"), readWriteGranted));
         final PolicyEntry policyEntry = PoliciesModelFactory.newPolicyEntry(
-                "SUITE-AUTH-CLIENT", Subjects.newInstance(suiteAuthClient.getSubject(), suiteAuthClient2.getSubject()),
+                "O-AUTH-CLIENT", Subjects.newInstance(authClient.getSubject(), authClient2.getSubject()),
                 resources);
 
         putPolicyEntry(thingId, policyEntry)

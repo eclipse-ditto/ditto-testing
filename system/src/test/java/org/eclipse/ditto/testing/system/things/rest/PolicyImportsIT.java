@@ -370,7 +370,7 @@ public final class PolicyImportsIT extends IntegrationTest {
 
     private static PutMatcher putPolicyImports(final CharSequence policyId, final PolicyImports policyImports) {
         final String path = ResourcePathBuilder.forPolicy(policyId).policyImports().toString();
-        final String thingsServiceUrl = thingsServiceUrl(TestConstants.API_V_2, path);
+        final String thingsServiceUrl = dittoUrl(TestConstants.API_V_2, path);
         final String jsonString = policyImports.toJsonString();
 
         LOGGER.debug("PUTing Policy Imports JSON to URL '{}': {}", thingsServiceUrl, jsonString);
@@ -379,17 +379,17 @@ public final class PolicyImportsIT extends IntegrationTest {
 
     private static GetMatcher getPolicyImports(final CharSequence policyId) {
         final String path = ResourcePathBuilder.forPolicy(policyId).policyImports().toString();
-        return get(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "Policy");
+        return get(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "Policy");
     }
 
     private static GetMatcher getPolicyImport(final CharSequence policyId, final CharSequence importedPolicyId) {
         final String path = ResourcePathBuilder.forPolicy(policyId).policyImport(importedPolicyId).toString();
-        return get(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "Policy");
+        return get(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "Policy");
     }
 
     private static DeleteMatcher deletePolicyImport(final CharSequence policyId, final CharSequence importedPolicyId) {
         final String path = ResourcePathBuilder.forPolicy(policyId).policyImport(importedPolicyId).toString();
-        return delete(thingsServiceUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "Policy");
+        return delete(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "Policy");
     }
 
 }

@@ -4,8 +4,10 @@
     <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
     <envs>
       <env name="CHECK_API_TOKEN" value="true" />
-      <env name="CONFIG_FORCE_ditto_gateway_authentication_oauth_openid__connect__issuers_ditto_issuers.0" value="localhost:9900/ditto" />
-      <env name="CONFIG_FORCE_ditto_gateway_authentication_oauth_openid__connect__issuers_ditto_issuers.1" value="localhost:9900/token" />
+      <env name="CONFIG_FORCE_ditto_gateway_authentication_oauth_openid__connect__issuers_ditto_issuer" value="localhost:9900/ditto" />
+      <env name="CONFIG_FORCE_ditto_gateway_authentication_oauth_openid__connect__issuers_dummy_issuer" value="localhost:9900/dummy" />
+      <env name="OAUTH_TOKEN_INTEGRATION_SUBJECT" value="integration:{{jwt:sub}}:{{jwt:aud}}" />
+      <env name="GATEWAY_WEBSOCKET_THROTTLING_ENABLED" value="true" />
       <env name="DEVOPS_PASSWORD" value="foobar" />
       <env name="DEVOPS_SECURED" value="true" />
       <env name="ENABLE_PRE_AUTHENTICATION" value="true" />
@@ -14,7 +16,6 @@
       <env name="LOG_LEVEL" value="INFO" />
       <env name="LOG_LEVEL_APPLICATION" value="INFO" />
       <env name="OAUTH_PROTOCOL" value="http" />
-      <env name="REMOTING_IDLE_CPU_LEVEL" value="2" />
       <env name="STATUS_PASSWORD" value="status" />
     </envs>
     <option name="MAIN_CLASS_NAME" value="org.eclipse.ditto.gateway.service.starter.GatewayService" />

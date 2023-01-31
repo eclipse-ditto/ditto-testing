@@ -272,10 +272,7 @@ public final class ThingsWithPoliciesIT extends SearchIntegrationTest {
                 .expectingHttpStatus(NO_CONTENT)
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     public void createPolicyAndThingWithSameInlinedPolicyId() {
         final PolicyId policyId = PolicyId.of(
@@ -340,10 +337,7 @@ public final class ThingsWithPoliciesIT extends SearchIntegrationTest {
                 .expectingHttpStatus(NO_CONTENT)
                 .fire();
     }
-
-    /**
-     *
-     */
+    
     @Test
     @Category(Acceptance.class)
     public void createPolicyAndThingWithReferenceToThatPolicy() {

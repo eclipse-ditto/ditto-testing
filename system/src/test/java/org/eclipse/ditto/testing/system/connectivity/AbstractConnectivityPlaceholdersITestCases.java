@@ -71,7 +71,7 @@ public abstract class AbstractConnectivityPlaceholdersITestCases<C, M>
                 .build();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionNameWithAuthPlaceholderOnHEADER_ID))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
@@ -112,7 +112,7 @@ public abstract class AbstractConnectivityPlaceholdersITestCases<C, M>
     }
 
     protected String getSendSingleCommandAndEnsurePlaceholderSubstitutionExpectedSource(final String placeholderValue) {
-        return String.format("integration:%s:%s", SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),
+        return String.format("integration:%s:%s", testingContextWithRandomNs.getSolution().getUsername(),
                 placeholderValue);
     }
 
@@ -127,7 +127,7 @@ public abstract class AbstractConnectivityPlaceholdersITestCases<C, M>
                 .build();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionName1))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
@@ -179,7 +179,7 @@ public abstract class AbstractConnectivityPlaceholdersITestCases<C, M>
                 .build();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionName1))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
@@ -245,7 +245,7 @@ public abstract class AbstractConnectivityPlaceholdersITestCases<C, M>
                 .build();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(additionalAuthSubject))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)

@@ -126,12 +126,12 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
         final ThingId thingId = generateThingId();
 
         final SubjectId connectivitySubjectId = SubjectId.newInstance(SubjectIssuer.INTEGRATION,
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername() + ":" + cf.connectionNameWithPayloadMapping);
+                testingContextWithRandomNs.getSolution().getUsername() + ":" + cf.connectionNameWithPayloadMapping);
         final Subject connectivitySubject = Subject.newInstance(connectivitySubjectId);
 
         final Policy policy = Policy.newBuilder(PolicyId.of(thingId))
                 .forLabel("OWNER")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectivitySubject)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"),
                         READ, WRITE)
@@ -145,7 +145,7 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
                 .build();
 
         putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -160,7 +160,7 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
         // WebSocket client consumes live commands:
         final ConnectivityTestWebsocketClient clientUser1 =
                 ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2),
-                        SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
+                        testingContextWithRandomNs.getOAuthClient().getAccessToken());
         clientUser1.connect("sendWebsocketLiveCommandAnswersWithLiveResponse-" + UUID.randomUUID());
         clientUser1.startConsumingLiveCommands(liveCommand -> {
             LOGGER.info("clientUser1 got liveCommand <{}>", liveCommand);
@@ -201,7 +201,7 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
 
         // Then
         // expect response to the live command:
-        final JsonObject expectedResponse = JsonObject.of("{\"namespace\":\"" + RANDOM_NAMESPACE + "\"," +
+        final JsonObject expectedResponse = JsonObject.of("{\"namespace\":\"" + randomNamespace + "\"," +
                 "\"deviceid\":\"" + thingId.getName() +
                 "\",\"action\":\"modify\",\"path\":\"/attributes/live-foo\",\"value\":\"bar-is-all-we-need\"}");
         for (int i = 0; i < multiplier; i++) {
@@ -238,12 +238,12 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
         final ThingId thingId = generateThingId();
 
         final SubjectId connectivitySubjectId = SubjectId.newInstance(SubjectIssuer.INTEGRATION,
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername() + ":" + cf.connectionNameWithPayloadMapping);
+                testingContextWithRandomNs.getSolution().getUsername() + ":" + cf.connectionNameWithPayloadMapping);
         final Subject connectivitySubject = Subject.newInstance(connectivitySubjectId);
 
         final Policy policy = Policy.newBuilder(PolicyId.of(thingId))
                 .forLabel("OWNER")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectivitySubject)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"),
                         READ, WRITE)
@@ -259,7 +259,7 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
                 .build();
 
         putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -275,7 +275,7 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
 
         final DittoClient client =
                 getDittoClient(dittoWsUrl(TestConstants.API_V_2),
-                        SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
+                        testingContextWithRandomNs.getOAuthClient().getAccessToken());
         final String messageSubject = UUID.randomUUID().toString();
         final String registrationId = "registration" + UUID.randomUUID();
         client.live().startConsumption().toCompletableFuture().get(15, TimeUnit.SECONDS);
@@ -318,7 +318,7 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
         // Then
         // expect response to the live command:
         final JsonObject expectedResponse = JsonObject.newBuilder()
-                .set("namespace", RANDOM_NAMESPACE)
+                .set("namespace", randomNamespace)
                 .set("deviceid", thingId.getName())
                 .set("action", messageSubject)
                 .set("path", "/inbox/messages/" + messageSubject)
@@ -419,11 +419,11 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
                 cf.connectionNameWithMultiplePayloadMappings + ConnectionModelFactory.JS_SOURCE_SUFFIX);
 
         putPolicy(thingId.toString(), policy)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
         putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .withHeader("multiplier", multiplierValue)
                 .withHeader(HttpHeader.X_CORRELATION_ID, cid)
                 .expectingHttpStatus(HttpStatus.CREATED)
@@ -466,11 +466,11 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
                 .build();
 
         putPolicy(thingId.toString(), policy)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
         putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .withHeader(HttpHeader.X_CORRELATION_ID, UUID.randomUUID().toString())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
@@ -510,7 +510,7 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
         // verify that all values were merged successfully
         Awaitility.await().untilAsserted(() -> {
             final Response retrieve = getThing(2, thingId)
-                    .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                    .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                     .expectingHttpStatus(HttpStatus.OK)
                     .fire();
             final Thing mergedThing = ThingsModelFactory.newThing(retrieve.asString());
@@ -542,7 +542,7 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
 
         // Given
         final String deviceId = name.getMethodName() + ":" + UUID.randomUUID();
-        final String namespace = RANDOM_NAMESPACE;
+        final String namespace = randomNamespace;
         final ThingId thingId = ThingId.of(namespace, deviceId);
 
         final Thing thing = Thing.newBuilder()
@@ -681,7 +681,7 @@ public abstract class AbstractConnectivityPayloadMappingITestCases<C, M>
         sendAsJsonString(destination, correlationId, stringMessage, headersMap);
 
         final Response response1 = getThing(2, thingId)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.OK)
                 .expectingBody(Matchers.containsString(CONNECTION_STATUS_FEATURE))
                 .expectingHeader("etag", etagMatcher)

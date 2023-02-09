@@ -46,7 +46,6 @@ import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.protocol.Adaptable;
 import org.eclipse.ditto.protocol.JsonifiableAdaptable;
 import org.eclipse.ditto.protocol.ProtocolFactory;
-import org.eclipse.ditto.testing.common.Solution;
 import org.eclipse.ditto.testing.common.categories.RequireSource;
 import org.eclipse.ditto.testing.common.categories.RequireSshTunnel;
 import org.eclipse.ditto.things.model.Thing;
@@ -158,10 +157,10 @@ public abstract class AbstractConnectivityTunnelingITestCases<C, M>
     public void createThingViaHttpAndExpectEventIsPublishedViaTunnel() {
         final String correlationId = UUID.randomUUID().toString();
 
-        final ThingId thingId = generateThingId(RANDOM_NAMESPACE);
+        final ThingId thingId = generateThingId(randomNamespace);
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionWithTunnel))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
@@ -171,7 +170,7 @@ public abstract class AbstractConnectivityTunnelingITestCases<C, M>
         final C eventConsumer = initTargetsConsumer(cf.connectionWithTunnel);
 
         putThingWithPolicy(2, Thing.newBuilder().setId(thingId).build(), policy, JsonSchemaVersion.V_2)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .withCorrelationId(correlationId)
                 .expectingHttpStatus(CREATED)
                 .fire();
@@ -196,7 +195,6 @@ public abstract class AbstractConnectivityTunnelingITestCases<C, M>
     @UseConnection(category = CONNECTION_WITH_SSH_TUNNEL, mod = WRONG_PLAIN_CREDENTIALS)
     public void useInvalidPlainCredentialsForSshTunnel() {
 
-        final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
         final ConnectionId connectionId = cf.getConnectionId(cf.connectionWithTunnel);
 
         connectionsClient().openConnection(connectionId.toString())
@@ -211,7 +209,6 @@ public abstract class AbstractConnectivityTunnelingITestCases<C, M>
     @UseConnection(category = CONNECTION_WITH_SSH_TUNNEL, mod = ENDPOINT_NOT_REACHABLE)
     public void sshEndpointNotReachable() {
 
-        final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
         final ConnectionId connectionId = cf.getConnectionId(cf.connectionWithTunnel);
 
         connectionsClient().openConnection(connectionId.toString())
@@ -226,7 +223,6 @@ public abstract class AbstractConnectivityTunnelingITestCases<C, M>
     @UseConnection(category = CONNECTION_WITH_SSH_TUNNEL, mod = INVALID_FINGERPRINT)
     public void invalidFingerprintForSshEndpoint() {
 
-        final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
         final ConnectionId connectionId = cf.getConnectionId(cf.connectionWithTunnel);
 
         connectionsClient().openConnection(connectionId.toString())
@@ -302,8 +298,6 @@ public abstract class AbstractConnectivityTunnelingITestCases<C, M>
     @Category(RequireSshTunnel.class)
     @Connections(NONE) // connection is sent via testConnection command
     public void testConnectionWithSshTunnel() {
-
-        final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
 
         final org.eclipse.ditto.connectivity.model.Connection connection =
                 cf.getSingleConnectionWithTunnel("testConnectionWithSshTunnel")

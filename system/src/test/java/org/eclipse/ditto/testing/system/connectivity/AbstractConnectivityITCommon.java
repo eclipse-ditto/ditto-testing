@@ -91,11 +91,11 @@ public abstract class AbstractConnectivityITCommon<C, M> extends AbstractConnect
     protected abstract String targetAddressForTargetPlaceHolderSubstitution();
 
     protected ThingId generateThingId() {
-        return generateThingId(RANDOM_NAMESPACE);
+        return generateThingId(randomNamespace);
     }
 
     protected PolicyId generatePolicyId() {
-        return PolicyId.of(IdGenerator.fromNamespace(RANDOM_NAMESPACE).withPrefixedRandomName(name.getMethodName()));
+        return PolicyId.of(IdGenerator.fromNamespace(randomNamespace).withPrefixedRandomName(name.getMethodName()));
     }
 
     /**
@@ -157,7 +157,7 @@ public abstract class AbstractConnectivityITCommon<C, M> extends AbstractConnect
 
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(connectionName))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
@@ -266,7 +266,7 @@ public abstract class AbstractConnectivityITCommon<C, M> extends AbstractConnect
 
         // Given: Policy exists
         putPolicy(policyId, PoliciesModelFactory.newPolicy(createThingWithPolicy.getInitialPolicy().orElseThrow()))
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -303,7 +303,7 @@ public abstract class AbstractConnectivityITCommon<C, M> extends AbstractConnect
         final Permissions grantedPermissions = Permissions.newInstance("READ", "WRITE");
         return Policy.newBuilder(policyId)
                 .forLabel("connections")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(sendingConnectionName))
                 .setSubject(connectionSubject(receivingConnectionName))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), grantedPermissions)
@@ -442,13 +442,13 @@ public abstract class AbstractConnectivityITCommon<C, M> extends AbstractConnect
     Policy createNewPolicy(final EntityId entityId, final String featureId, final String connectionName,
             final String... connectionNames) {
         final List<Subject> subjects = Arrays.stream(connectionNames)
-                .map(AbstractConnectivityITBase::connectionSubject)
+                .map(this::connectionSubject)
                 .collect(Collectors.toList());
 
         final Subject connectivitySubject = connectionSubject(connectionName);
         subjects.add(connectivitySubject);
 
-        subjects.add(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject());
+        subjects.add(testingContextWithRandomNs.getOAuthClient().getDefaultSubject());
 
         return Policy.newBuilder(PolicyId.of(entityId))
                 .forLabel("OWNER")

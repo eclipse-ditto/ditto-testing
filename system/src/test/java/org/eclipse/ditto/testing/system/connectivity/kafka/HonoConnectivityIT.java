@@ -105,15 +105,13 @@ public final class HonoConnectivityIT extends
         super(ConnectivityFactory.of(
                         "Hono",
                         connectionModelFactory,
-                        () -> SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(),
                         CONNECTION_TYPE,
                         HonoConnectivityIT::getConnectionUri,
                         HonoConnectivityIT::getSpecificConfig,
                         (name) -> TARGET_ADDRESS_ALIAS,
                         (name) -> SOURCE_ADDRESS_ALIAS,
                         id -> KAFKA_ENFORCEMENT,
-                        () -> SSH_TUNNEL_CONFIG,
-                        SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient())
+                        () -> SSH_TUNNEL_CONFIG)
                 .withDefaultHeaderMapping(
                         Map.of(
                                 "correlation-id", "{{ header:correlation-id }}",
@@ -149,7 +147,9 @@ public final class HonoConnectivityIT extends
     }
 
     @Before
+    @Override
     public void setupConnectivity() throws Exception {
+        super.setupConnectivity();
         tenantId = "honoTenantId";
 
         LOGGER.info("Preparing Kafka at {}:{}", KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT);
@@ -201,7 +201,7 @@ public final class HonoConnectivityIT extends
                         LOGGER.error("Got error closing kafka consumer.", e);
                     }
                 });
-        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
+        cleanupConnections(testingContextWithRandomNs.getSolution().getUsername());
     }
 
     private static String getConnectionUri(final boolean tunnel, final boolean basicAuth) {
@@ -234,7 +234,7 @@ public final class HonoConnectivityIT extends
         // expect all messages are processed
         getThing(2, thingId)
                 .withParam("fields", "_revision")
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .useAwaitility(Awaitility.await()
                         .pollInterval(Duration.ofSeconds(1))
                         .atMost(Duration.ofMinutes(1)))
@@ -254,7 +254,7 @@ public final class HonoConnectivityIT extends
     }
 
     public void testRejectNonAlias(final String parameter) {
-        final var username = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername();
+        final var username = testingContextWithRandomNs.getSolution().getUsername();
         final String connectionName = UUID.randomUUID().toString();
         final Connection connection = connectionModelFactory.buildConnectionModelWithHeaderMapping(
                 username,

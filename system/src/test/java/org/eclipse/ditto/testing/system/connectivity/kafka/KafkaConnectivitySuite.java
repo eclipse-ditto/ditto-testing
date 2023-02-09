@@ -97,15 +97,13 @@ public final class KafkaConnectivitySuite extends
         super(ConnectivityFactory.of(
                         "Kafka",
                         connectionModelFactory,
-                        () -> SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(),
                         CONNECTION_TYPE,
                         KafkaConnectivitySuite::getConnectionUri,
                         KafkaConnectivitySuite::getSpecificConfig,
                         KafkaConnectivitySuite::defaultTargetAddress,
                         KafkaConnectivitySuite::defaultSourceAddress,
                         id -> KAFKA_ENFORCEMENT,
-                        () -> SSH_TUNNEL_CONFIG,
-                        SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient())
+                        () -> SSH_TUNNEL_CONFIG)
                 .withDefaultHeaderMapping(
                         Map.of(
                                 "correlation-id", "{{ header:correlation-id }}",
@@ -141,7 +139,9 @@ public final class KafkaConnectivitySuite extends
     }
 
     @Before
+    @Override
     public void setupConnectivity() throws Exception {
+        super.setupConnectivity();
         LOGGER.info("Preparing Kafka at {}:{}", KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT);
 
         final String itestsName = cf.connectionNameWithAuthPlaceholderOnHEADER_ID + "_itests";
@@ -188,7 +188,7 @@ public final class KafkaConnectivitySuite extends
                         LOGGER.error("Got error closing kafka consumer.", e);
                     }
                 });
-        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
+        cleanupConnections(testingContextWithRandomNs.getSolution().getUsername());
     }
 
     private static String getConnectionUri(final boolean tunnel, final boolean basicAuth) {
@@ -241,7 +241,7 @@ public final class KafkaConnectivitySuite extends
         // expect all messages are processed
         getThing(2, thingId)
                 .withParam("fields", "_revision")
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .useAwaitility(Awaitility.await()
                         .pollInterval(Duration.ofSeconds(1))
                         .atMost(Duration.ofMinutes(1)))

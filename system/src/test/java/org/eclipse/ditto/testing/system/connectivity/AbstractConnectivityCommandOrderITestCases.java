@@ -61,7 +61,7 @@ public abstract class AbstractConnectivityCommandOrderITestCases<C, M>
         final ThingBuilder.FromScratch thingBuilder = Thing.newBuilder();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionName1))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
@@ -78,7 +78,7 @@ public abstract class AbstractConnectivityCommandOrderITestCases<C, M>
         final CreateThing createThing1 = CreateThing.of(thingBuilder.setId(thingId1).build(), policy.toJson(),
                 createDittoHeaders(correlationId + "-1-x"));
 
-        final ThingId thingId2 = generateThingId(RANDOM_NAMESPACE_2);
+        final ThingId thingId2 = generateThingId(randomNamespace2);
         final CreateThing createThing2 = CreateThing.of(thingBuilder.setId(thingId2).build(), policy.toJson(),
                 createDittoHeaders(correlationId + "-2-x"));
 

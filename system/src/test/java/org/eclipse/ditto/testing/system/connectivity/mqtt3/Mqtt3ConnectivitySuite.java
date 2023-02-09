@@ -78,9 +78,7 @@ import org.eclipse.ditto.things.model.signals.commands.modify.DeleteThing;
 import org.eclipse.ditto.things.model.signals.events.ThingCreated;
 import org.hamcrest.Matchers;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -171,48 +169,23 @@ public final class Mqtt3ConnectivitySuite
         );
     }
 
-    private final String mqttCustomConnectionName;
 
-    private final Mqtt3ConnectivityWorker connectivityWorker;
+    private String mqttCustomConnectionName;
+    private Mqtt3ConnectivityWorker connectivityWorker;
     private Mqtt3AsyncClient mqttClient;
 
     public Mqtt3ConnectivitySuite() {
         super(ConnectivityFactory.of(
                         "Mqtt3",
                         connectionModelFactory,
-                        () -> SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(),
                         MQTT_TYPE,
                         (tunnel, basicAuth) -> tunnel ? MQTT_TUNNEL_URI : MQTT_INTERNAL_URI,
                         Collections::emptyMap,
                         Mqtt3ConnectivitySuite::getTargetTopic,
                         Mqtt3ConnectivitySuite::getSourceTopic,
                         MQTT_SOURCE_ENFORCEMENT,
-                        () -> SSH_TUNNEL_CONFIG,
-                        SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient())
+                        () -> SSH_TUNNEL_CONFIG)
                 .withMaxClientCount(1));
-
-        mqttCustomConnectionName = cf.disambiguateConnectionName(
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(), "Mqtt3Custom"
-        );
-        connectivityWorker = new Mqtt3ConnectivityWorker(LOGGER, Mqtt3ConnectivitySuite::getTargetTopic,
-                () -> mqttClient, cf.connectionNameWithEnforcementEnabled, Duration.ofMillis(WAIT_TIMEOUT_MS));
-    }
-
-    private static ConnectivityTestWebsocketClient websocketClient;
-
-    @BeforeClass
-    public static void setUpWebsocketClient() {
-        websocketClient = ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2),
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
-        websocketClient.connect("mqtt-websocket-" + UUID.randomUUID());
-    }
-
-    @AfterClass
-    public static void closeWebsocketClient() {
-        if (websocketClient != null) {
-            websocketClient.disconnect();
-            websocketClient = null;
-        }
     }
 
     @Override
@@ -221,10 +194,17 @@ public final class Mqtt3ConnectivitySuite
     }
 
     @Before
-    public void createConnections() throws Exception {
+    @Override
+    public void setupConnectivity() throws Exception {
+        super.setupConnectivity();
         LOGGER.info("Creating connections..");
+        mqttCustomConnectionName = cf.disambiguateConnectionName(
+                testingContextWithRandomNs.getSolution().getUsername(), "Mqtt3Custom"
+        );
         cf.setUpConnections(connectionsWatcher.getConnections(),
                 Collections.singleton(setupSingleConnectionWithTopicFilter(mqttCustomConnectionName)));
+        connectivityWorker = new Mqtt3ConnectivityWorker(LOGGER, Mqtt3ConnectivitySuite::getTargetTopic,
+                () -> mqttClient, cf.connectionNameWithEnforcementEnabled, Duration.ofMillis(WAIT_TIMEOUT_MS));
     }
 
     @Before
@@ -244,7 +224,7 @@ public final class Mqtt3ConnectivitySuite
     @After
     public void cleanup() {
         disconnectClient();
-        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
+        cleanupConnections(testingContextWithRandomNs.getSolution().getUsername());
     }
 
     @Override
@@ -336,7 +316,7 @@ public final class Mqtt3ConnectivitySuite
     @Test
     @Connections(ConnectionCategory.NONE)
     public void creatingMqttConnectionWithHeaderMappingShouldFail() {
-        final String username = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername();
+        final String username = testingContextWithRandomNs.getSolution().getUsername();
         final String connectionName = UUID.randomUUID().toString();
         final Connection connection = connectionModelFactory.buildConnectionModelWithHeaderMapping(
                 username,
@@ -362,6 +342,13 @@ public final class Mqtt3ConnectivitySuite
     @Test
     @UseConnection(category = ConnectionCategory.CONNECTION1, mod = ADD_MQTT_SOURCE_HEADER_MAPPING)
     public void allowedHeadersAreMappedFromInboundMqttMessage() {
+
+        final ConnectivityTestWebsocketClient websocketClient =
+                ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2),
+                        testingContextWithRandomNs.getOAuthClient().getAccessToken()
+                );
+        websocketClient.connect("mqtt-websocket-" + UUID.randomUUID());
+
         final AtomicBoolean waitForEvent = new AtomicBoolean(false);
         final CompletableFuture<Void> waitForAck = websocketClient.startConsumingEvents(event -> {
             // custom.* headers are mapped by the configured header mapping
@@ -381,11 +368,18 @@ public final class Mqtt3ConnectivitySuite
 
         sendCreateThing(cf.connectionName1, ThingBuilder.FromScratch::build);
         Awaitility.await("waiting for event sent via mqtt").untilTrue(waitForEvent);
+        websocketClient.disconnect();
     }
 
     @Test
     @UseConnection(category = ConnectionCategory.CONNECTION1, mod = ADD_MQTT_TARGET_HEADER_MAPPING)
     public void allowedHeadersAreMappedToOutboundMqttMessage() throws InterruptedException {
+
+        final ConnectivityTestWebsocketClient websocketClient =
+                ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2),
+                        testingContextWithRandomNs.getOAuthClient().getAccessToken()
+                );
+        websocketClient.connect("mqtt-websocket-" + UUID.randomUUID());
 
         final CreateThing createThing = buildCreateThing(cf.connectionName1, ThingBuilder.FromScratch::build);
         final String customTopic = "some/custom/topic";
@@ -415,6 +409,7 @@ public final class Mqtt3ConnectivitySuite
         assertThat(signal).isInstanceOf(ThingCreated.class);
         final ThingCreated thingCreated = (ThingCreated) signal;
         assertThat((Object) thingCreated.getEntityId()).isEqualTo(createThing.getEntityId());
+        websocketClient.disconnect();
     }
 
     private void testSslFailure(@Nullable final String caCrt,
@@ -477,7 +472,7 @@ public final class Mqtt3ConnectivitySuite
         final String targetAddress = getTargetTopic(connectionName);
 
         return connectionModelFactory.buildConnectionModelWithEnforcement(
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),
+                testingContextWithRandomNs.getSolution().getUsername(),
                 connectionName, MQTT_TYPE,
                 MQTT_INTERNAL_URI,
                 Collections.emptyMap(),
@@ -492,14 +487,14 @@ public final class Mqtt3ConnectivitySuite
 
         final String connectionName = UUID.randomUUID().toString();
         final JsonObject connection = getMqttOverSslConnection(connectionName, caCrt, clientCrt, clientKey);
-        final Response response = cf.asyncCreateConnection(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(), connection)
+        final Response response = cf.asyncCreateConnection(testingContextWithRandomNs.getSolution(), connection)
                 .get(30, TimeUnit.SECONDS);
         LOGGER.info("Created MQTT connection over SSL <{}> Response: {}", connectionName, response.statusLine());
         assertThat(response.getStatusCode()).satisfies(StatusCodeSuccessfulMatcher.getConsumer());
         return connectionName;
     }
 
-    private static JsonObject getMqttOverSslConnection(final String connectionName,
+    private JsonObject getMqttOverSslConnection(final String connectionName,
             @Nullable final String caCrt,
             @Nullable final String clientCrt,
             @Nullable final String clientKey) {
@@ -516,7 +511,7 @@ public final class Mqtt3ConnectivitySuite
 
 
         final Connection connectionTemplate = connectionModelFactory.buildConnectionModel(
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),
+                testingContextWithRandomNs.getSolution().getUsername(),
                 connectionName,
                 MQTT_TYPE,
                 getMqttInternalSslUri(CONFIG),

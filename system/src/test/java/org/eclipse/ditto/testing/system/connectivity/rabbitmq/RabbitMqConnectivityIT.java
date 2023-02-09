@@ -95,15 +95,13 @@ public class RabbitMqConnectivityIT extends
         super(ConnectivityFactory.of(
                 "RabbitCon",
                 connectionModelFactory,
-                () -> SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(),
                 AMQP_091_TYPE,
                 RabbitMqConnectivityIT::getConnectionUri,
                 Collections::emptyMap,
                 TARGET_ADDRESS::concat,
                 SOURCE_ADDRESS::concat,
                 id -> RABBITMQ_ENFORCEMENT,
-                () -> SSH_TUNNEL_CONFIG,
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient())
+                () -> SSH_TUNNEL_CONFIG)
                 .withDefaultHeaderMapping(DEFAULT_HEADER_MAPPING.getMapping())
                 .withDefaultReplyTargetAddress("/{{header:reply-to}}"));
         rabbitConnectivityWorker =
@@ -112,7 +110,9 @@ public class RabbitMqConnectivityIT extends
     }
 
     @Before
-    public void setUpRabbit() throws Exception {
+    @Override
+    public void setupConnectivity() throws Exception {
+        super.setupConnectivity();
         LOGGER.info("Connecting to RabbitMQ at {}:{}",
                 CONFIG.getRabbitMqHostname(),
                 CONFIG.getRabbitMqPort());
@@ -132,7 +132,7 @@ public class RabbitMqConnectivityIT extends
                 LOGGER.debug("Close failed, but can be ignored ({}).", e.getMessage());
             }
         }
-        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
+        cleanupConnections(testingContextWithRandomNs.getSolution().getUsername());
     }
 
     private void deleteQueues() {

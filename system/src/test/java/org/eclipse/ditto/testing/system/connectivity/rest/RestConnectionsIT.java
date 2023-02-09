@@ -162,15 +162,15 @@ public final class RestConnectionsIT extends IntegrationTest {
                 new ConnectionModelFactory((username, suffix) -> integrationSubject);
         connectivityFactory = ConnectivityFactory.of("Rest",
                 connectionModelFactory,
-                () -> testingContext.getSolution(),
                 ConnectionType.KAFKA,
                 RestConnectionsIT::getConnectionUri,
                 RestConnectionsIT::getSpecificConfig,
                 RestConnectionsIT::defaultTargetAddress,
                 connectionId -> null,
                 connectionId -> null,
-                () -> DISABLED_SSH_TUNNEL,
-                testingContext.getOAuthClient());
+                () -> DISABLED_SSH_TUNNEL
+        ).withSolutionSupplier(() -> testingContext.getSolution())
+                .withAuthClient(testingContext.getOAuthClient());
     }
 
     @Test

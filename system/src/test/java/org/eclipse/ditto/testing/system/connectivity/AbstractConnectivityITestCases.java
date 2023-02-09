@@ -266,7 +266,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         final var policyId = PolicyId.inNamespaceWithRandomName(serviceEnv.getDefaultNamespaceName());
         final var subjectId =
                 SubjectId.newInstance(
-                        connectionAuthIdentifier(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),
+                        connectionAuthIdentifier(testingContextWithRandomNs.getSolution().getUsername(),
                                 TestingContext.DEFAULT_SCOPE));
         final var subjectExpiry = SubjectExpiry.newInstance(Instant.now().plus(Duration.ofSeconds(3600)));
         final var subjectAnnouncement = SubjectAnnouncement.of(DittoDuration.parseDuration("3599s"), true);
@@ -312,11 +312,11 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         final var policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("user")
                 .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject())
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setResource(Resource.newInstance("policy", "/",
                         EffectedPermissions.newInstance(List.of("READ", "WRITE", "EXECUTE"), List.of())))
                 .forLabel("connection-target")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setResource(Resource.newInstance("thing", "/",
                         EffectedPermissions.newInstance(List.of("READ"), List.of())))
                 .build();
@@ -325,7 +325,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         putPolicy(policy).expectingHttpStatus(HttpStatus.CREATED).fire();
 
         final JsonWebToken jwt = ImmutableJsonWebToken.fromToken(
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
+                testingContextWithRandomNs.getOAuthClient().getAccessToken());
         final Instant now = Instant.now();
         final Instant jwtExpirationTime = jwt.getExpirationTime();
         // system-tests are configured via policies env variable POLICY_SUBJECT_EXPIRY_GRANULARITY=5s, so also round up:
@@ -345,16 +345,16 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .set("announcement", subjectAnnouncement.toJson())
                 .build();
         postPolicyAction(policyId, "activateTokenIntegration", payload.toString())
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
 
         final var connectionSubjectId =
-                SubjectId.newInstance(connectionAuthIdentifier(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),
+                SubjectId.newInstance(connectionAuthIdentifier(testingContextWithRandomNs.getSolution().getUsername(),
                         TestingContext.DEFAULT_SCOPE));
 
         getPolicyEntrySubject(policyId, "connection-target", connectionSubjectId.toString())
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.OK)
                 .expectingBody(contains(JsonKey.of("expiry"), JsonKey.of("announcement")))
                 .fire();
@@ -437,7 +437,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
             final String connectionName, final Duration expiry, final DittoDuration sendAnnouncementBefore) {
 
         final var policyId = PolicyId.inNamespaceWithRandomName(serviceEnv.getDefaultNamespaceName());
-        final var defaultSubject = SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject();
+        final var defaultSubject = testingContextWithRandomNs.getOAuthClient().getDefaultSubject();
         final var connectionSubjectId = connectionSubject(connectionName).getId();
 
         final var now = Instant.now();
@@ -539,7 +539,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .build();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionName1))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
@@ -649,7 +649,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .contentType(is(expectedResponseContentType))
                 .body(is(expectedResponseMsgBody))
                 .given()
-                .auth().oauth2(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .auth().oauth2(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .header(HttpHeader.X_CORRELATION_ID.getName(), msgCorrelationId)
                 .header(HttpHeader.CONTENT_TYPE.getName(), requestMsgContentType)
                 .header(customHeaderName, customHeaderValue)
@@ -719,7 +719,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         // Then
         expect().statusCode(is(HttpStatus.ACCEPTED.getCode()))
                 .given()
-                .auth().oauth2(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .auth().oauth2(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .header(HttpHeader.X_CORRELATION_ID.getName(), msgCorrelationId)
                 .header(HttpHeader.CONTENT_TYPE.getName(), requestAndResponseContentType)
                 .body(requestMsgBody.toString())
@@ -763,7 +763,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         final ThingBuilder.FromScratch thingBuilder = Thing.newBuilder();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionName1))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
@@ -781,7 +781,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         final CreateThing createThing1 = CreateThing.of(thingBuilder.setId(thingId1).build(), policy.toJson(),
                 createDittoHeaders(correlationId));
 
-        final ThingId thingId2 = generateThingId(RANDOM_NAMESPACE_2);
+        final ThingId thingId2 = generateThingId(randomNamespace2);
         final CreateThing createThing2 = CreateThing.of(thingBuilder.setId(thingId2).build(), policy.toJson(),
                 createDittoHeaders(correlationId));
 
@@ -1009,7 +1009,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         final Policy policy = createNewPolicy(thingId, featureId, connectionName);
         putPolicy(policy)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .withCorrelationId(UUID.randomUUID().toString())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
@@ -1020,7 +1020,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .setFeature(featureId, FeatureProperties.newBuilder().build())
                 .build();
         putThing(2, thing, JsonSchemaVersion.V_2)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .withCorrelationId(UUID.randomUUID().toString())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
@@ -1099,7 +1099,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .build();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionName1))
                 .setSubject(connectionSubject(cf.connectionNameWithExtraFields))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
@@ -1306,7 +1306,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .build();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionName1))
                 .setSubject(connectionSubject(cf.connectionNameWithExtraFields))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
@@ -1534,7 +1534,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .build();
 
         putThing(2, thing, JsonSchemaVersion.V_2)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .withCorrelationId(thingCreatedCorrelationId)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
@@ -1613,7 +1613,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                         String.join(",", twinPersistedAckRequest.getLabel(), customAckRequest.getLabel(), hopelessAck))
                 .withHeader(DittoHeaderDefinition.TIMEOUT.getKey(), "2s")
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .withCorrelationId(thingCreatedCorrelationId)
                 .fire();
 
@@ -1665,7 +1665,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                         String.join(",", twinPersistedAckRequest.getLabel(), customAckRequest.getLabel(), hopelessAck))
                 .withHeader(DittoHeaderDefinition.TIMEOUT.getKey(), "2s")
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .withCorrelationId(thingCreatedCorrelationId)
                 .fire();
 
@@ -1707,7 +1707,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         final Response response = putThing(2, thing, JsonSchemaVersion.V_2)
                 .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                         targetIssuedAck + "," + DittoAcknowledgementLabel.TWIN_PERSISTED)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .withCorrelationId(thingCreatedCorrelationId)
                 .fire();
 
@@ -1770,7 +1770,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         // THEN: Response is received right away
         final C targetConsumer = initTargetsConsumer(cf.connectionName1);
         final Response response = putThing(2, thing, JsonSchemaVersion.V_2)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .withCorrelationId(correlationId)
                 .withHeader("requested-acks", twinPersisted + "," + customAck)
                 .expectingHttpStatus(HttpStatus.OK)
@@ -1815,7 +1815,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         expect().statusCode(anyOf(is(200), is(204))) // status is 204 for Kafka and 200 for others
                 .given()
                 .header("Authorization",
-                        "Bearer " + SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                        "Bearer " + testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .header(HttpHeader.CONTENT_TYPE.getName(), "text/plain")
                 .header("x-correlation-id", messageCorrelationId)
                 .header("requested-acks", customAck.toString())
@@ -1839,7 +1839,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .build();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionName1))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
@@ -1912,7 +1912,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .build();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionName2))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
@@ -2073,7 +2073,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .build();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionName1))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
@@ -2097,7 +2097,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         final C eventConsumer = initTargetsConsumer(cf.connectionName2);
         putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
                 .withCorrelationId(correlationId)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -2200,7 +2200,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionName1))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
@@ -2209,7 +2209,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
                 .withCorrelationId(correlationId)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -2295,7 +2295,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         final var permissions = Permissions.newInstance("READ", "WRITE");
         final var policy = Policy.newBuilder(policyId)
                 .forLabel("connections-grant")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(connection))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), permissions)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), permissions)
@@ -2306,7 +2306,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .build();
 
         putPolicy(policyId, policy)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -2315,7 +2315,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         // When Thing is created
         final var createThingCorrelationId = createNewCorrelationId();
         putThing(2, thing, JsonSchemaVersion.V_2)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .withCorrelationId(createThingCorrelationId)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();

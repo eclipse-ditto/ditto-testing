@@ -76,6 +76,7 @@ public final class ConnectivityFactory {
     private static final AtomicInteger CONNECTION_RETRY_COUNTER = new AtomicInteger();
     private static final int DEFAULT_MAX_CLIENT_COUNT = 3;
 
+    private final String connectionNamePrefix;
     private final ConnectionModelFactory modelBuilder;
     private final ConnectionType connectionType;
 
@@ -85,8 +86,8 @@ public final class ConnectivityFactory {
     private final GetSourceAddress getSourceAddress;
     private final GetEnforcement getEnforcement;
     private final GetSshTunnel getSshTunnel;
-    private final AuthClient client;
-    private final SolutionSupplier solutionSupplier;
+    @Nullable private final SolutionSupplier solutionSupplier;
+    @Nullable private final AuthClient authClient;
     private final Map<String, String> defaultHeaderMapping;
     private final GetReplyTargetAddress getReplyTargetAddress;
     private final Map<String, ConnectionId> connectionIds = new ConcurrentHashMap<>();
@@ -118,7 +119,7 @@ public final class ConnectivityFactory {
     private ConnectivityFactory(
             final String connectionNamePrefix,
             final ConnectionModelFactory modelBuilder,
-            final SolutionSupplier solutionSupplier,
+            @Nullable final SolutionSupplier solutionSupplier,
             final ConnectionType connectionType,
             final GetConnectionUri getConnectionUri,
             final GetSpecificConfig getSpecificConfig,
@@ -126,8 +127,9 @@ public final class ConnectivityFactory {
             final GetSourceAddress getSourceAddress,
             final GetEnforcement getEnforcement,
             final GetSshTunnel getSshTunnel,
-            final AuthClient client) {
+            @Nullable final AuthClient authClient) {
 
+        this.connectionNamePrefix = connectionNamePrefix;
         this.modelBuilder = modelBuilder;
         this.solutionSupplier = solutionSupplier;
         this.connectionType = connectionType;
@@ -137,62 +139,52 @@ public final class ConnectivityFactory {
         this.getSourceAddress = getSourceAddress;
         this.getEnforcement = getEnforcement;
         this.getSshTunnel = getSshTunnel;
-        this.client = client;
+        this.authClient = authClient;
         this.defaultHeaderMapping = Collections.emptyMap();
         this.getReplyTargetAddress = name -> null;
         maxClientCount = DEFAULT_MAX_CLIENT_COUNT;
-        connectionName1 = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 1
-        );
-        connectionName2 = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 2
-        );
-        connectionNameWithPayloadMapping = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 3
-        );
-        connectionNameWithAuthPlaceholderOnHEADER_ID = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 4
-        );
-        connectionNameWithNamespaceAndRqlFilter = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 5
-        );
-        connectionNameWithEnforcementEnabled = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 6
-        );
-        connectionNameWithHeaderMapping = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 7
-        );
-        connectionNameWithMultiplePayloadMappings = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 8
-        );
-        connectionNameWithExtraFields = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 9
-        );
-        connectionWithRawMessageMapper1 = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 10
-        );
-        connectionWithRawMessageMapper2 = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 11
-        );
-        connectionWithTunnel = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 12
-        );
-        connectionWithConnectionAnnouncements = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 13
-        );
-        connectionWith2Sources = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 14
-        );
-        connectionHonoName = disambiguateConnectionName(
-                solutionSupplier.getSolution().getUsername(), connectionNamePrefix + 15
-        );
+        if (solutionSupplier != null) {
+            final String username = solutionSupplier.getSolution().getUsername();
+            connectionName1 = disambiguateConnectionName(username, connectionNamePrefix + 1);
+            connectionName2 = disambiguateConnectionName(username, connectionNamePrefix + 2);
+            connectionNameWithPayloadMapping = disambiguateConnectionName(username, connectionNamePrefix + 3);
+            connectionNameWithAuthPlaceholderOnHEADER_ID = disambiguateConnectionName(username, connectionNamePrefix + 4);
+            connectionNameWithNamespaceAndRqlFilter = disambiguateConnectionName(username, connectionNamePrefix + 5);
+            connectionNameWithEnforcementEnabled = disambiguateConnectionName(username, connectionNamePrefix + 6);
+            connectionNameWithHeaderMapping = disambiguateConnectionName(username, connectionNamePrefix + 7);
+            connectionNameWithMultiplePayloadMappings = disambiguateConnectionName(username, connectionNamePrefix + 8);
+            connectionNameWithExtraFields = disambiguateConnectionName(username, connectionNamePrefix + 9);
+            connectionWithRawMessageMapper1 = disambiguateConnectionName(username, connectionNamePrefix + 10);
+            connectionWithRawMessageMapper2 = disambiguateConnectionName(username, connectionNamePrefix + 11);
+            connectionWithTunnel = disambiguateConnectionName(username, connectionNamePrefix + 12);
+            connectionWithConnectionAnnouncements = disambiguateConnectionName(username, connectionNamePrefix + 13);
+            connectionWith2Sources = disambiguateConnectionName(username, connectionNamePrefix + 14);
+            connectionHonoName = disambiguateConnectionName(username, connectionNamePrefix + 15);
+        } else {
+            connectionName1 = null;
+            connectionName2 = null;
+            connectionNameWithPayloadMapping = null;
+            connectionNameWithAuthPlaceholderOnHEADER_ID = null;
+            connectionNameWithNamespaceAndRqlFilter = null;
+            connectionNameWithEnforcementEnabled = null;
+            connectionNameWithHeaderMapping = null;
+            connectionNameWithMultiplePayloadMappings = null;
+            connectionNameWithExtraFields = null;
+            connectionWithRawMessageMapper1 = null;
+            connectionWithRawMessageMapper2 = null;
+            connectionWithTunnel = null;
+            connectionWithConnectionAnnouncements = null;
+            connectionWith2Sources = null;
+            connectionHonoName = null;
+        }
     }
 
     // copy constructor
     private ConnectivityFactory(
             final ConnectivityFactory cf,
             final ConnectionModelFactory modelBuilder,
-            final SolutionSupplier solutionSupplier,
+            @Nullable final SolutionSupplier solutionSupplier,
+            @Nullable final AuthClient authClient,
             final ConnectionType connectionType,
             final GetConnectionUri getConnectionUri,
             final GetSpecificConfig getSpecificConfig,
@@ -204,6 +196,7 @@ public final class ConnectivityFactory {
 
         this.modelBuilder = modelBuilder;
         this.solutionSupplier = solutionSupplier;
+        this.authClient = authClient;
         this.connectionType = connectionType;
         this.getConnectionUri = getConnectionUri;
         this.getSpecificConfig = getSpecificConfig;
@@ -214,41 +207,59 @@ public final class ConnectivityFactory {
 
         getSshTunnel = cf.getSshTunnel;
         getEnforcement = cf.getEnforcement;
-        client = cf.client;
-        connectionName1 = cf.connectionName1;
-        connectionName2 = cf.connectionName2;
-        connectionNameWithPayloadMapping = cf.connectionNameWithPayloadMapping;
-        connectionNameWithAuthPlaceholderOnHEADER_ID = cf.connectionNameWithAuthPlaceholderOnHEADER_ID;
-        connectionNameWithNamespaceAndRqlFilter = cf.connectionNameWithNamespaceAndRqlFilter;
-        connectionNameWithEnforcementEnabled = cf.connectionNameWithEnforcementEnabled;
-        connectionNameWithHeaderMapping = cf.connectionNameWithHeaderMapping;
-        connectionNameWithMultiplePayloadMappings = cf.connectionNameWithMultiplePayloadMappings;
-        connectionNameWithExtraFields = cf.connectionNameWithExtraFields;
-        connectionWithRawMessageMapper1 = cf.connectionWithRawMessageMapper1;
-        connectionWithRawMessageMapper2 = cf.connectionWithRawMessageMapper2;
-        connectionWithTunnel = cf.connectionWithTunnel;
-        connectionWithConnectionAnnouncements = cf.connectionWithConnectionAnnouncements;
-        connectionWith2Sources = cf.connectionWith2Sources;
-        connectionHonoName = cf.connectionHonoName;
+        connectionNamePrefix = cf.connectionNamePrefix;
+
+        if (solutionSupplier != null) {
+            final String username = solutionSupplier.getSolution().getUsername();
+            connectionName1 = disambiguateConnectionName(username, connectionNamePrefix + 1);
+            connectionName2 = disambiguateConnectionName(username, connectionNamePrefix + 2);
+            connectionNameWithPayloadMapping = disambiguateConnectionName(username, connectionNamePrefix + 3);
+            connectionNameWithAuthPlaceholderOnHEADER_ID = disambiguateConnectionName(username, connectionNamePrefix + 4);
+            connectionNameWithNamespaceAndRqlFilter = disambiguateConnectionName(username, connectionNamePrefix + 5);
+            connectionNameWithEnforcementEnabled = disambiguateConnectionName(username, connectionNamePrefix + 6);
+            connectionNameWithHeaderMapping = disambiguateConnectionName(username, connectionNamePrefix + 7);
+            connectionNameWithMultiplePayloadMappings = disambiguateConnectionName(username, connectionNamePrefix + 8);
+            connectionNameWithExtraFields = disambiguateConnectionName(username, connectionNamePrefix + 9);
+            connectionWithRawMessageMapper1 = disambiguateConnectionName(username, connectionNamePrefix + 10);
+            connectionWithRawMessageMapper2 = disambiguateConnectionName(username, connectionNamePrefix + 11);
+            connectionWithTunnel = disambiguateConnectionName(username, connectionNamePrefix + 12);
+            connectionWithConnectionAnnouncements = disambiguateConnectionName(username, connectionNamePrefix + 13);
+            connectionWith2Sources = disambiguateConnectionName(username, connectionNamePrefix + 14);
+            connectionHonoName = disambiguateConnectionName(username, connectionNamePrefix + 15);
+        } else {
+            connectionName1 = cf.connectionName1;
+            connectionName2 = cf.connectionName2;
+            connectionNameWithPayloadMapping = cf.connectionNameWithPayloadMapping;
+            connectionNameWithAuthPlaceholderOnHEADER_ID = cf.connectionNameWithAuthPlaceholderOnHEADER_ID;
+            connectionNameWithNamespaceAndRqlFilter = cf.connectionNameWithNamespaceAndRqlFilter;
+            connectionNameWithEnforcementEnabled = cf.connectionNameWithEnforcementEnabled;
+            connectionNameWithHeaderMapping = cf.connectionNameWithHeaderMapping;
+            connectionNameWithMultiplePayloadMappings = cf.connectionNameWithMultiplePayloadMappings;
+            connectionNameWithExtraFields = cf.connectionNameWithExtraFields;
+            connectionWithRawMessageMapper1 = cf.connectionWithRawMessageMapper1;
+            connectionWithRawMessageMapper2 = cf.connectionWithRawMessageMapper2;
+            connectionWithTunnel = cf.connectionWithTunnel;
+            connectionWithConnectionAnnouncements = cf.connectionWithConnectionAnnouncements;
+            connectionWith2Sources = cf.connectionWith2Sources;
+            connectionHonoName = cf.connectionHonoName;
+        }
         this.maxClientCount = maxClientCount;
     }
 
     public static ConnectivityFactory of(
             final String connectionNamePrefix,
             final ConnectionModelFactory modelBuilder,
-            final SolutionSupplier solutionSupplier,
             final ConnectionType connectionType,
             final GetConnectionUri getConnectionUri,
             final GetSpecificConfig getSpecificConfig,
             final GetTargetAddress getTargetAddress,
             final GetSourceAddress getSourceAddress,
             final GetEnforcement getEnforcement,
-            final GetSshTunnel getSshTunnel,
-            final AuthClient client) {
+            final GetSshTunnel getSshTunnel) {
 
-        return new ConnectivityFactory(connectionNamePrefix, modelBuilder, solutionSupplier, connectionType,
+        return new ConnectivityFactory(connectionNamePrefix, modelBuilder, null, connectionType,
                 getConnectionUri, getSpecificConfig, getTargetAddress, getSourceAddress, getEnforcement, getSshTunnel,
-                client);
+                null);
     }
 
     public ConnectionId getConnectionId(final String connectionName) {
@@ -313,9 +324,9 @@ public final class ConnectivityFactory {
             throw new IllegalArgumentException("Setting defaultReplyTargetAddress has no effect without " +
                     "setting a nonempty defaultHeaderMapping first.");
         }
-        return new ConnectivityFactory(this, modelBuilder, solutionSupplier, connectionType, getConnectionUri,
-                getSpecificConfig, getTargetAddress, getSourceAddress, defaultHeaderMapping,
-                name -> defaultReplyTargetAddress, maxClientCount);
+        return new ConnectivityFactory(this, modelBuilder, solutionSupplier, authClient, connectionType,
+                getConnectionUri, getSpecificConfig, getTargetAddress, getSourceAddress,
+                defaultHeaderMapping, name -> defaultReplyTargetAddress, maxClientCount);
     }
 
     public ConnectivityFactory withReplyTargetAddress(final GetReplyTargetAddress getReplyTargetAddress) {
@@ -323,28 +334,40 @@ public final class ConnectivityFactory {
             throw new IllegalArgumentException("Setting getReplyTargetAddress has no effect without " +
                     "setting a nonempty defaultHeaderMapping first.");
         }
-        return new ConnectivityFactory(this, modelBuilder, solutionSupplier, connectionType, getConnectionUri,
-                getSpecificConfig, getTargetAddress, getSourceAddress, defaultHeaderMapping, getReplyTargetAddress,
-                maxClientCount);
+        return new ConnectivityFactory(this, modelBuilder, solutionSupplier, authClient, connectionType,
+                getConnectionUri, getSpecificConfig, getTargetAddress, getSourceAddress, defaultHeaderMapping,
+                getReplyTargetAddress, maxClientCount);
     }
 
 
     public ConnectivityFactory withDefaultHeaderMapping(final Map<String, String> defaultHeaderMapping) {
-        return new ConnectivityFactory(this, modelBuilder, solutionSupplier, connectionType, getConnectionUri,
-                getSpecificConfig, getTargetAddress, getSourceAddress, defaultHeaderMapping, getReplyTargetAddress,
-                maxClientCount);
+        return new ConnectivityFactory(this, modelBuilder, solutionSupplier, authClient, connectionType,
+                getConnectionUri, getSpecificConfig, getTargetAddress, getSourceAddress, defaultHeaderMapping,
+                getReplyTargetAddress, maxClientCount);
     }
 
     public ConnectivityFactory withTargetAddress(final GetTargetAddress getTargetAddress) {
-        return new ConnectivityFactory(this, modelBuilder, solutionSupplier, connectionType, getConnectionUri,
-                getSpecificConfig, getTargetAddress, getSourceAddress, defaultHeaderMapping, getReplyTargetAddress,
-                maxClientCount);
+        return new ConnectivityFactory(this, modelBuilder, solutionSupplier, authClient, connectionType,
+                getConnectionUri, getSpecificConfig, getTargetAddress, getSourceAddress, defaultHeaderMapping,
+                getReplyTargetAddress, maxClientCount);
     }
 
     public ConnectivityFactory withMaxClientCount(final int maxClientCount) {
-        return new ConnectivityFactory(this, modelBuilder, solutionSupplier, connectionType, getConnectionUri,
-                getSpecificConfig, getTargetAddress, getSourceAddress, defaultHeaderMapping, getReplyTargetAddress,
-                maxClientCount);
+        return new ConnectivityFactory(this, modelBuilder, solutionSupplier, authClient, connectionType,
+                getConnectionUri, getSpecificConfig, getTargetAddress, getSourceAddress, defaultHeaderMapping,
+                getReplyTargetAddress, maxClientCount);
+    }
+
+    public ConnectivityFactory withSolutionSupplier(final SolutionSupplier solutionSupplier) {
+        return new ConnectivityFactory(this, modelBuilder, solutionSupplier, authClient, connectionType,
+                getConnectionUri, getSpecificConfig, getTargetAddress, getSourceAddress, defaultHeaderMapping,
+                getReplyTargetAddress, maxClientCount);
+    }
+
+    public ConnectivityFactory withAuthClient(final AuthClient authClient) {
+        return new ConnectivityFactory(this, modelBuilder, solutionSupplier, authClient, connectionType,
+                getConnectionUri, getSpecificConfig, getTargetAddress, getSourceAddress, defaultHeaderMapping,
+                getReplyTargetAddress, maxClientCount);
     }
 
     public void setUpConnections(final Map<ConnectionCategory, String> enabledConnections) throws Exception {
@@ -392,7 +415,8 @@ public final class ConnectivityFactory {
                 entry(ConnectionCategory.CONNECTION_WITH_AUTH_PLACEHOLDER_ON_HEADER_ID,
                         () -> setupSingleConnectionWithAuthPlaceholder(connectionNameWithAuthPlaceholderOnHEADER_ID)),
                 entry(ConnectionCategory.CONNECTION_WITH_NAMESPACE_AND_RQL_FILTER,
-                        () -> setupSingleConnectionWithNamespaceAndRqlFilter(connectionNameWithNamespaceAndRqlFilter)),
+                        () -> setupSingleConnectionWithNamespaceAndRqlFilter(connectionNameWithNamespaceAndRqlFilter,
+                                solutionSupplier.getSolution().getDefaultNamespace())),
                 entry(ConnectionCategory.CONNECTION_WITH_ENFORCEMENT_ENABLED,
                         () -> setupSingleConnectionWithEnforcement(connectionNameWithEnforcementEnabled,
                                 getEnforcement.get(connectionNameWithEnforcementEnabled))),
@@ -559,10 +583,11 @@ public final class ConnectivityFactory {
                 getSpecificConfig(),
                 defaultSourceAddress(connectionId),
                 defaultTargetAddress(connectionId),
-                client);
+                authClient);
     }
 
-    public Connection setupSingleConnectionWithNamespaceAndRqlFilter(final String connectionId) {
+    public Connection setupSingleConnectionWithNamespaceAndRqlFilter(final String connectionId,
+            final String defaultNamespace) {
 
         LOGGER.info("Creating a connection of type <{}> with namespace and RQL filter with ID <{}> to <{}> in Ditto " +
                 "Connectivity", connectionType, connectionId, getConnectionUri());
@@ -576,7 +601,7 @@ public final class ConnectivityFactory {
                 defaultSourceAddress(connectionId),
                 defaultTargetAddress(connectionId),
                 Collections.singletonList(
-                        "_/_/things/twin/events?namespaces=" + AbstractConnectivityITBase.RANDOM_NAMESPACE +
+                        "_/_/things/twin/events?namespaces=" + defaultNamespace +
                                 "&filter=gt(attributes/counter,42)"
                 )
         );

@@ -96,15 +96,13 @@ public class Amqp10ConnectivityIT extends AbstractConnectivityITestCases<Blockin
         super(ConnectivityFactory.of(
                 "Amqp",
                 connectionModelFactory,
-                () -> SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(),
                 AMQP10_TYPE,
                 Amqp10ConnectivityIT::getAmqpUri,
                 () -> Collections.singletonMap("jms.closeTimeout", "0"),
                 Amqp10ConnectivityIT::defaultTargetAddress,
                 Amqp10ConnectivityIT::defaultSourceAddress,
                 id -> AMQP_ENFORCEMENT,
-                () -> SSH_TUNNEL_CONFIG,
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient()));
+                () -> SSH_TUNNEL_CONFIG));
 
         connectivityWorker = new Amqp10ConnectivityWorker(LOGGER,
                 () -> JMS_MESSAGE_LISTENERS,
@@ -122,7 +120,9 @@ public class Amqp10ConnectivityIT extends AbstractConnectivityITestCases<Blockin
     }
 
     @Before
+    @Override
     public void setupConnectivity() throws Exception {
+        super.setupConnectivity();
         sourceAddress = cf.disambiguate("testSource");
         targetAddress = cf.disambiguate("testTarget");
         targetAddressForTargetPlaceholderSubstitution =
@@ -144,7 +144,7 @@ public class Amqp10ConnectivityIT extends AbstractConnectivityITestCases<Blockin
         closeEntryValuesAndRemoveEntries(JMS_RECEIVERS);
         closeEntryValuesAndRemoveEntries(JMS_SESSIONS);
         closeEntryValuesAndRemoveEntries(JMS_CONNECTIONS);
-        cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
+        cleanupConnections(testingContextWithRandomNs.getSolution().getUsername());
     }
 
     private static <T extends AutoCloseable> void closeEntryValuesAndRemoveEntries(final Map<String, T> map) {
@@ -200,7 +200,7 @@ public class Amqp10ConnectivityIT extends AbstractConnectivityITestCases<Blockin
         // expect all messages are processed
         getThing(2, thingId)
                 .withParam("fields", "_revision")
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .useAwaitility(Awaitility.await()
                         .pollInterval(Duration.ofSeconds(1))
                         .atMost(Duration.ofMinutes(1)))

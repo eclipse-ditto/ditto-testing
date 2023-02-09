@@ -164,7 +164,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
         final String connectionName = cf.connectionName1;
 
         final ThingId thingId =
-                createNewThingWithAccessForUserAndConnection(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient(),
+                createNewThingWithAccessForUserAndConnection(testingContextWithRandomNs.getOAuthClient(),
                         connectionName);
 
         final CountDownLatch websocketLatch = new CountDownLatch(1);
@@ -178,7 +178,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
         // WebSocket client consumes live commands:
         final ConnectivityTestWebsocketClient clientUser1 =
                 ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2),
-                        SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
+                        testingContextWithRandomNs.getOAuthClient().getAccessToken());
         clientUser1.connect("sendWebsocketLiveCommandAnswersWithLiveResponse-" + UUID.randomUUID());
         clientUser1.startConsumingLiveCommands(liveCommand -> {
             LOGGER.info("clientUser1 got liveCommand <{}>", liveCommand);
@@ -250,7 +250,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
         final var connectionName = cf.connectionName1;
 
         final var thingId =
-                createNewThingWithAccessForUserAndConnection(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient(),
+                createNewThingWithAccessForUserAndConnection(testingContextWithRandomNs.getOAuthClient(),
                         connectionName);
 
         final var websocketLatch = new CountDownLatch(1);
@@ -259,7 +259,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
         // WebSocket client consumes live commands:
         final var clientUser1 =
                 ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2),
-                        SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
+                        testingContextWithRandomNs.getOAuthClient().getAccessToken());
         clientUser1.connect("sendWebsocketLiveChannelConditionCommandAnswersWithLiveResponse-" + UUID.randomUUID());
         clientUser1.startConsumingLiveCommands(liveCommand -> {
             LOGGER.info("clientUser1 got liveCommand <{}>", liveCommand);
@@ -427,7 +427,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
         // Given
         final String connectionName = cf.connectionName1;
         final ThingId thingId =
-                createNewThingWithAccessForUserAndConnection(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient(),
+                createNewThingWithAccessForUserAndConnection(testingContextWithRandomNs.getOAuthClient(),
                         connectionName);
 
         final CountDownLatch websocketLatch = new CountDownLatch(1);
@@ -436,7 +436,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
 
         // WebSocket client consumes live commands:
         final ConnectivityTestWebsocketClient webSocketClient =
-                initiateWebSocketClient(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient());
+                initiateWebSocketClient(testingContextWithRandomNs.getOAuthClient());
         webSocketClient.connect("responseRequiredHeaderInResponseHasNoEffect-" + UUID.randomUUID());
         webSocketClient.startConsumingMessages(liveMessage -> {
             LOGGER.info("webSocketClient got liveMessage <{}>", liveMessage);
@@ -520,7 +520,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
         final String receivingConnectionName = cf.connectionWithRawMessageMapper2;
 
         final ThingId thingId =
-                createNewThingWithAccessForUserAndConnection(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient(),
+                createNewThingWithAccessForUserAndConnection(testingContextWithRandomNs.getOAuthClient(),
                         cf.connectionName1, sendingConnectionName, receivingConnectionName);
 
         final String messageSubject = UUID.randomUUID().toString();
@@ -576,7 +576,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
         final String receivingConnectionName = cf.connectionWithRawMessageMapper2;
 
         final ThingId thingId =
-                createNewThingWithAccessForUserAndConnection(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient(),
+                createNewThingWithAccessForUserAndConnection(testingContextWithRandomNs.getOAuthClient(),
                         cf.connectionName1, sendingConnectionName, receivingConnectionName);
 
         final String messageSubject = UUID.randomUUID().toString();
@@ -784,15 +784,15 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
                 .build();
     }
 
-    private static Policy policyWhichAllowsAccessForUserAndConnection(final PolicyId policyId,
+    private Policy policyWhichAllowsAccessForUserAndConnection(final PolicyId policyId,
             final AuthClient client, final String connectionName, final String... connectionNames) {
 
         final SubjectId connectivitySubjectId = SubjectId.newInstance(SubjectIssuer.INTEGRATION,
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername() + ":" + connectionName);
+                testingContextWithRandomNs.getSolution().getUsername() + ":" + connectionName);
         final Subject connectivitySubject = Subject.newInstance(connectivitySubjectId);
         final List<Subject> subjects = Arrays.stream(connectionNames)
                 .map(name -> SubjectId.newInstance(SubjectIssuer.INTEGRATION,
-                        SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername() + ":" + name))
+                        testingContextWithRandomNs.getSolution().getUsername() + ":" + name))
                 .map(Subject::newInstance)
                 .collect(Collectors.toList());
 

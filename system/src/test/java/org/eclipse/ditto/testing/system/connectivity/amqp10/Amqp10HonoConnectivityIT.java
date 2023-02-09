@@ -122,15 +122,13 @@ public class Amqp10HonoConnectivityIT extends AbstractConnectivityITCommon<Block
         super(ConnectivityFactory.of(
                 "AmqpHono",
                 connectionModelFactory,
-                () -> SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(),
                 AMQP10_TYPE,
                 Amqp10HonoConnectivityIT::getAmqpUri,
                 () -> Collections.singletonMap("jms.closeTimeout", "0"),
                 Amqp10HonoConnectivityIT::defaultTargetAddress,
                 Amqp10HonoConnectivityIT::defaultSourceAddress,
                 id -> AMQP_ENFORCEMENT,
-                () -> SSH_TUNNEL_CONFIG,
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient()));
+                () -> SSH_TUNNEL_CONFIG));
         connectivityWorker = new Amqp10ConnectivityWorker(LOGGER,
                 () -> jmsMessageListeners,
                 () -> jmsSenders,
@@ -147,7 +145,9 @@ public class Amqp10HonoConnectivityIT extends AbstractConnectivityITCommon<Block
     }
 
     @Before
+    @Override
     public void setupConnectivity() throws Exception {
+        super.setupConnectivity();
         honoConnectionName = UUID.randomUUID().toString();
         sourceAddress = cf.disambiguate("testSource");
         targetAddress = cf.disambiguate("testTarget");
@@ -182,7 +182,7 @@ public class Amqp10HonoConnectivityIT extends AbstractConnectivityITCommon<Block
                 }
             });
             jmsConnections.clear();
-            cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
+            cleanupConnections(testingContextWithRandomNs.getSolution().getUsername());
         } finally {
             amqp10Server.stopServer();
             amqp10Server = null;
@@ -308,7 +308,7 @@ public class Amqp10HonoConnectivityIT extends AbstractConnectivityITCommon<Block
 
         // get the thing via http-api
         final Response response = getThing(2, thingId)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.OK)
                 .useAwaitility(Awaitility.await().atMost(Duration.ofSeconds(10)))
                 .withLogging(LOGGER, "thing")
@@ -340,7 +340,7 @@ public class Amqp10HonoConnectivityIT extends AbstractConnectivityITCommon<Block
 
         // get the thing via http-api
         final Response response = getThing(2, thingId)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.OK)
                 .useAwaitility(Awaitility.await().atMost(Duration.ofSeconds(10)))
                 .withLogging(LOGGER, "thing")
@@ -350,11 +350,11 @@ public class Amqp10HonoConnectivityIT extends AbstractConnectivityITCommon<Block
         assertThat(thing.getEntityId().orElseThrow().toString()).hasToString(thingId.toString());
         assertThat(thing.getPolicyId().orElseThrow().toString()).hasToString(thingId.toString());
         final Policy policy = PoliciesModelFactory.newPolicy(getPolicy(thingId)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingStatusCode(HttpVerbMatcher.is(HttpStatus.OK))
                 .fire().body().asString());
 
-        final var username = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername();
+        final var username = testingContextWithRandomNs.getSolution().getUsername();
         final PolicyEntry expectedDeviceManagementEntry = PoliciesModelFactory.newPolicyEntry("DEVICE-MANAGEMENT",
                 Subjects.newInstance(
                         Subject.newInstance("integration:" + username + ":iot-manager",
@@ -444,7 +444,7 @@ public class Amqp10HonoConnectivityIT extends AbstractConnectivityITCommon<Block
         LOGGER.info("Creating an AMQP1.0 connection with name <{}> to <{}:{}> in Ditto Connectivity",
                 connectionName, AMQP10_HONO_HOSTNAME, AMQP10_HONO_PORT);
         final Connection connection = connectionModelFactory.buildConnectionModel(
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(),
+                testingContextWithRandomNs.getSolution().getUsername(),
                 connectionName,
                 AMQP10_TYPE,
                 getAmqpUri(false, true),

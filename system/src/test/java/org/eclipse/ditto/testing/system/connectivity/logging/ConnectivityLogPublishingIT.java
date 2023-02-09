@@ -211,15 +211,13 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
         final ConnectivityFactory connectivityFactory =
                 ConnectivityFactory.of(ConnectivityLogPublishingIT.class.getSimpleName(),
                         new ConnectionModelFactory((username, suffix) -> preAuthenticatedConnectionSubject),
-                        () -> testingContext.getSolution(),
                         ConnectionType.KAFKA,
                         ConnectivityLogPublishingIT::getConnectionUri,
                         ConnectivityLogPublishingIT::getSpecificConfig,
                         ConnectivityLogPublishingIT::defaultTargetAddress,
                         ConnectivityLogPublishingIT::defaultSourceAddress,
                         connectionId -> null,
-                        () -> DISABLED_SSH_TUNNEL,
-                        testingContext.getOAuthClient());
+                        () -> DISABLED_SSH_TUNNEL);
 
         final Response response = connectivityFactory.setupSingleConnection(connectionName)
                 .get(50, TimeUnit.SECONDS);

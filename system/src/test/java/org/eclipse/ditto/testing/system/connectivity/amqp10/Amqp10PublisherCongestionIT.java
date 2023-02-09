@@ -101,15 +101,13 @@ public class Amqp10PublisherCongestionIT extends AbstractConnectivityITCommon<Bl
         super(ConnectivityFactory.of(
                 "AmqpHono",
                 connectionModelFactory,
-                () -> SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(),
                 AMQP10_TYPE,
                 Amqp10PublisherCongestionIT::getAmqpUri,
                 () -> Map.of("jms.closeTimeout", "0", "jms.sendTimeout", "120000"),
                 Amqp10PublisherCongestionIT::defaultTargetAddress,
                 Amqp10PublisherCongestionIT::defaultSourceAddress,
                 id -> AMQP_ENFORCEMENT,
-                () -> SSH_TUNNEL_CONFIG,
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient()));
+                () -> SSH_TUNNEL_CONFIG));
         connectivityWorker = new Amqp10ConnectivityWorker(LOGGER,
                 () -> jmsMessageListeners,
                 () -> jmsSenders,
@@ -126,7 +124,9 @@ public class Amqp10PublisherCongestionIT extends AbstractConnectivityITCommon<Bl
     }
 
     @Before
+    @Override
     public void setupConnectivity() throws Exception {
+        super.setupConnectivity();
         sourceAddress = cf.disambiguate("testSource");
         targetAddress = cf.disambiguate("testTarget");
 
@@ -156,7 +156,7 @@ public class Amqp10PublisherCongestionIT extends AbstractConnectivityITCommon<Bl
                 }
             });
             jmsConnections.clear();
-            cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
+            cleanupConnections(testingContextWithRandomNs.getSolution().getUsername());
         } finally {
             amqp10Server.stopServer();
             amqp10Server = null;
@@ -173,27 +173,27 @@ public class Amqp10PublisherCongestionIT extends AbstractConnectivityITCommon<Bl
                 .build();
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject())
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
                 .setSubject(connectionSubject(cf.connectionName1))
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
                 .build();
 
         putThingWithPolicy(2, thing, policy, V_2)
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
         // WHEN: connection1 is flooded with enough events to fill the 100 element queue and 10 sending futures
         IntStream.range(0, 1010)
                 .forEach(i -> putAttribute(2, thingId, "x", "5")
-                        .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                        .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                         .expectingStatusCodeSuccessful()
                         .fire());
 
         // THEN: connection1 drops subsequent events
         final Response response = putAttribute(2, thingId, "x", "5")
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .withHeader("requested-acks", ConnectionModelFactory.toAcknowledgementLabel(
                         cf.getConnectionId(cf.connectionName1),
                         defaultTargetAddress(cf.connectionName1))

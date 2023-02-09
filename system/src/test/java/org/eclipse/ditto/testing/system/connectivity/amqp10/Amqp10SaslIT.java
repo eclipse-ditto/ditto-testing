@@ -49,15 +49,13 @@ public class Amqp10SaslIT extends AbstractConnectivityITCommon<BlockingQueue<Mes
         super(ConnectivityFactory.of(
                 "Amqp10Sasl",
                 connectionModelFactory,
-                () -> SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution(),
                 ConnectionType.AMQP_10,
                 Amqp10SaslIT::getAmqpUri,
                 () -> Collections.singletonMap("jms.closeTimeout", "0"),
                 Amqp10SaslIT::defaultTargetAddress,
                 Amqp10SaslIT::defaultSourceAddress,
                 id -> null,
-                () -> null,
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient()));
+                () -> null));
     }
 
     @Override
@@ -66,7 +64,9 @@ public class Amqp10SaslIT extends AbstractConnectivityITCommon<BlockingQueue<Mes
     }
 
     @Before
+    @Override
     public void setupConnectivity() throws Exception {
+        super.setupConnectivity();
         amqp10Server = new Amqp10TestServer(CONFIG.getAmqp10HonoPort());
         amqp10Server.startServer();
     }
@@ -74,7 +74,7 @@ public class Amqp10SaslIT extends AbstractConnectivityITCommon<BlockingQueue<Mes
     @After
     public void cleanupConnectivity() throws Exception {
         try {
-            cleanupConnections(SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername());
+            cleanupConnections(testingContextWithRandomNs.getSolution().getUsername());
         } finally {
             amqp10Server.stopServer();
             amqp10Server = null;
@@ -85,9 +85,9 @@ public class Amqp10SaslIT extends AbstractConnectivityITCommon<BlockingQueue<Mes
     @Connections(ConnectionCategory.NONE)
     public void azSaslPlain() {
         // WHEN: An open AMQP connection is created with HMAC credentials with the algorithm "az-sasl".
-        final Solution solution = SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution();
+        final Solution solution = testingContextWithRandomNs.getSolution();
         final String connectionName = cf.disambiguateConnectionName(
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername(), "AmqpWithAzSaslAuth");
+                testingContextWithRandomNs.getSolution().getUsername(), "AmqpWithAzSaslAuth");
         final String skn = "RootSharedAccessKeyPolicy";
         final String endpointWithoutAzureSuffix = "localhost";
         final String endpoint = endpointWithoutAzureSuffix + ".azure-devices.net";

@@ -26,8 +26,8 @@ import org.eclipse.ditto.things.model.Feature;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.signals.commands.modify.CreateThing;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
+import org.junit.After;
+import org.junit.Before;
 
 /**
  * Integration test cases for Connectivity tests which only support targets (e.g. HTTP).
@@ -38,7 +38,7 @@ import org.junit.BeforeClass;
  */
 public abstract class AbstractTargetOnlyTestCases<C, M> extends AbstractConnectivityITestCases<C, M> {
 
-    private static ConnectivityTestWebsocketClient websocketClient;
+    private ConnectivityTestWebsocketClient websocketClient;
 
     protected AbstractTargetOnlyTestCases(final ConnectivityFactory cf) {
         super(cf);
@@ -49,15 +49,17 @@ public abstract class AbstractTargetOnlyTestCases<C, M> extends AbstractConnecti
         return false;
     }
 
-    @BeforeClass
-    public static void setUpWebsocketClient() {
+    @Before
+    @Override
+    public void setupConnectivity() throws Exception {
+        super.setupConnectivity();
         websocketClient = ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2),
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken());
+                testingContextWithRandomNs.getOAuthClient().getAccessToken());
         websocketClient.connect("kafka-source-replacement-websocket-" + UUID.randomUUID());
     }
 
-    @AfterClass
-    public static void closeWebsocketClient() {
+    @After
+    public void closeWebsocketClient() {
         if (websocketClient != null) {
             websocketClient.disconnect();
             websocketClient = null;

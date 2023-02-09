@@ -93,15 +93,13 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
     protected static final ProtocolAdapter PROTOCOL_ADAPTER = DittoProtocolAdapter.of(HeaderTranslator.empty());
 
     protected static final ConnectivityTestConfig CONFIG = ConnectivityTestConfig.getInstance();
-
-    protected static TestingContext SOLUTION_CONTEXT_WITH_RANDOM_NS;
-    protected static String RANDOM_NAMESPACE;
-
-    protected static String RANDOM_NAMESPACE_2;
+    static final Map<String, Function<Connection, Connection>> MODS = new ConcurrentHashMap<>();
 
     protected static SshTunnel SSH_TUNNEL_CONFIG = getCommonSshTunnel(true);
 
-    static final Map<String, Function<Connection, Connection>> MODS = new ConcurrentHashMap<>();
+    protected TestingContext testingContextWithRandomNs;
+    protected String randomNamespace;
+    protected String randomNamespace2;
 
     public static void addMod(final String id, final Function<Connection, Connection> mod) {
         if (MODS.containsKey(id)) {
@@ -114,9 +112,9 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
         return String.format("%s:%s:%s", SubjectIssuer.INTEGRATION, username, suffix);
     }
 
-    protected static Subject connectionSubject(final String suffix) {
+    protected Subject connectionSubject(final String suffix) {
         return Subject.newInstance(SubjectIssuer.INTEGRATION,
-                SOLUTION_CONTEXT_WITH_RANDOM_NS.getSolution().getUsername() + ":" + suffix);
+                testingContextWithRandomNs.getSolution().getUsername() + ":" + suffix);
     }
 
     protected static AcknowledgementLabel connectionScopedAckLabel(final String connectionName,
@@ -127,18 +125,23 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
 
     protected static ConnectionModelFactory connectionModelFactory;
 
-    protected final ConnectivityFactory cf;
+    protected ConnectivityFactory cf;
     protected AbstractConnectivityITBase(final ConnectivityFactory cf) {
         this.cf = cf;
     }
 
     @BeforeClass
-    public static void init() {
-        RANDOM_NAMESPACE = "org.eclipse.ditto.ns1." + randomString();
-        RANDOM_NAMESPACE_2 = "org.eclipse.ditto.ns2." + randomString();
-        final Solution solution = serviceEnv.createSolution(RANDOM_NAMESPACE);
-        SOLUTION_CONTEXT_WITH_RANDOM_NS = TestingContext.withGeneratedMockClient(solution, TEST_CONFIG);
+    public static void initStatic() {
         connectionModelFactory = new ConnectionModelFactory(AbstractConnectivityITBase::connectionAuthIdentifier);
+    }
+
+    public void setupConnectivity() throws Exception {
+        randomNamespace = "org.eclipse.ditto.ns1." + randomString();
+        randomNamespace2 = "org.eclipse.ditto.ns2." + randomString();
+        final Solution solution = serviceEnv.createSolution(randomNamespace);
+        testingContextWithRandomNs = TestingContext.withGeneratedMockClient(solution, TEST_CONFIG);
+        cf = cf.withSolutionSupplier(() -> testingContextWithRandomNs.getSolution())
+                .withAuthClient(testingContextWithRandomNs.getOAuthClient());
     }
 
     protected static Response deleteConnection(final ConnectionId connectionId) {
@@ -462,7 +465,7 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
         final PolicyId policyId = PolicyId.of(thingId);
         final PolicyBuilder.LabelScoped policyBuilder = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("default")
-                .setSubject(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getDefaultSubject());
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject());
 
         for (final String name : authorizedConnectionNames) {
             policyBuilder.setSubject(connectionSubject(name));
@@ -472,7 +475,7 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
                 .setGrantedPermissions("policy", "/", "READ", "WRITE")
                 .setGrantedPermissions("message", "/", "READ", "WRITE");
         putPolicy(policyId, policyBuilder.build())
-                .withJWT(SOLUTION_CONTEXT_WITH_RANDOM_NS.getOAuthClient().getAccessToken())
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
         return policyId;

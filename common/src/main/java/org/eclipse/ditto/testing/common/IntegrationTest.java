@@ -131,7 +131,7 @@ public abstract class IntegrationTest {
     public static final ConditionFactory AWAITILITY_DEFAULT_CONFIG = Awaitility.await().atMost(5, TimeUnit.SECONDS);
 
     protected static ServiceEnvironment serviceEnv;
-    private static IdGenerator defaultIdGenerator;
+    protected static IdGenerator defaultIdGenerator;
 
     private static ConnectionsClient connectionsClient;
 

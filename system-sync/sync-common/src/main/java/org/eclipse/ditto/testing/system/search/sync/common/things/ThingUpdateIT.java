@@ -29,6 +29,8 @@ import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonObjectBuilder;
+import org.eclipse.ditto.testing.common.IdGenerator;
+import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.VersionedSearchIntegrationTest;
 import org.eclipse.ditto.testing.common.matcher.search.SearchResponseExtractors;
 import org.eclipse.ditto.testing.system.search.sync.common.SearchSyncTestConfig;
@@ -40,6 +42,7 @@ import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.ThingsModelFactory;
 import org.eclipse.ditto.thingsearch.model.SearchFilter;
 import org.eclipse.ditto.thingsearch.model.SearchResult;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 /**
@@ -54,6 +57,13 @@ public final class ThingUpdateIT extends VersionedSearchIntegrationTest {
     private static final String NEW_ATTR_VAL = "attrNewVal";
     private static final String FEATURE_PROPERTY_KEY = "featurePropertyKey";
     private static final String FEATURE_PROPERTY_VAL = "featurePropertyVal";
+
+    private static final String RANDOM_NAMESPACE = ServiceEnvironment.createRandomDefaultNamespace();
+
+    @BeforeClass
+    public static void initStatics() {
+        defaultIdGenerator = IdGenerator.fromNamespace(RANDOM_NAMESPACE);
+    }
 
     private static FeatureProperties newFeatureProperties(final String key, final String value) {
         final JsonObjectBuilder featurePropertiesBuilder = JsonFactory.newObjectBuilder();

@@ -95,8 +95,8 @@ import io.restassured.response.Response;
 
 /**
  * System test verifying that connection log publishing works by consuming published connection logs via a Kafka topic.
- * The "Fluent Bit" docker container in the system tests is configured to forward the logs to a Kafka topic
- * {@link #KAFKA_TOPIC_FLUENTBIT_LOG_OUTPUT},
+ * The "Fluent Bit" docker container in the system tests is configured to forward the logs to a Kafka topic with the
+ * topic of the connectionId.
  */
 @RunIf(DockerEnvironment.class)
 public class ConnectivityLogPublishingIT extends IntegrationTest {
@@ -117,7 +117,6 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
     private static final String KAFKA_SERVICE_HOSTNAME = CONFIG.getKafkaHostname();
     private static final int KAFKA_SERVICE_PORT = CONFIG.getKafkaPort();
 
-    private static final String KAFKA_TOPIC_FLUENTBIT_LOG_OUTPUT = "fluentbit-log-output";
     private static final Duration KAFKA_POLL_TIMEOUT = Duration.ofSeconds(5);
 
     private static final String RESPONSES_ADDRESS = "_responses";
@@ -193,23 +192,8 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
     public void setupTest() throws ExecutionException, InterruptedException, TimeoutException {
         connectionName = "Kafka-" + UUID.randomUUID();
 
-        LOGGER.info("Preparing Kafka at {}:{}", KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT);
-        KafkaConnectivityWorker.setupKafka(KAFKA_TEST_CLIENT_ID, KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT,
-                KAFKA_TEST_USERNAME, KAFKA_TEST_PASSWORD,
-                List.of(defaultTargetAddress(connectionName), defaultSourceAddress(connectionName),
-                        KAFKA_TOPIC_FLUENTBIT_LOG_OUTPUT), LOGGER);
-
-        kafkaLogOutputConsumer = KafkaConnectivityWorker.setupKafkaConsumer(KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT,
-                KAFKA_TEST_USERNAME, KAFKA_TEST_PASSWORD, connectionName);
-        topicPartition = new TopicPartition(KAFKA_TOPIC_FLUENTBIT_LOG_OUTPUT, 0);
-        kafkaLogOutputConsumer.assign(List.of(topicPartition));
-        kafkaLogOutputConsumerSeekToEnd();
-
-        kafkaProducer = KafkaConnectivityWorker.setupKafkaProducer(KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT,
-                KAFKA_TEST_USERNAME, KAFKA_TEST_PASSWORD, connectionName);
-
         final ConnectivityFactory connectivityFactory =
-                ConnectivityFactory.of(ConnectivityLogPublishingIT.class.getSimpleName(),
+                ConnectivityFactory.of(connectionName,
                         new ConnectionModelFactory((username, suffix) -> preAuthenticatedConnectionSubject),
                         ConnectionType.KAFKA,
                         ConnectivityLogPublishingIT::getConnectionUri,
@@ -225,6 +209,20 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
         final Connection connection = ConnectivityModelFactory.connectionFromJson(
                 JsonFactory.newObject(response.getBody().asString()));
         createdConnectionId = connection.getId();
+
+        LOGGER.info("Preparing Kafka at {}:{}", KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT);
+        KafkaConnectivityWorker.setupKafka(KAFKA_TEST_CLIENT_ID, KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT,
+                KAFKA_TEST_USERNAME, KAFKA_TEST_PASSWORD,
+                List.of(defaultTargetAddress(connectionName), defaultSourceAddress(connectionName)), LOGGER);
+
+        kafkaLogOutputConsumer = KafkaConnectivityWorker.setupKafkaConsumer(KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT,
+                KAFKA_TEST_USERNAME, KAFKA_TEST_PASSWORD, connectionName);
+        topicPartition = new TopicPartition(createdConnectionId.toString(), 0);
+        kafkaLogOutputConsumer.assign(List.of(topicPartition));
+        kafkaLogOutputConsumerSeekToEnd();
+
+        kafkaProducer = KafkaConnectivityWorker.setupKafkaProducer(KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT,
+                KAFKA_TEST_USERNAME, KAFKA_TEST_PASSWORD, connectionName);
     }
 
     private void kafkaLogOutputConsumerSeekToEnd() {
@@ -360,14 +358,14 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
             }
 
             final List<TestLogEntry> parsedLogRecords = StreamSupport.stream(topicRecords.spliterator(), false)
-                    .filter(cr -> KAFKA_TOPIC_FLUENTBIT_LOG_OUTPUT.equals(cr.topic()))
+                    .filter(cr -> createdConnectionId.toString().equals(cr.topic()))
                     .map(ConsumerRecord::value)
                     .map(bytes -> new String(bytes, StandardCharsets.UTF_8))
                     .map(TestLogEntry::fromJsonString)
-                    .collect(Collectors.toList());
+                    .toList();
             kafkaLogOutputConsumer.commitSync();
             LOGGER.info("Polled <{}> records from Kafka topic <{}>:\n[\n\t{}\n]", parsedLogRecords.size(),
-                    KAFKA_TOPIC_FLUENTBIT_LOG_OUTPUT, parsedLogRecords.stream()
+                    createdConnectionId, parsedLogRecords.stream()
                             .map(TestLogEntry::toString)
                             .collect(Collectors.joining("\n\t"))
             );

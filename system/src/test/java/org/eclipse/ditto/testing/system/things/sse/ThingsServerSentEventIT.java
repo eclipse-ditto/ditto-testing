@@ -368,6 +368,7 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
         final Attributes attributes = Attributes.newBuilder()
                 .set(counterKey, 0)
                 .build();
+
         final Thing thing1 = Thing.newBuilder()
                 .setId(thingId1)
                 .setAttributes(attributes)
@@ -378,7 +379,7 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
                 .fire();
 
         final int expectedMessagesCount = 2;
-        final var path = getDefaultPath("extraFields=attributes/counter");
+        final var path = getDefaultPath("namespaces=" + interestingNamespace + "&extraFields=attributes/counter");
         final SseTestDriver driver = createTestDriver(expectedMessagesCount, path);
         driver.connect();
 

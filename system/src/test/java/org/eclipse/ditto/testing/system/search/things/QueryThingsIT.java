@@ -54,9 +54,6 @@ import org.junit.experimental.runners.Enclosed;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-/**
- *
- */
 @Timeout(millis = Long.MAX_VALUE)
 @RunWith(Enclosed.class)
 @Category(Acceptance.class)

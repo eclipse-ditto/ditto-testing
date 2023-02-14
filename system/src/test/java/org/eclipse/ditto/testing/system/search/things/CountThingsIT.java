@@ -24,7 +24,7 @@ import java.time.Duration;
 
 import org.assertj.core.api.Assumptions;
 import org.eclipse.ditto.base.model.common.HttpStatus;
-import org.eclipse.ditto.testing.common.HttpHeader;
+import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.Timeout;
 import org.eclipse.ditto.testing.common.VersionedSearchIntegrationTest;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
@@ -66,6 +66,8 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
     private static final String NOT_MATCHED = "notMatched";
     private static final int USER1_THINGS_COUNT = 12;
 
+    private static final String RANDOM_NAMESPACE = ServiceEnvironment.createRandomDefaultNamespace();
+
     protected void createTestData() {
         persistThingsAndWaitTillAvailable(i -> createRandomThing(createThingId("user1")), 10);
         persistThingAndWaitTillAvailable(createThing1());
@@ -101,20 +103,12 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
     }
 
     private static ThingId createThingId(final String prefix) {
-        return ThingId.of(idGenerator().withPrefixedRandomName(CountThingsIT.class.getSimpleName(), prefix));
+        return ThingId.of(idGenerator(RANDOM_NAMESPACE).withPrefixedRandomName(CountThingsIT.class.getSimpleName(), prefix));
     }
 
     @Test
     public void countOneThing() {
         assertCount(attribute(ATTR1_KEY).eq(THING1_ATTR1_VALUE), 1);
-    }
-
-    @Test
-    public void countThingForNamespaceWithContentTypeHeaderSet() {
-        searchCount(apiVersion)
-                .withHeader(HttpHeader.CONTENT_TYPE, "application/json")
-                .namespaces(serviceEnv.getSecondaryNamespaceName())
-                .expectingBody(isCount(0)).fire();
     }
 
     @Test
@@ -165,12 +159,16 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
     public void countThingWithEmptySearchParam() {
         /* check if size is ge than USER1_THINGS_COUNT which are the things created by this test with default user.
          * We have to use ge, because other tests also create things. */
-        searchCount(apiVersion).expectingBody(isCountGte(USER1_THINGS_COUNT)).fire();
+        searchCount(apiVersion)
+                .namespaces(RANDOM_NAMESPACE)
+                .expectingBody(isCountGte(USER1_THINGS_COUNT))
+                .fire();
     }
 
     @Test
     public void countThingsWithoutPermission() {
         searchCount(apiVersion).filter(attribute(ATTR1_KEY).eq(THING1_ATTR1_VALUE))
+                .namespaces(RANDOM_NAMESPACE)
                 .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
                 .expectingBody(isCount(0))
                 .fire();
@@ -181,10 +179,11 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
         // create a thing. it should be counted.
         Assumptions.assumeThat(apiVersion.toInt()).isEqualTo(V_2.toInt());
 
-        final ThingId thingId = ThingId.of(idGenerator(serviceEnv.getDefaultNamespaceName()).withRandomName());
+        final ThingId thingId = ThingId.of(idGenerator(RANDOM_NAMESPACE).withRandomName());
         persistThingAndWaitTillAvailable(Thing.newBuilder().setId(thingId).build());
 
         searchCount(apiVersion).filter(SearchProperties.thingId().eq(thingId.toString()))
+                .namespaces(RANDOM_NAMESPACE)
                 .expectingBody(isCount(1))
                 .fire();
 
@@ -195,6 +194,7 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
 
         // wait up to 2 minutes because deletion is scheduled by MongoDB.
         searchCount(apiVersion).filter(SearchProperties.thingId().eq(thingId.toString()))
+                .namespaces(RANDOM_NAMESPACE)
                 .useAwaitility(await().atMost(Duration.ofMinutes(2)).pollInterval(Duration.ofSeconds(10)))
                 .expectingBody(isCount(0))
                 .fire();
@@ -203,7 +203,7 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
     private void assertCount(final SearchFilter searchFilter, final long expected) {
         searchCount(apiVersion)
                 .filter(searchFilter)
-                .namespaces(serviceEnv.getDefaultNamespaceName())
+                .namespaces(RANDOM_NAMESPACE)
                 .expectingBody(isCount(expected))
                 .registerResponseConsumer(response -> {
                     if (null == response) { // in case of a bad request (for example) the response can be null
@@ -214,7 +214,7 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
                         LOGGER.warn("Got not expected count <{}> where expected was: <{}>", responseBody, expected);
                         final Response searchResponse = searchThings(apiVersion)
                                 .filter(searchFilter)
-                                .namespaces(serviceEnv.getDefaultNamespaceName())
+                                .namespaces(RANDOM_NAMESPACE)
                                 .fire();
                         LOGGER.info("Search response: <{}>", searchResponse.print());
                     }

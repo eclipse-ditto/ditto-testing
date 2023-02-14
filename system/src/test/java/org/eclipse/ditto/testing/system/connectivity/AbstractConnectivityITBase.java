@@ -43,7 +43,6 @@ import org.eclipse.ditto.connectivity.model.Credentials;
 import org.eclipse.ditto.connectivity.model.SshTunnel;
 import org.eclipse.ditto.connectivity.model.UserPasswordCredentials;
 import org.eclipse.ditto.json.JsonFactory;
-import org.eclipse.ditto.json.JsonFieldSelector;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.messages.model.Message;
@@ -152,17 +151,15 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
     }
 
     protected static List<ConnectionId> getAllConnectionIds(final String connectionNamePrefixToMatch) {
-        final Response response = connectionsClient().getConnections(
-                        JsonFieldSelector.newInstance("id", "name")
-                )
+        final Response response = connectionsClient().getConnectionIds()
                 .withDevopsAuth()
                 .fire();
 
         return JsonFactory.newArray(response.body().asString()).stream()
                 .filter(JsonValue::isObject)
                 .map(JsonValue::asObject)
-                .filter(idAndName -> idAndName.getValue(Connection.JsonFields.NAME)
-                        .filter(name -> name.startsWith(connectionNamePrefixToMatch))
+                .filter(conObj -> conObj.getValue(Connection.JsonFields.ID)
+                        .filter(id -> id.startsWith(connectionNamePrefixToMatch))
                         .isPresent()
                 )
                 .map(idAndName -> ConnectionId.of(idAndName.getValueOrThrow(Connection.JsonFields.ID)))

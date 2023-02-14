@@ -19,14 +19,10 @@ import java.util.UUID;
 
 import org.apache.commons.lang3.RandomStringUtils;
 import org.eclipse.ditto.base.model.common.HttpStatus;
-import org.eclipse.ditto.connectivity.model.signals.commands.ConnectivityCommand;
 import org.eclipse.ditto.json.JsonObject;
-import org.eclipse.ditto.testing.common.client.ConnectionsClient;
 import org.eclipse.ditto.testing.common.matcher.PostMatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import io.restassured.response.Response;
 
 /**
  * This class sets up a Ditto environment for testing.
@@ -144,8 +140,7 @@ public final class ServiceEnvironment {
 
 
     public static String createRandomDefaultNamespace() {
-        final String randomNamespace = createRandomNamespace(DEFAULT_NAMESPACE_PREFIX);
-        return createDefaultNamespace(randomNamespace);
+        return createRandomNamespace(DEFAULT_NAMESPACE_PREFIX);
     }
 
     private static String createRandomNamespace(final String namespacePrefix) {
@@ -153,16 +148,6 @@ public final class ServiceEnvironment {
         return namespacePrefix + RandomStringUtils.randomAlphabetic(1) + RandomStringUtils.randomAlphanumeric(10);
     }
 
-
-    private static String createDefaultNamespace(final CharSequence name) {
-        return DEFAULT_NAMESPACE_PREFIX + name;
-    }
-    public Response executeConnectionsCommand(final ConnectivityCommand<?> command,
-            final HttpStatus... allowedPiggyCommandResponseStatuses) {
-
-        final ConnectionsClient connectionsClient = ConnectionsClient.getInstance();
-        return connectionsClient.executeCommand(command, allowedPiggyCommandResponseStatuses);
-    }
 
     public PostMatcher postPiggy(final String piggyBackSubUrl, final JsonObject jsonPiggyCommand,
             final String targetActorSelection) {

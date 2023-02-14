@@ -217,7 +217,8 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
                         ConnectivityLogPublishingIT::defaultTargetAddress,
                         ConnectivityLogPublishingIT::defaultSourceAddress,
                         connectionId -> null,
-                        () -> DISABLED_SSH_TUNNEL);
+                        () -> DISABLED_SSH_TUNNEL
+                ).withSolutionSupplier(() -> testingContext.getSolution());
 
         final Response response = connectivityFactory.setupSingleConnection(connectionName)
                 .get(50, TimeUnit.SECONDS);

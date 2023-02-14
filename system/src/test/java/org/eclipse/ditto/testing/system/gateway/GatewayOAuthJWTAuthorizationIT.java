@@ -25,6 +25,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;
 import org.eclipse.ditto.base.model.common.HttpStatus;
+import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.policies.api.Permission;
@@ -37,11 +38,14 @@ import org.eclipse.ditto.policies.model.Resources;
 import org.eclipse.ditto.policies.model.Subjects;
 import org.eclipse.ditto.protocol.Adaptable;
 import org.eclipse.ditto.testing.common.IntegrationTest;
+import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.TestingContext;
+import org.eclipse.ditto.testing.common.ThingJsonProducer;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.common.ws.ThingsWebsocketClient;
+import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -51,19 +55,20 @@ import org.junit.experimental.categories.Category;
  */
 public final class GatewayOAuthJWTAuthorizationIT extends IntegrationTest {
 
+    private static final String RANDOM_NAMESPACE = ServiceEnvironment.createRandomDefaultNamespace();
+
     @Test
     @Category({Acceptance.class})
     public void postThingWithOAuthToken() throws IllegalStateException {
         final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
         final String jwtToken = authClient.getAccessToken();
 
-        final String location = postThing(TestConstants.API_V_2)
+        final ThingId thingId = ThingId.of(idGenerator(RANDOM_NAMESPACE).withRandomName());
+
+        putThing(TestConstants.API_V_2, Thing.newBuilder().setId(thingId).build(), JsonSchemaVersion.V_2)
                 .withJWT(jwtToken)
                 .expectingHttpStatus(HttpStatus.CREATED)
-                .fire()
-                .header("Location");
-
-        final String thingId = parseIdFromLocation(location);
+                .fire();
 
         final EffectedPermissions readWriteGranted =
                 EffectedPermissions.newInstance(Arrays.asList(Permission.READ, Permission.WRITE), null);
@@ -124,20 +129,19 @@ public final class GatewayOAuthJWTAuthorizationIT extends IntegrationTest {
         });
         assertThat(thingsWebsocketClient.isOpen()).isTrue();
         final CompletableFuture<Void> ackConfirmed =
-                thingsWebsocketClient.sendProtocolCommand("START-SEND-EVENTS?extraFields=attributes",
+                thingsWebsocketClient.sendProtocolCommand("START-SEND-EVENTS?namespaces=" + RANDOM_NAMESPACE + "&extraFields=attributes",
                         "START-SEND-EVENTS:ACK");
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofSeconds(1))
                 .untilAsserted(() -> Assertions.assertThat(ackConfirmed.isDone()).isTrue());
 
-        final String location = postThing(TestConstants.API_V_2)
+        final ThingId thingId = ThingId.of(idGenerator(RANDOM_NAMESPACE).withRandomName());
+        final Thing thing = new ThingJsonProducer().getThing().toBuilder().setId(thingId).build();
+        putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
                 .withJWT(restJwtToken)
                 .expectingHttpStatus(HttpStatus.CREATED)
-                .fire()
-                .header("Location");
-
-        final String thingId = parseIdFromLocation(location);
+                .fire();
 
         final EffectedPermissions readWriteGranted =
                 EffectedPermissions.newInstance(Arrays.asList(Permission.READ, Permission.WRITE), null);

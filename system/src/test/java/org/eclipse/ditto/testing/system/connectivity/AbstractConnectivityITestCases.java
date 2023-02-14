@@ -234,9 +234,13 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Then
         final M message = consumeResponse(correlationId, consumer);
+        LOGGER.info("Received expected response message: {}", message);
         // Connection should only get response via one source.
         try {
             final M message2 = consumeResponse(correlationId, consumer);
+            if (null != message2) {
+                LOGGER.error("Received unexpected response message: {}", message);
+            }
             assertThat(message2).isNull();
         } catch (final Exception e){
             assertThat(e).isNotNull();

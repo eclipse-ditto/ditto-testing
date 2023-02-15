@@ -309,11 +309,31 @@ public class QueryThingsWithFilterByAttributesIT extends VersionedSearchIntegrat
     }
 
     /**
+     * Test to check starts with functionality, ignoring case sensitivity.
+     */
+    @Test
+    public void queryByILikeString1() {
+        search(attribute(REGEX_ATTR).ilike(THING1_REGEX_STARTS_WITH.toLowerCase()))
+                .expectingBody(isEqualTo(toThingResult(thing1Id)))
+                .fire();
+    }
+
+    /**
      * Test to check contains functionality
      */
     @Test
     public void queryByLikeString2() {
         search(attribute(REGEX_ATTR).like(THING2_REGEX_CONTAINS))
+                .expectingBody(isEqualTo(toThingResult(thing2Id)))
+                .fire();
+    }
+
+    /**
+     * Test to check contains functionality, ignoring case sensitivity.
+     */
+    @Test
+    public void queryByILikeString2() {
+        search(attribute(REGEX_ATTR).ilike(THING2_REGEX_CONTAINS.toUpperCase()))
                 .expectingBody(isEqualTo(toThingResult(thing2Id)))
                 .fire();
     }

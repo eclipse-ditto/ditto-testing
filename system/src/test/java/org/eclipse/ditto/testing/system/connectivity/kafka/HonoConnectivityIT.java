@@ -262,7 +262,7 @@ public final class HonoConnectivityIT extends
                 ConnectionType.HONO,
                 "tcp://" + KAFKA_TEST_HOSTNAME + ":9092",
                 Map.of("bootstrapServers", KAFKA_TEST_HOSTNAME +":" + KAFKA_TEST_PORT),
-                parameter.equals("badSource") ? "topic1" : "events",
+                parameter.equals("badSource") ? "topic1" : "event",
                 parameter.equals("badTarget") ? "topic2" : "command");
 
         final JsonObject connectionWithoutId = ConnectivityFactory.removeIdFromJson(connection.toJson());
@@ -272,7 +272,7 @@ public final class HonoConnectivityIT extends
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .expectingErrorCode("connectivity:connection.configuration.invalid")
-                .expectingBody(Matchers.containsString("It should be one of the defined aliases:"))
+                .expectingBody(Matchers.containsString("is invalid. It should be "))
                 .fire();
     }
 

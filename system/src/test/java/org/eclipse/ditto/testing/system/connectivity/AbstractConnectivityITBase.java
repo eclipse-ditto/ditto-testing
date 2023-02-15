@@ -156,13 +156,10 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
                 .fire();
 
         return JsonFactory.newArray(response.body().asString()).stream()
-                .filter(JsonValue::isObject)
-                .map(JsonValue::asObject)
-                .filter(conObj -> conObj.getValue(Connection.JsonFields.ID)
-                        .filter(id -> id.startsWith(connectionNamePrefixToMatch))
-                        .isPresent()
-                )
-                .map(idAndName -> ConnectionId.of(idAndName.getValueOrThrow(Connection.JsonFields.ID)))
+                .filter(JsonValue::isString)
+                .map(JsonValue::asString)
+                .filter(id -> id.startsWith(connectionNamePrefixToMatch))
+                .map(ConnectionId::of)
                 .collect(Collectors.toList());
     }
 

@@ -150,7 +150,7 @@ public final class HonoConnectivityIT extends
     @Override
     public void setupConnectivity() throws Exception {
         super.setupConnectivity();
-        tenantId = "honoTenantId";
+        tenantId = cf.connectionHonoName;
 
         LOGGER.info("Preparing Kafka at {}:{}", KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT);
 

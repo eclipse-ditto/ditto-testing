@@ -717,13 +717,13 @@ public final class ConnectivityFactory {
 
     public CompletableFuture<Response> asyncCreateConnection(final Solution solution, final JsonObject connection) {
 
-        final JsonObject connectionJsonWithoutId = removeIdFromJson(connection);
         final String connectionName = getConnectionName(connection);
         final ConnectivityStatus desiredStatus = getDesiredConnectionStatus(connection);
 
         return CompletableFuture.supplyAsync(() ->
                         ConnectionsClient.getInstance()
-                                .postConnection(connectionJsonWithoutId)
+                                .putConnection(connection.getValue(Connection.JsonFields.ID).orElse(connectionName),
+                                        connection)
                                 .withDevopsAuth()
                                 .withHeader(HttpHeader.TIMEOUT, 60)
                                 .expectingHttpStatus(HttpStatus.CREATED)

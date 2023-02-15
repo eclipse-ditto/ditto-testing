@@ -3,30 +3,30 @@
     <option name="ALTERNATIVE_JRE_PATH" value="17" />
     <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
     <envs>
-      <env name="INSTANCE_INDEX" value="1" />
-      <env name="LOG_LEVEL" value="INFO" />
-      <env name="LOG_LEVEL_APPLICATION" value="INFO" />
       <env name="AMQP10_CONSUMER_THROTTLING_ENABLED" value="true" />
       <env name="AMQP10_CONSUMER_THROTTLING_INTERVAL" value="1s" />
       <env name="AMQP10_CONSUMER_THROTTLING_LIMIT" value="10" />
+      <env name="CONNECTION_SOURCE_NUMBER" value="10" />
+      <env name="CONNECTIVITY_ALL_CLIENT_ACTORS_ON_ONE_NODE" value="true" />
+      <env name="CONNECTIVITY_CONNECTION_ALLOWED_HOSTNAMES" value="127.0.0.1,localhost,artemis,system-test-container,kafka,mqtt,rabbitmq,ssh,unknown,oauth,172.17.0.1,hono-endpoint" />
+      <env name="CONNECTIVITY_CONNECTION_BLOCKED_HOSTNAMES" value="127.0.0.1" />
+      <env name="CONNECTIVITY_HTTP_OAUTH2_ENFORCE_HTTPS" value="false" />
+      <env name="CONNECTIVITY_HTTP_PUSH_MAX_QUEUE_SIZE" value="100" />
+      <env name="CONNECTIVITY_LOGGER_PUBLISHER_ENABLED" value="false" />
+      <env name="CONNECTIVITY_LOGGER_PUBLISHER_FLUENCY_HOST" value="localhost" />
+      <env name="CONNECTIVITY_MQTT_RECONNECT_FOR_REDELIVERY" value="true" />
+      <env name="CONNECTIVITY_MQTT_SEPARATE_PUBLISHER_CLIENT" value="true" />
+      <env name="HONO_CONNECTION_BOOTSTRAP_SERVERS" value="localhost:9092" />
+      <env name="HONO_CONNECTION_HONO_PASSWORD" value="kafkaPassword" />
+      <env name="HONO_CONNECTION_HONO_USERNAME" value="kafkaUsername" />
+      <env name="HONO_CONNECTION_SASL_MECHANISM" value="PLAIN" />
+      <env name="HONO_CONNECTION_URI" value="tcp://localhost:9092" />
+      <env name="INSTANCE_INDEX" value="1" />
       <env name="KAFKA_CONSUMER_THROTTLING_ENABLED" value="true" />
       <env name="KAFKA_CONSUMER_THROTTLING_INTERVAL" value="1s" />
       <env name="KAFKA_CONSUMER_THROTTLING_LIMIT" value="10" />
-      <env name="HONO_CONNECTION_URI" value="tcp://localhost:9092" />
-      <env name="HONO_CONNECTION_BOOTSTRAP_SERVERS" value="localhost:9092" />
-      <env name="HONO_CONNECTION_SASL_MECHANISM" value="PLAIN" />
-      <env name="HONO_CONNECTION_HONO_USERNAME" value="kafkaUsername" />
-      <env name="HONO_CONNECTION_HONO_PASSWORD" value="kafkaPassword" />
-      <env name="CONNECTIVITY_HTTP_PUSH_MAX_QUEUE_SIZE" value="100" />
-      <env name="CONNECTIVITY_LOGGER_PUBLISHER_ENABLED" value="true" />
-      <env name="CONNECTIVITY_LOGGER_PUBLISHER_FLUENCY_HOST" value="localhost" />
-      <env name="CONNECTIVITY_ALL_CLIENT_ACTORS_ON_ONE_NODE" value="true" />
-      <env name="CONNECTIVITY_MQTT_RECONNECT_FOR_REDELIVERY" value="true" />
-      <env name="CONNECTIVITY_MQTT_SEPARATE_PUBLISHER_CLIENT" value="true" />
-      <env name="CONNECTIVITY_CONNECTION_ALLOWED_HOSTNAMES" value="127.0.0.1,localhost,artemis,system-test-container,kafka,mqtt,rabbitmq,ssh,unknown,oauth,172.17.0.1,hono-endpoint" />
-      <env name="CONNECTIVITY_CONNECTION_BLOCKED_HOSTNAMES" value="127.0.0.1" />
-      <env name="CONNECTION_SOURCE_NUMBER" value="10" />
-      <env name="CONNECTIVITY_HTTP_OAUTH2_ENFORCE_HTTPS" value="false" />
+      <env name="LOG_LEVEL" value="INFO" />
+      <env name="LOG_LEVEL_APPLICATION" value="INFO" />
     </envs>
     <option name="MAIN_CLASS_NAME" value="org.eclipse.ditto.connectivity.service.ConnectivityService" />
     <module name="ditto-connectivity-service" />

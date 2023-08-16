@@ -13,7 +13,7 @@
     </envs>
     <option name="MAIN_CLASS_NAME" value="org.eclipse.ditto.policies.service.starter.PoliciesService" />
     <module name="ditto-policies-service" />
-    <option name="VM_PARAMETERS" value="-Xms1g -Xmx1g -Dakka.cluster.failure-detector.acceptable-heartbeat-pause=20s" />
+    <option name="VM_PARAMETERS" value="-Xms1g -Xmx1g -Dpekko.cluster.failure-detector.acceptable-heartbeat-pause=20s" />
     <method v="2">
       <option name="Make" enabled="true" />
     </method>

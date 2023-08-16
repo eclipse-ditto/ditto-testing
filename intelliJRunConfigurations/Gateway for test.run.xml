@@ -20,7 +20,7 @@
     </envs>
     <option name="MAIN_CLASS_NAME" value="org.eclipse.ditto.gateway.service.starter.GatewayService" />
     <module name="ditto-gateway-service" />
-    <option name="VM_PARAMETERS" value="-Xms1g -Xmx1g -Dakka.cluster.failure-detector.acceptable-heartbeat-pause=20s -Dconfig.override_with_env_vars=true" />
+    <option name="VM_PARAMETERS" value="-Xms1g -Xmx1g -Dpekko.cluster.failure-detector.acceptable-heartbeat-pause=20s -Dconfig.override_with_env_vars=true" />
     <method v="2">
       <option name="Make" enabled="true" />
     </method>

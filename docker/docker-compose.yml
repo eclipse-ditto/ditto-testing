@@ -125,7 +125,7 @@ services:
       - INSTANCE_INDEX=1
       - BIND_HOSTNAME=policies
       - REMOTING_IDLE_CPU_LEVEL=2
-      - JAVA_TOOL_OPTIONS=-Xms${POLICIES_MEMORY:-1g} -Xmx${POLICIES_MEMORY:-1g} -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=policies ${TEST_JAVA_OPTIONS}
+      - JAVA_TOOL_OPTIONS=-Xms${POLICIES_MEMORY:-1g} -Xmx${POLICIES_MEMORY:-1g} -Dpekko.cluster.seed-nodes.0=pekko://ditto-cluster@policies:2551 -Dpekko.remote.artery.canonical.hostname=policies ${TEST_JAVA_OPTIONS}
       - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
       - LOG_LEVEL=INFO
       - LOG_LEVEL_APPLICATION=INFO
@@ -150,7 +150,7 @@ services:
       - TZ=Europe/Berlin
       - INSTANCE_INDEX=1
       - BIND_HOSTNAME=things
-      - JAVA_TOOL_OPTIONS=-Xms${THINGS_MEMORY:-1g} -Xmx${THINGS_MEMORY:-1g} -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=things ${TEST_JAVA_OPTIONS}
+      - JAVA_TOOL_OPTIONS=-Xms${THINGS_MEMORY:-1g} -Xmx${THINGS_MEMORY:-1g} -Dpekko.cluster.seed-nodes.0=pekko://ditto-cluster@policies:2551 -Dpekko.remote.artery.canonical.hostname=things ${TEST_JAVA_OPTIONS}
       - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
       - LOG_LEVEL=INFO
       - LOG_LEVEL_APPLICATION=INFO
@@ -174,7 +174,7 @@ services:
       - TZ=Europe/Berlin
       - INSTANCE_INDEX=1
       - BIND_HOSTNAME=things-search
-      - JAVA_TOOL_OPTIONS=-Xms${THINGS_SEARCH_MEMORY:-1g} -Xmx${THINGS_SEARCH_MEMORY:-1g} -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=things-search ${TEST_JAVA_OPTIONS} ${THINGS_SEARCH_JAVA_OPTIONS}
+      - JAVA_TOOL_OPTIONS=-Xms${THINGS_SEARCH_MEMORY:-1g} -Xmx${THINGS_SEARCH_MEMORY:-1g} -Dpekko.cluster.seed-nodes.0=pekko://ditto-cluster@policies:2551 -Dpekko.remote.artery.canonical.hostname=things-search ${TEST_JAVA_OPTIONS} ${THINGS_SEARCH_JAVA_OPTIONS}
       - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
       - LOG_LEVEL=INFO
       - LOG_LEVEL_APPLICATION=INFO
@@ -200,7 +200,7 @@ services:
       - TZ=Europe/Berlin
       - INSTANCE_INDEX=1
       - BIND_HOSTNAME=connectivity
-      - JAVA_TOOL_OPTIONS=-Xms${CONNECTIVITY_MEMORY:-2g} -Xmx${CONNECTIVITY_MEMORY:-2g} -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=connectivity ${TEST_JAVA_OPTIONS} -Dditto.connectivity.connection.snapshot.threshold=1 -Dakka.cluster.sharding.updating-state-timeout=10s
+      - JAVA_TOOL_OPTIONS=-Xms${CONNECTIVITY_MEMORY:-2g} -Xmx${CONNECTIVITY_MEMORY:-2g} -Dpekko.cluster.seed-nodes.0=pekko://ditto-cluster@policies:2551 -Dpekko.remote.artery.canonical.hostname=connectivity ${TEST_JAVA_OPTIONS} -Dditto.connectivity.connection.snapshot.threshold=1 -Dpekko.cluster.sharding.updating-state-timeout=10s
       - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
       - LOG_LEVEL=INFO
       - LOG_LEVEL_APPLICATION=INFO
@@ -254,7 +254,7 @@ services:
       - TZ=Europe/Berlin
       - INSTANCE_INDEX=1
       - BIND_HOSTNAME=gateway
-      - JAVA_TOOL_OPTIONS=-Xms${GATEWAY_MEMORY:-1g} -Xmx${GATEWAY_MEMORY:-1g} -Dconfig.override_with_env_vars=true -Dakka.cluster.seed-nodes.0=akka://ditto-cluster@policies:2551 -Dakka.remote.artery.canonical.hostname=gateway ${TEST_JAVA_OPTIONS}
+      - JAVA_TOOL_OPTIONS=-Xms${GATEWAY_MEMORY:-1g} -Xmx${GATEWAY_MEMORY:-1g} -Dconfig.override_with_env_vars=true -Dpekko.cluster.seed-nodes.0=pekko://ditto-cluster@policies:2551 -Dpekko.remote.artery.canonical.hostname=gateway ${TEST_JAVA_OPTIONS}
       - CLUSTER_DOWNING_DOWN_REMOVAL_MARGIN=65s
       - LOG_LEVEL=INFO
       - LOG_LEVEL_APPLICATION=INFO

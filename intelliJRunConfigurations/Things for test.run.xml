@@ -11,7 +11,7 @@
     </envs>
     <option name="MAIN_CLASS_NAME" value="org.eclipse.ditto.things.service.starter.ThingsService" />
     <module name="ditto-things-service" />
-    <option name="VM_PARAMETERS" value="-Xms1g -Xmx1g -Dakka.cluster.failure-detector.acceptable-heartbeat-pause=20s" />
+    <option name="VM_PARAMETERS" value="-Xms1g -Xmx1g -Dpekko.cluster.failure-detector.acceptable-heartbeat-pause=20s" />
     <method v="2">
       <option name="Make" enabled="true" />
     </method>

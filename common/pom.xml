@@ -56,12 +56,12 @@
         </dependency>
 
         <dependency>
-            <groupId>com.typesafe.akka</groupId>
-            <artifactId>akka-actor_${scala.version}</artifactId>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-actor_${scala.version}</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.typesafe.akka</groupId>
-            <artifactId>akka-http-core_${scala.version}</artifactId>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-http-core_${scala.version}</artifactId>
         </dependency>
         <dependency>
             <groupId>com.typesafe</groupId>
@@ -135,11 +135,7 @@
             <artifactId>ditto-base-service</artifactId>
             <exclusions>
                 <exclusion>
-                    <groupId>com.typesafe.akka</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>com.lightbend.akka.management</groupId>
+                    <groupId>org.apache.pekko</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
                 <exclusion>

@@ -24,8 +24,8 @@ import javax.annotation.concurrent.ThreadSafe;
 import org.eclipse.ditto.base.service.UriEncoding;
 import org.eclipse.ditto.connectivity.model.UserPasswordCredentials;
 
-import akka.http.javadsl.model.HttpRequest;
-import akka.http.javadsl.model.headers.HttpCredentials;
+import org.apache.pekko.http.javadsl.model.HttpRequest;
+import org.apache.pekko.http.javadsl.model.headers.HttpCredentials;
 
 /**
  * Signing of HTTP requests to authenticate at Azure.
@@ -71,7 +71,7 @@ public final class AzSaslRequestSigning implements HmacSigning {
 
     private String extractExpiry(final HttpRequest request) {
         final String authorization =
-                request.getHeader("authorization").map(akka.http.javadsl.model.HttpHeader::value).orElseThrow();
+                request.getHeader("authorization").map(org.apache.pekko.http.javadsl.model.HttpHeader::value).orElseThrow();
         return extractExpiry(authorization);
     }
 

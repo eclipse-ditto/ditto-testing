@@ -38,7 +38,7 @@ pipeline {
     environment {
         COMPOSE_PROJECT_NAME  = "$JOB_NAME-$BUILD_NUMBER"
         DOCKER_NETWORK = "$JOB_NAME-$BUILD_NUMBER"
-        TEST_JAVA_OPTIONS = '-XX:+UseContainerSupport -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -Dakka.cluster.failure-detector.acceptable-heartbeat-pause=20s'
+        TEST_JAVA_OPTIONS = '-XX:+UseContainerSupport -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -Dpekko.cluster.failure-detector.acceptable-heartbeat-pause=20s'
         MAVEN_OPTS='-Xmx1400M'
         JAVA_TOOL_OPTIONS = "-Duser.home=$USER_HOME"
         DITTO_ARTIFACT_VERSION = "${DITTO_VERSION == 'nightly' ? '0-SNAPSHOT' : "$DITTO_VERSION" }"

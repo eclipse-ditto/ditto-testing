@@ -20,7 +20,7 @@ import org.apache.qpid.proton.engine.Sasl;
 import org.apache.qpid.proton.engine.Transport;
 import org.eclipse.ditto.connectivity.model.UserPasswordCredentials;
 
-import akka.util.ByteString;
+import org.apache.pekko.util.ByteString;
 import io.vertx.core.Handler;
 import io.vertx.core.net.NetSocket;
 import io.vertx.proton.ProtonConnection;

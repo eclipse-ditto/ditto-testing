@@ -81,7 +81,7 @@ import org.junit.Test;
 
 import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient;
 
-import akka.util.ByteString;
+import org.apache.pekko.util.ByteString;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.filter.log.LogDetail;

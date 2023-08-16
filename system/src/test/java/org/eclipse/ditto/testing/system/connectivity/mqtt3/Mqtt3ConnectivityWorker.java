@@ -41,7 +41,7 @@ import com.hivemq.client.mqtt.datatypes.MqttQos;
 import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient;
 import com.hivemq.client.mqtt.mqtt3.message.publish.Mqtt3Publish;
 
-import akka.util.ByteString;
+import org.apache.pekko.util.ByteString;
 
 public final class Mqtt3ConnectivityWorker
         extends AbstractConnectivityWorker<BlockingQueue<Mqtt3Publish>, Mqtt3Publish> {

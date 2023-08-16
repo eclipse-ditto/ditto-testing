@@ -71,7 +71,7 @@ import org.eclipse.ditto.protocol.JsonifiableAdaptable;
 import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityWorker;
 import org.slf4j.Logger;
 
-import akka.japi.Pair;
+import org.apache.pekko.japi.Pair;
 
 public final class KafkaConnectivityWorker extends
         AbstractConnectivityWorker<BlockingQueue<ConsumerRecord<String, byte[]>>, ConsumerRecord<String, byte[]>> {

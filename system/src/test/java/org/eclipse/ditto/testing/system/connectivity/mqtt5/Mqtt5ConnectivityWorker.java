@@ -44,7 +44,7 @@ import com.hivemq.client.mqtt.mqtt5.datatypes.Mqtt5UserProperty;
 import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
 import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5PublishBuilder;
 
-import akka.util.ByteString;
+import org.apache.pekko.util.ByteString;
 
 public final class Mqtt5ConnectivityWorker
         extends AbstractConnectivityWorker<BlockingQueue<Mqtt5Publish>, Mqtt5Publish> {

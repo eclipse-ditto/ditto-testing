@@ -32,15 +32,15 @@ import javax.annotation.concurrent.ThreadSafe;
 
 import org.eclipse.ditto.base.service.UriEncoding;
 
-import akka.http.javadsl.model.ContentType;
-import akka.http.javadsl.model.HttpEntity;
-import akka.http.javadsl.model.HttpHeader;
-import akka.http.javadsl.model.HttpRequest;
-import akka.http.javadsl.model.Query;
-import akka.http.javadsl.model.Uri;
-import akka.http.javadsl.model.headers.HttpCredentials;
-import akka.japi.Pair;
-import akka.util.ByteString;
+import org.apache.pekko.http.javadsl.model.ContentType;
+import org.apache.pekko.http.javadsl.model.HttpEntity;
+import org.apache.pekko.http.javadsl.model.HttpHeader;
+import org.apache.pekko.http.javadsl.model.HttpRequest;
+import org.apache.pekko.http.javadsl.model.Query;
+import org.apache.pekko.http.javadsl.model.Uri;
+import org.apache.pekko.http.javadsl.model.headers.HttpCredentials;
+import org.apache.pekko.japi.Pair;
+import org.apache.pekko.util.ByteString;
 
 /**
  * Signing of HTTP requests to authenticate at AWS.
@@ -175,7 +175,7 @@ public final class AwsRequestSigning implements HmacSigning {
                             return X_AMZ_DATE_HEADER + ":" + X_AMZ_DATE_FORMATTER.format(xAmzDate) + "\n";
                         default:
                             return key + streamHeaders(request, key)
-                                    .map(akka.http.javadsl.model.HttpHeader::value)
+                                    .map(org.apache.pekko.http.javadsl.model.HttpHeader::value)
                                     .map(AwsRequestSigning::trimHeaderValue)
                                     .collect(Collectors.joining(",", ":", "\n"));
                     }
@@ -194,8 +194,8 @@ public final class AwsRequestSigning implements HmacSigning {
 
     private static String getContentTypeAsCanonicalHeader(final HttpRequest request) {
         final ContentType contentType =
-                request.getHeader(akka.http.javadsl.model.headers.ContentType.class)
-                        .map(akka.http.javadsl.model.headers.ContentType::contentType)
+                request.getHeader(org.apache.pekko.http.javadsl.model.headers.ContentType.class)
+                        .map(org.apache.pekko.http.javadsl.model.headers.ContentType::contentType)
                         .orElse(request.entity().getContentType());
         return CONTENT_TYPE_HEADER + ":" +
                 contentType.mediaType() +

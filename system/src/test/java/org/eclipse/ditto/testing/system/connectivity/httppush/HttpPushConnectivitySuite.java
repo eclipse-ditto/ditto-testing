@@ -83,10 +83,10 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import akka.http.javadsl.model.HttpMethods;
-import akka.http.javadsl.model.HttpRequest;
-import akka.http.javadsl.model.headers.Authorization;
-import akka.http.javadsl.model.headers.HttpCredentials;
+import org.apache.pekko.http.javadsl.model.HttpMethods;
+import org.apache.pekko.http.javadsl.model.HttpRequest;
+import org.apache.pekko.http.javadsl.model.headers.Authorization;
+import org.apache.pekko.http.javadsl.model.headers.HttpCredentials;
 
 /**
  * System tests for HTTP-push connections.
@@ -193,7 +193,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
 
         // THEN: The authorization header of the HTTP request contains a bearer token from the token endpoint.
         final String authorization =
-                request.getHeader("authorization").map(akka.http.javadsl.model.HttpHeader::value).orElseThrow();
+                request.getHeader("authorization").map(org.apache.pekko.http.javadsl.model.HttpHeader::value).orElseThrow();
         final String bearer = "Bearer ";
         assertThat(authorization).startsWith(bearer);
         final String token = authorization.substring(bearer.length());
@@ -229,7 +229,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
         final HttpCredentials httpCredentials = azRequestSigning.generateSignedAuthorizationHeader(request);
 
         final String authorization =
-                request.getHeader("authorization").map(akka.http.javadsl.model.HttpHeader::value).orElseThrow();
+                request.getHeader("authorization").map(org.apache.pekko.http.javadsl.model.HttpHeader::value).orElseThrow();
         assertThat(authorization).isEqualTo(httpCredentials.toString());
     }
 
@@ -266,7 +266,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
 
         // THEN: The authorization header of the HTTP request conforms to Azure-SAS pattern.
         final String authorization =
-                request.getHeader("authorization").map(akka.http.javadsl.model.HttpHeader::value).orElseThrow();
+                request.getHeader("authorization").map(org.apache.pekko.http.javadsl.model.HttpHeader::value).orElseThrow();
         assertThat(authorization).isEqualTo(expectedCredentials.toString());
     }
 
@@ -293,7 +293,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
         final HttpCredentials httpCredentials = azRequestSigning.generateSignedAuthorizationHeader(request);
 
         final String authorization =
-                request.getHeader("authorization").map(akka.http.javadsl.model.HttpHeader::value).orElseThrow();
+                request.getHeader("authorization").map(org.apache.pekko.http.javadsl.model.HttpHeader::value).orElseThrow();
         assertThat(authorization).isEqualTo(httpCredentials.toString());
     }
 
@@ -328,7 +328,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
         final HttpCredentials httpCredentials = awsRequestSigning.generateSignedAuthorizationHeader(request);
 
         final String authorization =
-                request.getHeader("authorization").map(akka.http.javadsl.model.HttpHeader::value).orElseThrow();
+                request.getHeader("authorization").map(org.apache.pekko.http.javadsl.model.HttpHeader::value).orElseThrow();
         assertThat(authorization).isEqualTo(httpCredentials.toString());
     }
 
@@ -363,7 +363,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
         final HttpCredentials httpCredentials = awsRequestSigning.generateSignedAuthorizationHeader(request);
 
         final String authorization =
-                request.getHeader("authorization").map(akka.http.javadsl.model.HttpHeader::value).orElseThrow();
+                request.getHeader("authorization").map(org.apache.pekko.http.javadsl.model.HttpHeader::value).orElseThrow();
         assertThat(authorization).isEqualTo(httpCredentials.toString());
     }
 

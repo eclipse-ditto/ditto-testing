@@ -16,8 +16,8 @@ import java.text.MessageFormat;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
-import org.eclipse.ditto.internal.utils.akka.logging.DittoLogger;
-import org.eclipse.ditto.internal.utils.akka.logging.DittoLoggerFactory;
+import org.eclipse.ditto.internal.utils.pekko.logging.DittoLogger;
+import org.eclipse.ditto.internal.utils.pekko.logging.DittoLoggerFactory;
 import org.eclipse.ditto.testing.common.junit.ExternalResourceState;
 import org.junit.rules.ExternalResource;
 

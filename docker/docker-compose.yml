@@ -114,7 +114,7 @@ services:
     command: mongod --storageEngine wiredTiger
 
   policies:
-    image: ${DITTO_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-policies:${DITTO_VERSION:-nightly}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_REGISTRY_NAMESPACE:-eclipse}/${DITTO_SERVICE_PREFIX-ditto-}policies:${DITTO_VERSION:-nightly}
     depends_on:
       - mongodb
     networks:
@@ -139,7 +139,7 @@ services:
       - CLEANUP_CREDITS_PER_BATCH=400
 
   things:
-    image: ${DITTO_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-things:${DITTO_VERSION:-nightly}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_REGISTRY_NAMESPACE:-eclipse}/${DITTO_SERVICE_PREFIX-ditto-}things:${DITTO_VERSION:-nightly}
     depends_on:
       - mongodb
       - policies
@@ -162,7 +162,7 @@ services:
       - CLEANUP_CREDITS_PER_BATCH=400
 
   things-search:
-    image: ${DITTO_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-things-search:${DITTO_VERSION:-nightly}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_REGISTRY_NAMESPACE:-eclipse}/${DITTO_SERVICE_PREFIX-ditto-}things-search:${DITTO_VERSION:-nightly}
     depends_on:
       - mongodb
       - policies
@@ -189,7 +189,7 @@ services:
       - MONGO_DB_CONNECTION_POOL_SIZE=100
 
   connectivity:
-    image: ${DITTO_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-connectivity:${DITTO_VERSION:-nightly}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_REGISTRY_NAMESPACE:-eclipse}/${DITTO_SERVICE_PREFIX-ditto-}connectivity:${DITTO_VERSION:-nightly}
     depends_on:
       - mongodb
       - policies
@@ -242,7 +242,7 @@ services:
       - HONO_CONNECTION_HONO_PASSWORD=kafkaPassword
 
   gateway:
-    image: ${DITTO_DOCKER_REGISTRY:-docker.io}/eclipse/ditto-gateway:${DITTO_VERSION:-nightly}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_REGISTRY_NAMESPACE:-eclipse}/${DITTO_SERVICE_PREFIX-ditto-}gateway:${DITTO_VERSION:-nightly}
     depends_on:
       - policies
     networks:

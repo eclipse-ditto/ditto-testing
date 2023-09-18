@@ -47,12 +47,12 @@ import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
-import akka.NotUsed;
-import akka.actor.ActorSystem;
-import akka.stream.ActorMaterializer;
-import akka.stream.javadsl.Keep;
-import akka.stream.javadsl.Sink;
-import akka.stream.javadsl.Source;
+import org.apache.pekko.NotUsed;
+import org.apache.pekko.actor.ActorSystem;
+import org.apache.pekko.stream.ActorMaterializer;
+import org.apache.pekko.stream.javadsl.Keep;
+import org.apache.pekko.stream.javadsl.Sink;
+import org.apache.pekko.stream.javadsl.Source;
 
 /**
  * Integration test for Thing search protocol via ditto-client.
@@ -200,7 +200,7 @@ public class SubscribeThingsIT extends AbstractClientIT {
     }
 
     @Test
-    public void subscribeViaAkkaStream() {
+    public void subscribeViaPekkoStream() {
         final String filter = "or(exists(attributes/test))";
         final ActorSystem system = ActorSystem.create("thing-search");
         try {

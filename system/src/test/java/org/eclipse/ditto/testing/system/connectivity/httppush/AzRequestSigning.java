@@ -20,11 +20,11 @@ import java.util.Locale;
 
 import javax.annotation.concurrent.ThreadSafe;
 
-import akka.http.javadsl.model.ContentType;
-import akka.http.javadsl.model.HttpMethod;
-import akka.http.javadsl.model.HttpRequest;
-import akka.http.javadsl.model.headers.HttpCredentials;
-import akka.util.ByteString;
+import org.apache.pekko.http.javadsl.model.ContentType;
+import org.apache.pekko.http.javadsl.model.HttpMethod;
+import org.apache.pekko.http.javadsl.model.HttpRequest;
+import org.apache.pekko.http.javadsl.model.headers.HttpCredentials;
+import org.apache.pekko.util.ByteString;
 
 /**
  * Signing of HTTP requests to authenticate at Azure.
@@ -59,7 +59,7 @@ public final class AzRequestSigning implements HmacSigning {
     private Instant getInstant(final HttpRequest request) {
         final String singingTime =
                 request.getHeader(X_MS_DATE_HEADER)
-                        .map(akka.http.javadsl.model.HttpHeader::value)
+                        .map(org.apache.pekko.http.javadsl.model.HttpHeader::value)
                         .orElseThrow();
         return Instant.from(X_MS_DATE_FORMAT.parse(singingTime));
     }

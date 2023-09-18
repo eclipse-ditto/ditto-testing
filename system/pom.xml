@@ -36,18 +36,18 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Akka -->
+            <!-- Pekko -->
             <dependency>
-                <groupId>com.typesafe.akka</groupId>
-                <artifactId>akka-bom_${scala.version}</artifactId>
+                <groupId>org.apache.pekko</groupId>
+                <artifactId>pekko-bom_${scala.version}</artifactId>
                 <type>pom</type>
-                <version>${akka.version}</version>
+                <version>${pekko.version}</version>
                 <scope>import</scope>
             </dependency>
             <dependency>
-                <groupId>com.typesafe.akka</groupId>
-                <artifactId>akka-remote_${scala.version}</artifactId>
-                <version>${akka.version}</version>
+                <groupId>org.apache.pekko</groupId>
+                <artifactId>pekko-remote_${scala.version}</artifactId>
+                <version>${pekko.version}</version>
                 <exclusions>
                     <!-- exclude netty from akka-remote - we use aeron remoting instead -->
                     <!-- due to license issues with the old netty version we are not allowed to use it -->
@@ -58,12 +58,12 @@
                 </exclusions>
             </dependency>
 
-            <!-- Akka HTTP -->
+            <!-- Pekko HTTP -->
             <dependency>
-                <groupId>com.typesafe.akka</groupId>
-                <artifactId>akka-http-bom_${scala.version}</artifactId>
+                <groupId>org.apache.pekko</groupId>
+                <artifactId>pekko-http-bom_${scala.version}</artifactId>
                 <type>pom</type>
-                <version>${akka-http.version}</version>
+                <version>${pekko-http.version}</version>
                 <scope>import</scope>
             </dependency>
         </dependencies>
@@ -143,26 +143,26 @@
             <artifactId>ditto-internal-utils-health</artifactId>
             <exclusions>
                 <exclusion>
-                    <groupId>com.typesafe.akka</groupId>
-                    <artifactId>akka-actor_${scala.version}</artifactId>
+                    <groupId>org.apache.pekko</groupId>
+                    <artifactId>pekko-actor_${scala.version}</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>com.typesafe.akka</groupId>
-                    <artifactId>akka-cluster_${scala.version}</artifactId>
+                    <groupId>org.apache.pekko</groupId>
+                    <artifactId>pekko-cluster_${scala.version}</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
         <dependency>
             <groupId>org.eclipse.ditto</groupId>
-            <artifactId>ditto-internal-utils-akka</artifactId>
+            <artifactId>ditto-internal-utils-pekko</artifactId>
             <exclusions>
                 <exclusion>
-                    <groupId>com.typesafe.akka</groupId>
-                    <artifactId>akka-actor_${scala.version}</artifactId>
+                    <groupId>org.apache.pekko</groupId>
+                    <artifactId>pekko-actor_${scala.version}</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>com.typesafe.akka</groupId>
-                    <artifactId>akka-stream_${scala.version}</artifactId>
+                    <groupId>org.apache.pekko</groupId>
+                    <artifactId>pekko-stream_${scala.version}</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -172,27 +172,27 @@
             <artifactId>ditto-internal-utils-config</artifactId>
             <exclusions>
                 <exclusion>
-                    <groupId>com.typesafe.akka</groupId>
-                    <artifactId>akka-actor_${scala.version}</artifactId>
+                    <groupId>org.apache.pekko</groupId>
+                    <artifactId>pekko-actor_${scala.version}</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
 
         <dependency>
-            <groupId>com.typesafe.akka</groupId>
-            <artifactId>akka-actor_${scala.version}</artifactId>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-actor_${scala.version}</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.typesafe.akka</groupId>
-            <artifactId>akka-stream_${scala.version}</artifactId>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-stream_${scala.version}</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.typesafe.akka</groupId>
-            <artifactId>akka-http_${scala.version}</artifactId>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-http_${scala.version}</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.typesafe.akka</groupId>
-            <artifactId>akka-serialization-jackson_${scala.version}</artifactId>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-serialization-jackson_${scala.version}</artifactId>
         </dependency>
 
         <dependency>

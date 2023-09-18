@@ -340,4 +340,18 @@
         </profile>
     </profiles>
 
+    <repositories>
+        <repository>
+            <id>apache-releases</id>
+            <name>apache-releases</name>
+            <url>https://repository.apache.org/content/repositories/releases/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
 </project>

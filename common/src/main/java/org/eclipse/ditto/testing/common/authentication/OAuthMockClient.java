@@ -19,8 +19,8 @@ import java.net.URI;
 import javax.annotation.concurrent.Immutable;
 
 import org.apache.http.HttpStatus;
-import org.eclipse.ditto.internal.utils.akka.logging.DittoLogger;
-import org.eclipse.ditto.internal.utils.akka.logging.DittoLoggerFactory;
+import org.eclipse.ditto.internal.utils.pekko.logging.DittoLogger;
+import org.eclipse.ditto.internal.utils.pekko.logging.DittoLoggerFactory;
 import org.eclipse.ditto.jwt.model.JsonWebToken;
 import org.eclipse.ditto.testing.common.restassured.UnexpectedResponseException;
 

@@ -170,7 +170,7 @@ public final class ConnectionsHttpClient {
                 .remove(Connection.JsonFields.ID)
                 .build();
 
-        LOGGER.setCorrelationId(correlationId)
+        LOGGER.withCorrelationId(correlationId)
                 .info("Posting connection of type <{}>  …",
                         connection.getConnectionType());
 
@@ -231,7 +231,7 @@ public final class ConnectionsHttpClient {
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Sending command <{}> to connection <{}> …", command, connectionId);
 
         final var expectedStatusCode = HttpStatus.SC_OK;
@@ -261,7 +261,7 @@ public final class ConnectionsHttpClient {
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Getting status for connection <{}> …", connectionId);
 
         final var expectedStatusCode = HttpStatus.SC_OK;
@@ -344,7 +344,7 @@ public final class ConnectionsHttpClient {
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Deleting connection <{}> …", connectionId);
 
         final var expectedStatusCode = HttpStatus.SC_NO_CONTENT;

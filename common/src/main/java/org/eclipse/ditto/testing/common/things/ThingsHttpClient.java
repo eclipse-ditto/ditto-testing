@@ -105,8 +105,7 @@ public final class ThingsHttpClient {
         requireThingNotNull(thing);
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
-
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Putting thing for ID <{}> …", thingId);
 
         final var expectedStatusCodes = Set.of(HttpStatus.SC_CREATED, HttpStatus.SC_NO_CONTENT);
@@ -213,7 +212,7 @@ public final class ThingsHttpClient {
             jsonBody = thing.toJson();
         }
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Posting thing <{}>.", StringUtil.truncate(thing.toString()));
         }
@@ -257,7 +256,7 @@ public final class ThingsHttpClient {
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Getting thing <{}> …", thingId);
 
         final var expectedStatusCodes = Set.of(HttpStatus.SC_OK, HttpStatus.SC_NOT_FOUND);
@@ -287,7 +286,7 @@ public final class ThingsHttpClient {
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Deleting thing <{}> …", thingId);
 
         try {
@@ -363,7 +362,7 @@ public final class ThingsHttpClient {
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Putting attribute <{}> at <{}> to thing <{}> …", attributeValue, attributePath, thingId);
 
         final var expectedStatusCodes = Set.of(HttpStatus.SC_CREATED, HttpStatus.SC_NO_CONTENT);
@@ -400,7 +399,7 @@ public final class ThingsHttpClient {
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Getting value of attribute at <{}> of thing <{}> …", attributePath, thingId);
 
         final var expectedStatusCodes = Set.of(HttpStatus.SC_OK, HttpStatus.SC_NOT_FOUND);
@@ -441,7 +440,7 @@ public final class ThingsHttpClient {
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Putting property <{}> at <{}> to feature <{}> of thing <{}> …",
                 propertyValue,
                 propertyPath,
@@ -503,7 +502,7 @@ public final class ThingsHttpClient {
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Getting property value at <{}> from feature <{}> of thing <{}> …",
                 propertyPath,
                 featureId,

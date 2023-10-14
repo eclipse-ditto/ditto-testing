@@ -101,7 +101,7 @@ public final class PoliciesHttpClient {
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Putting policy for ID <{}> …", policyId);
 
         final var expectedStatusCodes = Set.of(HttpStatus.SC_CREATED, HttpStatus.SC_NO_CONTENT);
@@ -188,7 +188,7 @@ public final class PoliciesHttpClient {
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Retrieving policy <{}> …", policyId);
 
         final var expectedStatusCodes = Set.of(HttpStatus.SC_OK, HttpStatus.SC_NOT_FOUND);
@@ -218,7 +218,7 @@ public final class PoliciesHttpClient {
         requireCorrelationIdNotNull(correlationId);
         requireFilterNotNull(filter);
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Deleting policy <{}> …", policyId);
 
         try {

@@ -78,7 +78,7 @@ final class OAuthClient {
         ConditionChecker.argumentNotEmpty(scope, "scope");
         final var correlationId = CorrelationId.random().withSuffix(".retrieveBearerToken");
 
-        LOGGER.setCorrelationId(correlationId);
+        LOGGER.withCorrelationId(correlationId);
         LOGGER.info("Retrieving access token for client ID <{}> and scope <{}> …",
                 clientCredentials.getClientId(),
                 scope);

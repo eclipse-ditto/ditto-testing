@@ -514,7 +514,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
 
         putThing(TestConstants.API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.FORBIDDEN)
-                .expectingErrorCode("policies:policy.notcreatable")
+                .expectingErrorCode("things:thing.notcreatable")
                 .fire();
     }
     

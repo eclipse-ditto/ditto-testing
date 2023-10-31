@@ -145,9 +145,7 @@ public final class Mqtt5ConnectivityWorker
         } else {
             mqttTopic = getPublishTopic(connectionName);
         }
-        final JsonObject objectWithHeaders = packHeaders(JsonFactory.newObject(stringMessage),
-                Map.of(ExternalMessage.REPLY_TO_HEADER, correlationId));
-        final ByteString bytePayload = ByteString.fromString(objectWithHeaders.toString());
+        final ByteString bytePayload = ByteString.fromString(stringMessage);
         rethrow(() -> {
             logger.info("mqttClient: publishing on topic <{}>: {}", mqttTopic, stringMessage);
             setContentType(mqttClientSupplier.get()
@@ -155,6 +153,7 @@ public final class Mqtt5ConnectivityWorker
                     .topic(mqttTopic)
                     .qos(MqttQos.EXACTLY_ONCE)
                     .payload(bytePayload.toByteBuffer())
+                    .responseTopic(correlationId)
                     .correlationData(ByteBufferUtils.fromUtf8String(correlationId))
                     .userProperties(Mqtt5UserProperties.of(extraHeaders.entrySet()
                             .stream()

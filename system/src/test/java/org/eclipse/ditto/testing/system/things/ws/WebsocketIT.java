@@ -13,7 +13,6 @@
 package org.eclipse.ditto.testing.system.things.ws;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.eclipse.ditto.policies.api.Permission.READ;
 import static org.eclipse.ditto.policies.api.Permission.WRITE;
 import static org.eclipse.ditto.testing.common.TestConstants.Policy.ARBITRARY_SUBJECT_TYPE;
@@ -29,7 +28,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -44,6 +42,7 @@ import org.eclipse.ditto.base.model.acks.AcknowledgementRequest;
 import org.eclipse.ditto.base.model.acks.DittoAcknowledgementLabel;
 import org.eclipse.ditto.base.model.common.DittoDuration;
 import org.eclipse.ditto.base.model.common.HttpStatus;
+import org.eclipse.ditto.base.model.exceptions.DittoJsonException;
 import org.eclipse.ditto.base.model.exceptions.DittoRuntimeException;
 import org.eclipse.ditto.base.model.headers.DittoHeaderDefinition;
 import org.eclipse.ditto.base.model.headers.DittoHeaders;
@@ -119,7 +118,6 @@ import org.eclipse.ditto.things.model.signals.events.FeaturePropertyModified;
 import org.eclipse.ditto.things.model.signals.events.ThingCreated;
 import org.eclipse.ditto.things.model.signals.events.ThingMerged;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -541,7 +539,8 @@ public final class WebsocketIT extends IntegrationTest {
     }
 
     @Test
-    public void createThingWithMultipleSlashesInFeatureProperty() {
+    public void createThingWithMultipleSlashesInFeatureProperty()
+            throws ExecutionException, InterruptedException, TimeoutException {
 
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
         final TopicPath topicPath = TopicPath.newBuilder(thingId).things().twin().commands().modify().build();
@@ -554,22 +553,16 @@ public final class WebsocketIT extends IntegrationTest {
                 "\"payload\": 13" +
                 "}";
 
-        final long expectNoResponseSeconds = 5;
-        assertThatExceptionOfType(TimeoutException.class).isThrownBy(() -> {
-            try {
-                clientUser1.sendWithResponse(createFeatureWithMultipleSlashesInPath, correlationId)
-                        .whenComplete((commandResponse, throwable) -> Assert.fail(
-                                "Should never get here as it is not possible to correlate the exception to the original message." +
-                                        " The backend can't deserialize the message and thus does not know the correlationId."))
-                        .get(expectNoResponseSeconds, TimeUnit.SECONDS);
-            } catch (final Throwable e) {
-                if (e instanceof CompletionException) {
-                    throw e.getCause();
-                } else {
-                    throw e;
-                }
-            }
-        });
+        clientUser1.sendWithResponse(createFeatureWithMultipleSlashesInPath, correlationId)
+                .whenComplete((commandResponse, throwable) -> {
+                    assertThat(throwable).isNull();
+                    assertThat(commandResponse).isInstanceOf(ThingErrorResponse.class);
+                    final DittoRuntimeException dittoRuntimeException =
+                            ((ThingErrorResponse) commandResponse).getDittoRuntimeException();
+                    assertThat(dittoRuntimeException).isInstanceOf(DittoJsonException.class);
+                    assertThat(dittoRuntimeException.getDescription()).contains("Consecutive slashes in JSON pointers are not supported.");
+                })
+                .get(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
     @Test

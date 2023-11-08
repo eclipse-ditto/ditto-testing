@@ -15,6 +15,7 @@ package org.eclipse.ditto.testing.system.connectivity.mqtt5;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -153,13 +154,24 @@ public final class Mqtt5ConnectivityWorker
                     .topic(mqttTopic)
                     .qos(MqttQos.EXACTLY_ONCE)
                     .payload(bytePayload.toByteBuffer())
-                    .responseTopic(correlationId)
+                    .responseTopic(resolveResponseTopic(headersMap, extraHeaders))
                     .correlationData(ByteBufferUtils.fromUtf8String(correlationId))
                     .userProperties(Mqtt5UserProperties.of(extraHeaders.entrySet()
                             .stream()
                             .map(entry -> Mqtt5UserProperty.of(entry.getKey(), entry.getValue()))
                             .collect(Collectors.toList()))), extraHeaders).send();
         });
+    }
+
+    private String resolveResponseTopic(final Map<String, String> headersMap, final Map<String, String> extraHeaders) {
+        String extraHeadersReplyTo = extraHeaders.get(ExternalMessage.REPLY_TO_HEADER);
+        return Optional.ofNullable(headersMap.get(ExternalMessage.REPLY_TO_HEADER))
+                .orElse(stripWildcardFromReplyTopic(extraHeadersReplyTo));
+    }
+
+    private static String stripWildcardFromReplyTopic(final String extraHeadersReplyTo) {
+        return extraHeadersReplyTo.contains("#") ?
+                extraHeadersReplyTo.substring(0, extraHeadersReplyTo.indexOf('#')) : extraHeadersReplyTo;
     }
 
     private Mqtt5PublishBuilder.Send.Complete<?> setContentType(final Mqtt5PublishBuilder.Send.Complete<?> send,
@@ -205,6 +217,7 @@ public final class Mqtt5ConnectivityWorker
                     .topic(mqttTopic)
                     .qos(MqttQos.EXACTLY_ONCE)
                     .payload(byteMessage)
+                    .responseTopic(correlationId)
                     .correlationData(ByteBufferUtils.fromUtf8String(correlationId))
                     .userProperties(
                             Mqtt5UserProperties.of(extraHeaders.entrySet()

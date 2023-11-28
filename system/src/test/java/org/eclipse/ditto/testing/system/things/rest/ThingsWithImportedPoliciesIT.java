@@ -138,7 +138,7 @@ public final class ThingsWithImportedPoliciesIT extends IntegrationTest {
 
         postThing(TestConstants.API_V_2, thingWithInlinePolicy)
                 .expectingHttpStatus(HttpStatus.FORBIDDEN)
-                .expectingErrorCode("policies:policy.notcreatable")
+                .expectingErrorCode("things:thing.notcreatable")
                 .fire();
     }
 
@@ -167,7 +167,7 @@ public final class ThingsWithImportedPoliciesIT extends IntegrationTest {
 
         postThing(TestConstants.API_V_2, thingWithInlinePolicy)
                 .expectingHttpStatus(HttpStatus.FORBIDDEN)
-                .expectingErrorCode("policies:policy.notcreatable")
+                .expectingErrorCode("things:thing.notcreatable")
                 .fire();
     }
 

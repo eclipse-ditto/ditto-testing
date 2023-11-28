@@ -75,7 +75,7 @@ public final class RestConnectionsIT extends IntegrationTest {
     private static final int TIMEOUT = 30;
     private static final ConnectivityTestConfig CONFIG = ConnectivityTestConfig.getInstance();
 
-    private static final String CONNECTION_NAME = UUID.randomUUID().toString();
+    private static final String CONNECTION_NAME = RestConnectionsIT.class.getSimpleName() + "-" + UUID.randomUUID();
     private static final SshTunnel DISABLED_SSH_TUNNEL = ConnectivityModelFactory.newSshTunnel(false,
             UserPasswordCredentials.newInstance("dummy", "dummy"), "ssh://localhost:22");
 

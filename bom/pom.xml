@@ -37,7 +37,7 @@
         <kafka-client.version>3.0.2</kafka-client.version>
         <typesafe-config.version>1.4.2</typesafe-config.version>
         <slf4j.version>1.7.36</slf4j.version>
-        <logback.version>1.2.11</logback.version>
+        <logback.version>1.2.13</logback.version>
         <restassured.version>4.3.3</restassured.version>
 
         <junit.version>4.13.2</junit.version>

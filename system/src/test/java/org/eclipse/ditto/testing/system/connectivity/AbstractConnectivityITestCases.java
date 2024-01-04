@@ -1034,8 +1034,14 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .correlationId(correlationId)
                 .putHeader(DEVICE_ID_HEADER, thingId)
                 .build();
-        final SubscribeForPersistedEvents createSubscription =
-                SubscribeForPersistedEvents.of(thingId, JsonPointer.empty(), null, null, dittoHeaders);
+        final SubscribeForPersistedEvents createSubscription = SubscribeForPersistedEvents.of(
+                thingId,
+                JsonPointer.empty(),
+                null,
+                null,
+                null,
+                dittoHeaders
+        );
 
         final C eventConsumer = initResponseConsumer(connectionName, correlationId);
         sendSignal(connectionName, createSubscription);

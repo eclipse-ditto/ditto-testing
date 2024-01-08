@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Ditto for system tests" type="CompoundRunConfigurationType">
+    <toRun name="Connectivity for test" type="Application" />
+    <toRun name="Gateway for test" type="Application" />
+    <toRun name="Policies for test" type="Application" />
+    <toRun name="Things for test" type="Application" />
+    <toRun name="ThingsSearch for test" type="Application" />
+    <method v="2" />
+  </configuration>
+</component>

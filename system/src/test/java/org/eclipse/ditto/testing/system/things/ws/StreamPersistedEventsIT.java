@@ -241,6 +241,62 @@ public final class StreamPersistedEventsIT extends IntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                DittoHeaders.newBuilder().correlationId(correlationId).build()
+        ));
+
+        assertThat(nextLatch.await(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    public void subscribeForAllPersistedEventsWithFilter() throws Exception {
+
+        final String correlationId = UUID.randomUUID().toString();
+        final CountDownLatch protocolLatch = new CountDownLatch(2);
+        final int filteredExpectedUpdates = TOTAL_COUNTER_UPDATES / 2;
+        final CountDownLatch nextLatch = new CountDownLatch(filteredExpectedUpdates);
+        final AtomicReference<String> subscriptionId = new AtomicReference<>();
+        client.onSignal(event -> {
+            LOGGER.info("Got event {}", event);
+            if (event instanceof StreamingSubscriptionCreated subscriptionCreated) {
+                subscriptionId.set(subscriptionCreated.getSubscriptionId());
+                client.send(RequestFromStreamingSubscription.of(
+                        thing.getEntityId().orElseThrow(),
+                        JsonPointer.empty(),
+                        subscriptionCreated.getSubscriptionId(),
+                        TOTAL_COUNTER_UPDATES + 1,
+                        DittoHeaders.empty()
+                ));
+                protocolLatch.countDown();
+            } else if (event instanceof StreamingSubscriptionHasNext subscriptionHasNext) {
+                final JsonValue item = subscriptionHasNext.getItem();
+                assertThat(item.isObject()).isTrue();
+
+                final Signal<?> historicalSignal = DITTO_PROTOCOL_ADAPTER.fromAdaptable(
+                        ProtocolFactory.jsonifiableAdaptableFromJson(item.asObject()));
+
+                assertThat(historicalSignal).isInstanceOf(ThingEvent.class);
+                final ThingEvent<?> thingEvent = (ThingEvent<?>) historicalSignal;
+                assertThat(thingEvent).isInstanceOf(AttributeModified.class);
+                final AttributeModified attributeModified = (AttributeModified) historicalSignal;
+                assertThat((CharSequence) attributeModified.getAttributePointer())
+                        .isEqualTo(JsonPointer.of("counter"));
+                assertThat(attributeModified.getAttributeValue())
+                        .isEqualTo(JsonValue.of(thingEvent.getRevision() - 1));
+                nextLatch.countDown();
+            } else if (event instanceof StreamingSubscriptionComplete streamingSubscriptionComplete) {
+                assertThat(streamingSubscriptionComplete.getSubscriptionId())
+                        .isEqualTo(subscriptionId.get());
+                protocolLatch.countDown();
+            }
+        });
+
+        client.send(SubscribeForPersistedEvents.of(thing.getEntityId().orElseThrow(), JsonPointer.empty(),
+                0L,
+                null,
+                null,
+                null,
+                "ge(attributes/counter," + filteredExpectedUpdates + ")",
                 DittoHeaders.newBuilder().correlationId(correlationId).build()
         ));
 
@@ -252,7 +308,7 @@ public final class StreamPersistedEventsIT extends IntegrationTest {
 
         final String correlationId = UUID.randomUUID().toString();
         final CountDownLatch protocolLatch = new CountDownLatch(2);
-        final CountDownLatch nextLatch = new CountDownLatch(5);
+        final CountDownLatch nextLatch = new CountDownLatch(4);
         final AtomicReference<String> subscriptionId = new AtomicReference<>();
         client.onSignal(event -> {
             LOGGER.info("Got event {}", event);
@@ -284,7 +340,7 @@ public final class StreamPersistedEventsIT extends IntegrationTest {
                         .isIn(List.of(
                                 JsonValue.of(8),
                                 JsonValue.of(10),
-                                JsonValue.of(12),
+                                // JsonValue.of(12), // shall be excluded via "filter"
                                 JsonValue.of(14),
                                 JsonValue.of(16)
                         ));
@@ -302,6 +358,7 @@ public final class StreamPersistedEventsIT extends IntegrationTest {
                 9L,
                 null,
                 null,
+                "ne(attributes/counter,12)", // we don't like twelves
                 DittoHeaders.newBuilder().correlationId(correlationId).build()
         ));
 
@@ -376,6 +433,7 @@ public final class StreamPersistedEventsIT extends IntegrationTest {
         client3.send(SubscribeForPersistedEvents.of(thing3.getEntityId().orElseThrow(), JsonPointer.empty(),
                 startTs.minus(5, ChronoUnit.MINUTES),
                 startTs,
+                null,
                 DittoHeaders.newBuilder().correlationId(correlationId).build()
         ));
 
@@ -418,6 +476,7 @@ public final class StreamPersistedEventsIT extends IntegrationTest {
                 null,
                 null,
                 null,
+                null,
                 DittoHeaders.newBuilder().correlationId(correlationId).build()
         ));
 
@@ -452,6 +511,7 @@ public final class StreamPersistedEventsIT extends IntegrationTest {
 
         client.send(SubscribeForPersistedEvents.of(thing.getEntityId().orElseThrow(), JsonPointer.empty(),
                 0L,
+                null,
                 null,
                 null,
                 null,

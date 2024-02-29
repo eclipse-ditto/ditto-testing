@@ -62,9 +62,7 @@ public final class TestSolutionResource extends ExternalResource
      */
     public static TestSolutionResource newInstance(final TestConfig testConfig) {
         ConditionChecker.checkNotNull(testConfig, "testConfig");
-        return new TestSolutionResource(
-                testConfig
-        );
+        return new TestSolutionResource(testConfig);
     }
 
     @Override

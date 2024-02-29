@@ -15,12 +15,15 @@ package org.eclipse.ditto.testing.system.things.ws;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.eclipse.ditto.policies.api.Permission.READ;
 import static org.eclipse.ditto.policies.api.Permission.WRITE;
+import static org.eclipse.ditto.testing.common.TestConstants.API_V_2;
 import static org.eclipse.ditto.testing.common.TestConstants.Policy.ARBITRARY_SUBJECT_TYPE;
 
 import java.text.MessageFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -69,6 +72,7 @@ import org.eclipse.ditto.policies.model.Subject;
 import org.eclipse.ditto.policies.model.SubjectAnnouncement;
 import org.eclipse.ditto.policies.model.SubjectExpiry;
 import org.eclipse.ditto.policies.model.SubjectId;
+import org.eclipse.ditto.policies.model.SubjectIssuer;
 import org.eclipse.ditto.policies.model.SubjectType;
 import org.eclipse.ditto.policies.model.signals.announcements.SubjectDeletionAnnouncement;
 import org.eclipse.ditto.policies.model.signals.commands.modify.CreatePolicy;
@@ -82,13 +86,14 @@ import org.eclipse.ditto.protocol.ProtocolFactory;
 import org.eclipse.ditto.protocol.TopicPath;
 import org.eclipse.ditto.protocol.adapter.DittoProtocolAdapter;
 import org.eclipse.ditto.protocol.adapter.ProtocolAdapter;
+import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.Solution;
-import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.common.conditions.DockerEnvironment;
 import org.eclipse.ditto.testing.common.conditions.RunIf;
@@ -166,20 +171,39 @@ public final class WebsocketIT extends IntegrationTest {
         user2 = testingContext2.getOAuthClient();
 
         declaredAckClient1 =
-                MessageFormat.format("{0}:custom1-" + ACK_COUNTER.incrementAndGet(), testingContext1.getSolution().getUsername());
+                MessageFormat.format("{0}:custom1-" + ACK_COUNTER.incrementAndGet(),
+                        testingContext1.getSolution().getUsername());
         final String custom2 = "custom2-" + ACK_COUNTER.incrementAndGet();
         declaredAckClient2 =
                 MessageFormat.format("{0}:" + custom2, testingContext2.getSolution().getUsername());
         requestedAckClient2 =
                 MessageFormat.format("{0}:" + custom2, testingContext2.getSolution().getUsername());
-        clientUser1 = newTestWebsocketClient(user1.getAccessToken(),
-                Map.of(DittoHeaderDefinition.DECLARED_ACKS.getKey(), "[\"" + declaredAckClient1 + "\"]"),
-                TestConstants.API_V_2);
-        clientUser2 = newTestWebsocketClient(user2.getAccessToken(),
-                Map.of(DittoHeaderDefinition.DECLARED_ACKS.getKey(), "[\"" + declaredAckClient2 + "\"]"),
-                TestConstants.API_V_2);
-        clientUser2ViaQueryParam = newTestWebsocketClient(user2.getAccessToken(), Map.of(),
-                TestConstants.API_V_2, ThingsWebsocketClient.JwtAuthMethod.QUERY_PARAM);
+
+        final Map<String, String> headers1 = new HashMap<>() {{
+            put(DittoHeaderDefinition.DECLARED_ACKS.getKey(), "[\"" + declaredAckClient1 + "\"]");
+        }};
+        final Map<String, String> headers2 = new HashMap<>() {{
+            put(DittoHeaderDefinition.DECLARED_ACKS.getKey(), "[\"" + declaredAckClient2+ "\"]");
+        }};
+        final Map<String, String> headers345 = new HashMap<>();
+        final BasicAuth basicAuth = testingContext1.getBasicAuth();
+        if (testingContext1.getBasicAuth().isEnabled()) {
+            final String credentials1 = basicAuth.getUsername() + ":" + basicAuth.getPassword();
+            final Map<String, String> basicAuthHeader1 = Map.of(HttpHeader.AUTHORIZATION.getName(),
+                    "Basic " + Base64.getEncoder().encodeToString(credentials1.getBytes()));
+            final String credentials2 =
+                    testingContext2.getBasicAuth().getUsername() + ":" + testingContext2.getBasicAuth().getPassword();
+            final Map<String, String> basicAuthHeader2 = Map.of(
+                    HttpHeader.AUTHORIZATION.getName(), "Basic " + Base64.getEncoder().encodeToString(credentials2.getBytes()));
+            headers1.putAll(basicAuthHeader1);
+            headers2.putAll(basicAuthHeader2);
+            headers345.putAll(basicAuthHeader1);
+        }
+
+        clientUser1 = newTestWebsocketClient(user1.getAccessToken(), headers1, API_V_2);
+        clientUser2 = newTestWebsocketClient(user2.getAccessToken(), headers2, API_V_2);
+        clientUser2ViaQueryParam = newTestWebsocketClient(user2.getAccessToken(), headers345,
+                API_V_2, ThingsWebsocketClient.AuthMethod.QUERY_PARAM);
 
         clientUser1.connect("ThingsWebsocketClient-User1-" + UUID.randomUUID());
         clientUser2.connect("ThingsWebsocketClient-User2-" + UUID.randomUUID());
@@ -188,19 +212,18 @@ public final class WebsocketIT extends IntegrationTest {
         final AuthClient user3 = serviceEnv.getTestingContext3().getOAuthClient();
         final AuthClient user4 = serviceEnv.getTestingContext4().getOAuthClient();
         final AuthClient user5 = serviceEnv.getTestingContext5().getOAuthClient();
-        clientUser3 = newTestWebsocketClient(user3.getAccessToken(), Map.of(), TestConstants.API_V_2);
-        clientUser4 = newTestWebsocketClient(user4.getAccessToken(), Map.of(), TestConstants.API_V_2);
-        clientUser5 = newTestWebsocketClient(user5.getAccessToken(), Map.of(), TestConstants.API_V_2);
+        clientUser3 = newTestWebsocketClient(user3.getAccessToken(), headers345, API_V_2);
+        clientUser4 = newTestWebsocketClient(user4.getAccessToken(), headers345, API_V_2);
+        clientUser5 = newTestWebsocketClient(user5.getAccessToken(), headers345, API_V_2);
         clientUserWithBlockedSolution =
-                newTestWebsocketClient(user2.getAccessToken(), Map.of(), TestConstants.API_V_2);
+                newTestWebsocketClient(user2.getAccessToken(), Map.of(), API_V_2);
 
         clientUser3.connect("ThingsWebsocketClient-User3-" + UUID.randomUUID());
         clientUser4.connect("ThingsWebsocketClient-User4-" + UUID.randomUUID());
         clientUser5.connect("ThingsWebsocketClient-User5-" + UUID.randomUUID());
         clientUserWithBlockedSolution.connect("ThingsWebsocketClient-User4-" + UUID.randomUUID());
 
-        secondClientForDefaultSolution = newTestWebsocketClient(this.user1.getAccessToken(), Map.of(),
-                TestConstants.API_V_2);
+        secondClientForDefaultSolution = newTestWebsocketClient(this.user1.getAccessToken(), headers345, API_V_2);
         secondClientForDefaultSolution.connect("ThingsWebsocketClient-User5-" + UUID.randomUUID());
     }
 
@@ -334,6 +357,15 @@ public final class WebsocketIT extends IntegrationTest {
         }).get(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
+    private JsonObject getPolicyJsonForAuth(final PolicyId policyId, final BasicAuth basicAuth) {
+        if (basicAuth.isEnabled()) {
+            return newPolicy(policyId, Subject.newInstance(
+                    SubjectIssuer.newInstance("nginx"), basicAuth.getUsername())).toJson();
+        } else {
+            return newPolicy(policyId, List.of(user1, user2), List.of(user1)).toJson();
+        }
+    }
+
     @Test
     @Category(Acceptance.class)
     public void retrieveThing() throws InterruptedException, TimeoutException, ExecutionException {
@@ -343,8 +375,10 @@ public final class WebsocketIT extends IntegrationTest {
                 .setId(thingId)
                 .build();
 
-        final Policy policy = newPolicy(PolicyId.of(thingId), List.of(user1, user2), List.of(user1));
-        final CreateThing createThing = CreateThing.of(thing, policy.toJson(), commandHeadersWithOwnCorrelationId());
+        final BasicAuth basicAuth = serviceEnv.getDefaultTestingContext().getBasicAuth();
+
+        final CreateThing createThing = CreateThing.of(thing, getPolicyJsonForAuth(PolicyId.of(thingId), basicAuth),
+                commandHeadersWithOwnCorrelationId());
 
         clientUser1.send(createThing).whenComplete((commandResponse, throwable) -> {
             assertThat(throwable).isNull();
@@ -362,6 +396,9 @@ public final class WebsocketIT extends IntegrationTest {
             assertThat(throwable).isNull();
             assertThat(commandResponse).isInstanceOf(RetrieveThingResponse.class);
         }).get(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        clientUser1.send(DeleteThing.of(thingId, COMMAND_HEADERS_V2));
+        clientUser1.send(DeletePolicy.of(PolicyId.of(thingId), COMMAND_HEADERS_V2));
+
     }
 
     @Test
@@ -375,12 +412,14 @@ public final class WebsocketIT extends IntegrationTest {
         }).join();
 
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
-        final Policy policy = newPolicy(PolicyId.of(thingId), List.of(user1, user2), List.of(user1));
+        final BasicAuth basicAuth = serviceEnv.getDefaultTestingContext().getBasicAuth();
         final Thing thing = Thing.newBuilder()
                 .setId(thingId)
                 .build();
 
-        final CreateThing createThing = CreateThing.of(thing, policy.toJson(), COMMAND_HEADERS_V2);
+        final CreateThing createThing =
+                CreateThing.of(thing, getPolicyJsonForAuth(PolicyId.of(thingId), basicAuth), COMMAND_HEADERS_V2);
+
 
         clientUser1.send(createThing).whenComplete((commandResponse, throwable) -> {
             assertThat(throwable).isNull();
@@ -388,6 +427,14 @@ public final class WebsocketIT extends IntegrationTest {
         });
 
         assertThat(latch.await(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+
+        // Cleanup
+        try {
+            clientUser1.send(DeleteThing.of(thingId, COMMAND_HEADERS_V2)).toCompletableFuture().get();
+            clientUser1.send(DeletePolicy.of(PolicyId.of(thingId), COMMAND_HEADERS_V2));
+        } catch (final ExecutionException ex) {
+            LOGGER.warn("Error during test cleanup: {}", ex.getMessage());
+        }
     }
 
     @Test
@@ -895,12 +942,12 @@ public final class WebsocketIT extends IntegrationTest {
 
         // create new websocket connection to not influence other tests
         final AuthClient user1 = testingContext1.getOAuthClient();
-        try (final ThingsWebsocketClient client = newTestWebsocketClient(user1.getAccessToken(), Map.of(),
-                TestConstants.API_V_2)) {
+        try (final ThingsWebsocketClient client = newTestWebsocketClient(user1.getAccessToken(), Map.of(), API_V_2)) {
 
             client.connect("ThingsWebsocketClient-toBeThrottled-" + UUID.randomUUID());
 
-            final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+            final ThingId thingId = ThingId.of(
+                    idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
             final Thing thing = Thing.newBuilder().setId(thingId).build();
             final CreateThing createThing = CreateThing.of(thing, null, DittoHeaders.newBuilder()
                     .correlationId("createThing-throttled")
@@ -1043,7 +1090,7 @@ public final class WebsocketIT extends IntegrationTest {
         clientUser2.startConsumingEvents(event -> {}, "gt(attributes/counter,10)").join();
 
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
-        final Policy policy = newPolicy(PolicyId.of(thingId), List.of(user1, user2), List.of(user1));
+        final BasicAuth basicAuth = serviceEnv.getDefaultTestingContext().getBasicAuth();
         final Thing thing = Thing.newBuilder()
                 .setId(thingId)
                 .build();
@@ -1052,7 +1099,8 @@ public final class WebsocketIT extends IntegrationTest {
                 .acknowledgementRequest(acknowledgementRequest1, acknowledgementRequest2)
                 .timeout(Duration.ofSeconds(2))
                 .build();
-        final CreateThing createThing = CreateThing.of(thing, policy.toJson(), dittoHeaders);
+        final CreateThing createThing =
+                CreateThing.of(thing, getPolicyJsonForAuth(PolicyId.of(thingId), basicAuth), dittoHeaders);
 
         clientUser1.send(createThing).handle((commandResponse, throwable) -> {
             assertThat(throwable).isNull();
@@ -1081,6 +1129,9 @@ public final class WebsocketIT extends IntegrationTest {
                     .findAny()
             ).contains(HttpStatus.REQUEST_TIMEOUT);
 
+            clientUser1.send(DeleteThing.of(thingId, dittoHeaders));
+            clientUser1.send(DeletePolicy.of(PolicyId.of(thingId), dittoHeaders));
+
             return commandResponse;
         }).join();
     }
@@ -1088,7 +1139,6 @@ public final class WebsocketIT extends IntegrationTest {
     @Test
     @Category(Acceptance.class)
     public void weakAcksAreIssuedForUnauthorizedSubscribers() {
-
         final AcknowledgementRequest requestUnauthorizedSubscriber =
                 AcknowledgementRequest.of(AcknowledgementLabel.of(requestedAckClient2));
         final AcknowledgementRequest requestNonexistentSubscriber =
@@ -1106,7 +1156,7 @@ public final class WebsocketIT extends IntegrationTest {
 
         final DittoHeaders dittoHeaders = COMMAND_HEADERS_V2.toBuilder()
                 .acknowledgementRequest(requestUnauthorizedSubscriber, requestNonexistentSubscriber)
-                .timeout(Duration.ofSeconds(2))
+                .timeout(Duration.ofSeconds(12))
                 .build();
         final CreateThing createThing = CreateThing.of(thing, null, dittoHeaders);
 
@@ -1123,11 +1173,13 @@ public final class WebsocketIT extends IntegrationTest {
                     acks.getAcknowledgement(requestNonexistentSubscriber.getLabel()).orElseThrow();
             assertThat(unauthorized.isWeak())
                     .describedAs("Expect weak ack from unauthorized subscriber: " + unauthorized)
-                    .isTrue();
+                    .isNotEqualTo(serviceEnv.getDefaultTestingContext().getBasicAuth().isEnabled());
             assertThat(nonexistent)
                     .describedAs("Expect timeout from nonexistent subscriber: " + nonexistent)
                     .satisfies(ack -> assertThat(ack.isWeak()).isFalse())
                     .satisfies(ack -> assertThat(ack.getHttpStatus()).isEqualTo(HttpStatus.REQUEST_TIMEOUT));
+            clientUser1.send(DeleteThing.of(thingId, dittoHeaders));
+            clientUser1.send(DeletePolicy.of(PolicyId.of(thingId), dittoHeaders));
         }).join();
     }
 

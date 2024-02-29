@@ -31,7 +31,7 @@ public final class ServiceEnvironment {
 
     public static final String DEFAULT_NAMESPACE = "namespace.default";
     public static final TestingContext TESTING_CONTEXT = TestingContext.withGeneratedMockClient(
-            new Solution("user", "password", DEFAULT_NAMESPACE), TEST_CONFIG);
+            new Solution("ditto", "ditto", DEFAULT_NAMESPACE), TEST_CONFIG);
 
     /**
      * Prefix for the Default namespace of the default solution.

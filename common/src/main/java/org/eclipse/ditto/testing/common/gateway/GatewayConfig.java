@@ -17,6 +17,8 @@ import java.net.URI;
 import javax.annotation.concurrent.Immutable;
 
 import org.eclipse.ditto.base.model.common.ConditionChecker;
+import org.eclipse.ditto.testing.common.CommonTestConfig;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.config.TestConfig;
 
 /**
@@ -32,12 +34,14 @@ public final class GatewayConfig {
 
     private final URI httpUriApi2;
     private final URI webSocketUriApi2;
+    private final BasicAuth basicAuth;
 
     private GatewayConfig(final TestConfig testConfig) {
         final var gatewayHttpUri = testConfig.getUriOrThrow(HTTP_URL_CONFIG_PATH);
         httpUriApi2 = gatewayHttpUri.resolve("/api/2/");
         final var gatewayWebSocketUri = testConfig.getUriOrThrow(WEBSOCKET_URL_CONFIG_PATH);
         webSocketUriApi2 = gatewayWebSocketUri.resolve("/ws/2");
+        basicAuth = CommonTestConfig.getInstance().getBasicAuth();
     }
 
     /**
@@ -61,4 +65,7 @@ public final class GatewayConfig {
         return webSocketUriApi2;
     }
 
+    public BasicAuth getBasicAuth() {
+        return basicAuth;
+    }
 }

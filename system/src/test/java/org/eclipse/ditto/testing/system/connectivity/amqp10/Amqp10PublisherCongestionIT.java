@@ -180,20 +180,20 @@ public class Amqp10PublisherCongestionIT extends AbstractConnectivityITCommon<Bl
                 .build();
 
         putThingWithPolicy(2, thing, policy, V_2)
-                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .withConfiguredAuth(testingContextWithRandomNs)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
         // WHEN: connection1 is flooded with enough events to fill the 100 element queue and 10 sending futures
         IntStream.range(0, 1010)
                 .forEach(i -> putAttribute(2, thingId, "x", "5")
-                        .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                        .withConfiguredAuth(testingContextWithRandomNs)
                         .expectingStatusCodeSuccessful()
                         .fire());
 
         // THEN: connection1 drops subsequent events
         final Response response = putAttribute(2, thingId, "x", "5")
-                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .withConfiguredAuth(testingContextWithRandomNs)
                 .withHeader("requested-acks", ConnectionModelFactory.toAcknowledgementLabel(
                         cf.getConnectionId(cf.connectionName1),
                         defaultTargetAddress(cf.connectionName1))

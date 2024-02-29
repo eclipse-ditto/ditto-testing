@@ -116,7 +116,7 @@ public final class RestConnectionsIT extends IntegrationTest {
                 .build();
 
         putThingWithPolicy(API_V_2, thing, policy, JsonSchemaVersion.V_2)
-                .withJWT(serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getDefaultTestingContext())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 

@@ -25,6 +25,7 @@ import static org.eclipse.ditto.testing.common.TestConstants.Policy.ARBITRARY_SU
 import static org.eclipse.ditto.testing.common.TestConstants.Policy.DITTO_AUTH_SUBJECT_TYPE;
 import static org.eclipse.ditto.things.api.Permission.READ;
 import static org.eclipse.ditto.things.api.Permission.WRITE;
+import static org.junit.Assume.assumeFalse;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -53,6 +54,7 @@ import org.eclipse.ditto.policies.model.Resources;
 import org.eclipse.ditto.policies.model.Subject;
 import org.eclipse.ditto.policies.model.SubjectAnnouncement;
 import org.eclipse.ditto.policies.model.SubjectId;
+import org.eclipse.ditto.policies.model.SubjectIssuer;
 import org.eclipse.ditto.policies.model.Subjects;
 import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.ResourcePathBuilder;
@@ -60,6 +62,7 @@ import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.matcher.PostMatcher;
 import org.hamcrest.Matchers;
 import org.junit.Test;
@@ -518,7 +521,7 @@ public final class PolicyIT extends IntegrationTest {
                 .set("announcement", subjectAnnouncement.toJson())
                 .build();
         postPolicy(policyId, "actions/activateTokenIntegration", activateTokenIntegrationPayload.toString())
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(NO_CONTENT)
                 .expectingBody(Matchers.isEmptyString())
                 .fire();
@@ -542,7 +545,7 @@ public final class PolicyIT extends IntegrationTest {
 
         // WHEN: token integration is deactivated at the policy level
         postPolicy(policyId, "actions/deactivateTokenIntegration")
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(NO_CONTENT)
                 .expectingBody(Matchers.isEmptyString())
                 .fire();
@@ -562,7 +565,7 @@ public final class PolicyIT extends IntegrationTest {
 
         // WHEN: the action "activateTokenIntegration" is executed at the entry level
         postPolicy(policyId, "entries/activate/actions/activateTokenIntegration")
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(NO_CONTENT)
                 .expectingBody(Matchers.isEmptyString())
                 .fire();
@@ -584,7 +587,7 @@ public final class PolicyIT extends IntegrationTest {
 
         // WHEN: token integration is deactivated at the entry level
         postPolicy(policyId, "entries/activate/actions/deactivateTokenIntegration")
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(NO_CONTENT)
                 .expectingBody(Matchers.isEmptyString())
                 .fire();
@@ -596,6 +599,8 @@ public final class PolicyIT extends IntegrationTest {
 
     @Test
     public void activateAndDeactivateTokenIntegrationWithoutPermission() {
+        assumeFalse("Test 'activateAndDeactivateTokenIntegrationWithoutPermission' skipped due to enabled Basic Auth configuration.",
+                serviceEnv.getDefaultTestingContext().getBasicAuth().isEnabled());
         final String policyId = idGenerator().withName("activateAndDeactivateTokenIntegrationWithoutPermission");
         final Policy policy = buildPolicyWithExecute(policyId,
                 serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject());
@@ -613,7 +618,7 @@ public final class PolicyIT extends IntegrationTest {
 
         // authenticated subject not contained in policy entry
         postPolicy(policyId, "entries/activate-without-subject/actions/activateTokenIntegration")
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(FORBIDDEN)
                 .fire();
 
@@ -668,7 +673,12 @@ public final class PolicyIT extends IntegrationTest {
     }
 
     private static Subject createDefaultSubject() {
-        return serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject();
+        final BasicAuth basicAuth = serviceEnv.getDefaultTestingContext().getBasicAuth();
+        if (basicAuth.isEnabled()) {
+            return Subject.newInstance(SubjectIssuer.newInstance("nginx"), basicAuth.getUsername());
+        } else {
+            return serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject();
+        }
     }
 
     private static Policy buildMinimalPolicy(final PolicyId policyId, final Subject subject) {

@@ -21,9 +21,12 @@ import java.util.Arrays;
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
 import org.eclipse.ditto.policies.model.PoliciesResourceType;
 import org.eclipse.ditto.policies.model.Policy;
+import org.eclipse.ditto.policies.model.Subject;
+import org.eclipse.ditto.policies.model.SubjectIssuer;
+import org.eclipse.ditto.policies.model.Subjects;
+import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.VersionedSearchIntegrationTest;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
-import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.common.matcher.search.SearchMatcher;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingBuilder;
@@ -43,9 +46,9 @@ public final class QueryThingsWithNamespacesIT extends VersionedSearchIntegratio
     @Override
     protected void createTestData() {
         thingId1 = createThingInNamespace(serviceEnv.getDefaultNamespaceName(),
-                serviceEnv.getDefaultTestingContext().getOAuthClient());
+                serviceEnv.getDefaultTestingContext());
         thingId2 = createThingInNamespace(serviceEnv.getTesting2NamespaceName(),
-                serviceEnv.getTestingContext2().getOAuthClient());
+                serviceEnv.getTestingContext2());
     }
 
     @Test
@@ -88,20 +91,28 @@ public final class QueryThingsWithNamespacesIT extends VersionedSearchIntegratio
         return searchThings(apiVersion).filter(idsFilter(Arrays.asList(thingId1, thingId2)));
     }
 
-    private ThingId createThingInNamespace(final String namespace, final AuthClient authClient) {
+    private ThingId createThingInNamespace(final String namespace, final TestingContext context) {
         final ThingId thingId = ThingId.of(idGenerator(namespace).withRandomName());
         final ThingBuilder.FromScratch thingBuilder = Thing.newBuilder().setId(thingId);
 
         final Thing thing = thingBuilder.build();
+        final Subjects subjects;
+        if (context.getBasicAuth().isEnabled()) {
+            subjects = Subjects.newInstance(Subject.newInstance(
+                            SubjectIssuer.newInstance("nginx"), context.getBasicAuth().getUsername()));
+        } else {
+            subjects = Subjects.newInstance(
+                    serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject(),
+                    serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject());
+        }
         final Policy policy = Policy.newBuilder().forLabel("DEFAULT")
-                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject())
-                .setSubject(serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject())
+                .setSubjects(subjects)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
                 .build();
 
-        return persistThingAndWaitTillAvailable(thing, policy, authClient);
+        return persistThingAndWaitTillAvailable(thing, policy, context);
     }
 
 }

@@ -32,6 +32,7 @@ import org.eclipse.ditto.json.JsonArray;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.testing.common.ConnectionsHttpClientResource;
+import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.TestSolutionResource;
 import org.eclipse.ditto.testing.common.ThingJsonProducer;
 import org.eclipse.ditto.testing.common.conditions.DockerEnvironment;
@@ -69,7 +70,7 @@ import io.restassured.specification.RequestSpecification;
  * This system test checks the handling of acknowledgements in conjunction with HTTP live requests.
  */
 @RunIf(DockerEnvironment.class)
-public final class LiveHttpChannelMqttAcknowledgementsIT {
+public final class LiveHttpChannelMqttAcknowledgementsIT extends IntegrationTest {
 
     private static final String CONNECTION_NAME = LiveHttpChannelMqttAcknowledgementsIT.class.getSimpleName();
     private static final Duration MQTT_CLIENT_OPERATION_TIMEOUT = Duration.ofSeconds(10L);
@@ -399,7 +400,8 @@ public final class LiveHttpChannelMqttAcknowledgementsIT {
                 .putHeader(DittoHeaderDefinition.DECLARED_ACKS.getKey(), JsonArray.of(webSocketAckLabel).toString())
                 .build();
         final var result =
-                ThingsWebSocketClientFactory.getWebSocketClient(TEST_CONFIG, TEST_SOLUTION_RESOURCE, additionalHeaders);
+                ThingsWebSocketClientFactory.getWebSocketClient(TEST_CONFIG, TEST_SOLUTION_RESOURCE,
+                        serviceEnv.getDefaultTestingContext().getBasicAuth(), additionalHeaders);
         result.connect(testNameCorrelationId.getCorrelationId(".connectWebSocketClient"));
         result.sendProtocolCommand("START-SEND-LIVE-COMMANDS", "START-SEND-LIVE-COMMANDS:ACK").join();
         return result;

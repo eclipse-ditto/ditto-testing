@@ -14,6 +14,7 @@ package org.eclipse.ditto.testing.system.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Base64;
 import java.util.concurrent.ExecutionException;
 
 import org.asynchttpclient.AsyncHttpClient;
@@ -23,14 +24,18 @@ import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonValue;
+import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.TestConstants;
+import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
 import org.eclipse.ditto.testing.common.client.http.AsyncHttpClientFactory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+
+import io.restassured.http.Header;
 
 /**
  * Integration test for duplicate header fields.
@@ -54,10 +59,19 @@ public class GatewayDuplicateHeaderIT extends IntegrationTest {
     public void postThingWithDuplicateCorrelationIdHeader() throws ExecutionException, InterruptedException {
 
         final String url = dittoUrl(TestConstants.API_V_2, TestConstants.Things.THINGS_PATH);
+        final TestingContext context = serviceEnv.getDefaultTestingContext();
+        final Header header;
+        if (context.getBasicAuth().isEnabled()) {
+            final String credentials = context.getBasicAuth().getUsername() + ":" + context.getBasicAuth().getPassword();
+            header = new Header(HttpHeader.AUTHORIZATION.name(),
+                    "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes()));
+        } else {
+            header = new Header(HttpHeader.AUTHORIZATION.name(),
+                    "Bearer " + context.getOAuthClient().getAccessToken());
+        }
 
         final ListenableFuture<Response> execute = client.preparePost(url)
-                .setHeader("Authorization",
-                        "Bearer " + serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken())
+                .setHeader(header.getName(), header.getValue())
                 .addHeader("Cache-Control", "no-cache")
                 .addHeader("x-correlation-id", "correlation-id-1")
                 .addHeader("x-correlation-id", "correlation-id-2")

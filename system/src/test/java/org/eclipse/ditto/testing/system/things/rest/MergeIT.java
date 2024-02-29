@@ -498,18 +498,18 @@ public class MergeIT extends IntegrationTest {
                 .append(propertyPath);
 
         patchThing(thingId, Thing.JsonFields.ATTRIBUTES.getPointer().append(attributePath), patchValue)
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
 
         patchThing(thingId, path, patchValue)
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.FORBIDDEN)
                 .expectingErrorCode("things:thing.notmodifiable")
                 .fire();
 
         patchThing(thingId, JsonPointer.empty(), JsonFactory.newObject(path, patchValue))
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.FORBIDDEN)
                 .expectingErrorCode("things:thing.notmodifiable")
                 .fire();

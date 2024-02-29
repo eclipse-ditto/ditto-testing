@@ -40,6 +40,8 @@ import org.awaitility.core.ConditionFactory;
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.HttpParameter;
+import org.eclipse.ditto.testing.common.TestingContext;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.hamcrest.CustomTypeSafeMatcher;
 import org.hamcrest.Matcher;
 import org.hamcrest.Matchers;
@@ -259,6 +261,8 @@ public abstract class HttpVerbMatcher<T extends HttpVerbMatcher> {
      * Sets the JWT Authorization Header.
      *
      * @param token the token to authorize.
+     * @param preemptive whether preemptive authentication is enabled: this means that the authentication details are
+     * sent in the request header regardless if the server has challenged for authentication or not.
      * @return this instance to allow Method Chaining.
      */
     public T withJWT(final String token, final boolean preemptive) {
@@ -271,6 +275,35 @@ public abstract class HttpVerbMatcher<T extends HttpVerbMatcher> {
         };
 
         return getThis();
+    }
+
+    /**
+     * Sets Authorization Header according to configured authentication method.
+     * If Basic Auth is enabled, Basic auth is used, otherwise OAuth method.
+     * @param testingContext the testing context
+     *
+     * @return this instance to allow Method Chaining.
+     */
+    public T withConfiguredAuth(final TestingContext testingContext) {
+        return withConfiguredAuth(testingContext, false);
+    }
+
+    /**
+     * Sets Authorization Header according to configured authentication method.
+     * If Basic Auth is enabled, Basic auth is used, otherwise OAuth method.
+     * @param testingContext the testing context
+     * @param preemptive whether preemptive authentication is enabled: this means that the authentication details are
+     * sent in the request header regardless if the server has challenged for authentication or not.
+     *
+     * @return this instance to allow Method Chaining.
+     */
+    public T withConfiguredAuth(final TestingContext testingContext, final boolean preemptive) {
+        final BasicAuth basicAuth = testingContext.getBasicAuth();
+        if (basicAuth.isEnabled()) {
+            return this.withBasicAuth(basicAuth.getUsername(), basicAuth.getPassword(), preemptive);
+        } else {
+            return this.withJWT(testingContext.getOAuthClient().getAccessToken(), preemptive);
+        }
     }
 
     /**

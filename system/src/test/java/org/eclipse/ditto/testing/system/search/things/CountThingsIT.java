@@ -19,16 +19,17 @@ import static org.eclipse.ditto.testing.common.matcher.search.SearchResponseMatc
 import static org.eclipse.ditto.testing.common.matcher.search.SearchResponseMatchers.isCountGte;
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.and;
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.or;
+import static org.junit.Assume.assumeFalse;
 
 import java.time.Duration;
 
 import org.assertj.core.api.Assumptions;
 import org.eclipse.ditto.base.model.common.HttpStatus;
+import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.Timeout;
 import org.eclipse.ditto.testing.common.VersionedSearchIntegrationTest;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
-import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.common.matcher.search.SearchProperties;
 import org.eclipse.ditto.things.model.Attributes;
 import org.eclipse.ditto.things.model.Thing;
@@ -72,9 +73,8 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
         persistThingsAndWaitTillAvailable(i -> createRandomThing(createThingId("user1")), 10);
         persistThingAndWaitTillAvailable(createThing1());
         persistThingAndWaitTillAvailable(createThing2());
-        final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
         persistThingsAndWaitTillAvailable(i -> createRandomThing(createThingId("user2")),
-                authClient, 4, V_2);
+                serviceEnv.getDefaultTestingContext(), 4, V_2);
     }
 
     private static Thing createThing1() {
@@ -103,7 +103,8 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
     }
 
     private static ThingId createThingId(final String prefix) {
-        return ThingId.of(idGenerator(RANDOM_NAMESPACE).withPrefixedRandomName(CountThingsIT.class.getSimpleName(), prefix));
+        return ThingId.of(
+                idGenerator(RANDOM_NAMESPACE).withPrefixedRandomName(CountThingsIT.class.getSimpleName(), prefix));
     }
 
     @Test
@@ -167,9 +168,10 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
 
     @Test
     public void countThingsWithoutPermission() {
+        assumeFalse(serviceEnv.getDefaultTestingContext().getBasicAuth().isEnabled());
         searchCount(apiVersion).filter(attribute(ATTR1_KEY).eq(THING1_ATTR1_VALUE))
                 .namespaces(RANDOM_NAMESPACE)
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingBody(isCount(0))
                 .fire();
     }
@@ -187,6 +189,8 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
                 .expectingBody(isCount(1))
                 .fire();
 
+        final Response policy = getPolicy(thingId).fire();
+
         // delete the thing's policy. the thing is locked and should be removed from search index eventually.
         deletePolicy(thingId)
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
@@ -198,6 +202,9 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
                 .useAwaitility(await().atMost(Duration.ofMinutes(2)).pollInterval(Duration.ofSeconds(10)))
                 .expectingBody(isCount(0))
                 .fire();
+
+        // Put the policy back to allow final cleanup of the Thing
+        putPolicy(thingId, JsonObject.of(policy.print())).fire();
     }
 
     private void assertCount(final SearchFilter searchFilter, final long expected) {

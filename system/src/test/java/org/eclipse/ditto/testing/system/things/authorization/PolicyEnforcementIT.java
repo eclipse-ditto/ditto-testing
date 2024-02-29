@@ -51,9 +51,11 @@ import org.eclipse.ditto.policies.model.ResourceKey;
 import org.eclipse.ditto.policies.model.Resources;
 import org.eclipse.ditto.policies.model.Subject;
 import org.eclipse.ditto.policies.model.SubjectId;
+import org.eclipse.ditto.policies.model.SubjectIssuer;
 import org.eclipse.ditto.policies.model.SubjectType;
 import org.eclipse.ditto.policies.model.Subjects;
 import org.eclipse.ditto.testing.common.IntegrationTest;
+import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
 import org.eclipse.ditto.testing.common.matcher.PostMatcher;
 import org.eclipse.ditto.testing.common.matcher.PutMatcher;
@@ -87,11 +89,20 @@ public final class PolicyEnforcementIT extends IntegrationTest {
     @Rule
     public TestName name = new TestName();
 
+    private static Subject getSubject(final TestingContext context) {
+        if (context.getBasicAuth().isEnabled()) {
+            return Subject.newInstance(
+                    SubjectIssuer.newInstance("nginx"), context.getBasicAuth().getUsername());
+        } else {
+            return context.getOAuthClient().getDefaultSubject();
+        }
+    }
+
     @BeforeClass
     public static void initTestFixture() {
-        defaultClientSubjectId = serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject().getId();
-        client2SubjectId = serviceEnv.getTestingContext2().getOAuthClient().getSubject().getId();
-        client3SubjectId = serviceEnv.getTestingContext3().getOAuthClient().getSubject().getId();
+        defaultClientSubjectId = getSubject(serviceEnv.getDefaultTestingContext()).getId();
+        client2SubjectId = getSubject(serviceEnv.getTestingContext2()).getId();
+        client3SubjectId = getSubject(serviceEnv.getTestingContext3()).getId();
     }
 
     /**
@@ -126,7 +137,7 @@ public final class PolicyEnforcementIT extends IntegrationTest {
 
         // There may only be returned the partial thing containing the attribute on which the passed in user has access
         getThing(API_V_2, thingId)
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingBody(containsOnly(expectedBody))
                 .expectingHttpStatus(HttpStatus.OK)
                 .fire();
@@ -141,7 +152,7 @@ public final class PolicyEnforcementIT extends IntegrationTest {
 
         // not found expected as user 3 has o rights on the thing
         getThing(API_V_2, thingId)
-                .withJWT(serviceEnv.getTestingContext3().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext3())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .fire();
     }
@@ -158,7 +169,7 @@ public final class PolicyEnforcementIT extends IntegrationTest {
 
         // not accessible with user 3
         getThing(API_V_2, thingId)
-                .withJWT(serviceEnv.getTestingContext3().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext3())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .fire();
 
@@ -173,7 +184,7 @@ public final class PolicyEnforcementIT extends IntegrationTest {
         final JsonValue expectedBody = createOnlyAttributeBody(thingId);
         getThing(API_V_2, thingId)
                 .useAwaitility(AWAITILITY_DEFAULT_CONFIG)
-                .withJWT(serviceEnv.getTestingContext3().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext3())
                 .expectingBody(containsOnly(expectedBody))
                 .expectingHttpStatus(HttpStatus.OK)
                 .fire();
@@ -197,7 +208,7 @@ public final class PolicyEnforcementIT extends IntegrationTest {
                         ATTRIBUTE_A);
 
         putAttribute(API_V_2, testThingId, ATTRIBUTE_A, "false")
-                .withJWT(serviceEnv.getTestingContext3().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext3())
                 .expectingHttpStatus(FORBIDDEN)
                 .fire();
 
@@ -208,7 +219,7 @@ public final class PolicyEnforcementIT extends IntegrationTest {
 
         Awaitility.await().atMost(5000, TimeUnit.MILLISECONDS)
                 .untilAsserted(() -> putAttribute(API_V_2, testThingId, ATTRIBUTE_A, "false")
-                        .withJWT(serviceEnv.getTestingContext3().getOAuthClient().getAccessToken())
+                        .withConfiguredAuth(serviceEnv.getTestingContext3())
                         .expectingHttpStatus(NO_CONTENT)
                         .fire());
     }
@@ -339,7 +350,7 @@ public final class PolicyEnforcementIT extends IntegrationTest {
                 .fire();
 
         putAttributes(API_V_2, thingId, createAttributes())
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(FORBIDDEN)
                 .fire();
     }
@@ -388,7 +399,7 @@ public final class PolicyEnforcementIT extends IntegrationTest {
 
         // try to access the Thing with the "another use" - should not be accessible (as policy was implicitly created for other user)
         getThing(API_V_2, thingId)
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .fire();
 
@@ -443,7 +454,7 @@ public final class PolicyEnforcementIT extends IntegrationTest {
 
         // WHEN/THEN
         putThing(API_V_2, otherThingJson, JsonSchemaVersion.V_2)
-                .withJWT(serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getDefaultTestingContext())
                 .expectingHttpStatus(CREATED) // now that the thing permissions are included it must be allowed
                 .fire();
     }
@@ -683,13 +694,13 @@ public final class PolicyEnforcementIT extends IntegrationTest {
 
         // reading the DEFAULT entry should not be permitted for user2
         getPolicyEntry(policyId, "DEFAULT")
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .fire();
 
         // reading the READER entry should be permitted for user2
         getPolicyEntry(policyId, "READER")
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.OK)
                 .fire();
 
@@ -697,7 +708,7 @@ public final class PolicyEnforcementIT extends IntegrationTest {
                 Resources.newInstance(Resource.newInstance(PoliciesResourceType.policyResource("entries/READER"),
                         EffectedPermissions.newInstance(collect("READ", "WRITE"),
                                 Permissions.none())))))
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(
                         FORBIDDEN) // writing the "READER" policyEntry should be permitted for user2
                 .fire();
@@ -767,18 +778,18 @@ public final class PolicyEnforcementIT extends IntegrationTest {
 
         putThing(API_V_2, thing, JsonSchemaVersion.V_2)
                 .useAwaitility(AWAITILITY_DEFAULT_CONFIG)
-                .withJWT(serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getDefaultTestingContext())
                 .expectingHttpStatus(CREATED)
                 .fire();
 
         getFeature(API_V_2, thingId, gyroscopeFeature.getId())
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.OK)
                 .expectingBody(containsOnly(gyroscopeFeature.toJson()))
                 .fire();
 
         getFeatures(API_V_2, thingId)
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.OK)
                 .expectingBody(containsOnly(JsonFactory.newObjectBuilder()
                         .set(gyroscopeFeature.getId(), gyroscopeFeature.toJson())
@@ -786,7 +797,7 @@ public final class PolicyEnforcementIT extends IntegrationTest {
                 .fire();
 
         getFeatures(API_V_2, thingId)
-                .withJWT(serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getDefaultTestingContext())
                 .expectingHttpStatus(HttpStatus.OK)
                 .expectingBody(containsOnly(features.toJson()))
                 .fire();

@@ -39,7 +39,6 @@ import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.testing.common.categories.Search;
-import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.common.matcher.search.SearchMatcher;
 import org.eclipse.ditto.testing.common.matcher.search.SearchProperties;
 import org.eclipse.ditto.things.model.Attributes;
@@ -209,9 +208,9 @@ public abstract class SearchIntegrationTest extends IntegrationTest {
      * @return Thing ID of the created thing.
      */
     protected static ThingId persistThingAndWaitTillAvailable(final Thing thing, final JsonSchemaVersion version,
-            final AuthClient authClient) {
+            final TestingContext context) {
         final String thingJson = thing.toJsonString(version, FieldType.regularOrSpecial());
-        return persistThingsAndWaitTillAvailable(thingJson, 1, version, authClient).iterator().next();
+        return persistThingsAndWaitTillAvailable(thingJson, 1, version, context).iterator().next();
     }
 
     /**
@@ -222,32 +221,26 @@ public abstract class SearchIntegrationTest extends IntegrationTest {
      * @return Thing ID of the created thing.
      */
     protected ThingId persistThingAndWaitTillAvailable(final Thing thing, final Policy policy,
-            final AuthClient authClient) {
+            final TestingContext context) {
         final String jsonString =
                 thing.toJson().toBuilder().set(Policy.INLINED_FIELD_NAME, policy.toJson()).build().toString();
-        return persistThingsAndWaitTillAvailable(jsonString, 1, JsonSchemaVersion.V_2, authClient).iterator()
-                .next();
+        return persistThingsAndWaitTillAvailable(jsonString, 1, JsonSchemaVersion.V_2, context).iterator().next();
     }
 
     protected static Set<ThingId> persistThingsAndWaitTillAvailable(final String thingJson, final long n,
-            final JsonSchemaVersion version, final AuthClient authClient) {
+            final JsonSchemaVersion version, final TestingContext context) {
 
-        return persistThingsAndWaitTillAvailable(thingJson, authClient, n, version);
+        return persistThingsAndWaitTillAvailable(thingJson, context, n, version);
     }
 
     public static Set<ThingId> persistThingsAndWaitTillAvailable(final Function<Long, Thing> thingBuilder,
             final long n, final JsonSchemaVersion version) {
 
-        final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
-
-        return persistThingsAndWaitTillAvailable(thingBuilder, authClient, n, version);
+        return persistThingsAndWaitTillAvailable(thingBuilder, serviceEnv.getDefaultTestingContext(), n, version);
     }
 
     public static Set<ThingId> persistThingsAndWaitTillAvailable(final Function<Long, Thing> thingBuilder,
-            final AuthClient authClient, final long n, final JsonSchemaVersion version) {
-        if (n == 0) {
-            return new LinkedHashSet<>();
-        }
+            final TestingContext testingContext, final long n, final JsonSchemaVersion version) {
 
         final Set<ThingId> thingIds = new LinkedHashSet<>();
         for (long i = 0; i < n; i++) {
@@ -261,7 +254,7 @@ public abstract class SearchIntegrationTest extends IntegrationTest {
                     .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                             DittoAcknowledgementLabel.SEARCH_PERSISTED.toString())
                     .withHeader(DittoHeaderDefinition.TIMEOUT.getKey(), "30s")
-                    .withJWT(authClient.getAccessToken())
+                    .withConfiguredAuth(testingContext)
                     .expectingStatusCodeSuccessful()
                     .fire();
             logProgress("Successfully persisted Thing", i, n);
@@ -271,7 +264,7 @@ public abstract class SearchIntegrationTest extends IntegrationTest {
     }
 
     private static Set<ThingId> persistThingsAndWaitTillAvailable(final String thingJson,
-            final AuthClient authClient,
+            final TestingContext testingContext,
             final long n, final JsonSchemaVersion version) {
         if (n == 0) {
             return new LinkedHashSet<>();
@@ -289,7 +282,7 @@ public abstract class SearchIntegrationTest extends IntegrationTest {
                     .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(),
                             DittoAcknowledgementLabel.SEARCH_PERSISTED.toString())
                     .withHeader(DittoHeaderDefinition.TIMEOUT.getKey(), "30s")
-                    .withJWT(authClient.getAccessToken())
+                    .withConfiguredAuth(testingContext)
                     .expectingStatusCodeSuccessful()
                     .fire();
             if (n == 1) {

@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,6 +50,9 @@ public class CommonTestConfig {
 
     private static final String PROPERTY_GATEWAY_URL = GATEWAY_PREFIX + "url";
     private static final String PROPERTY_GATEWAY_WS_URL = GATEWAY_PREFIX + "ws-url";
+    private static final String PROPERTY_GATEWAY_BASIC_AUTH_ENABLED = GATEWAY_PREFIX + "basic-auth.enabled";
+    private static final String PROPERTY_GATEWAY_BASIC_AUTH_PASSWORD = GATEWAY_PREFIX + "basic-auth.password";
+    private static final String PROPERTY_GATEWAY_BASIC_AUTH_USERNAME = GATEWAY_PREFIX + "basic-auth.username";
     private static final String CONNECTIVITY_PREFIX = "connectivity.";
     private static final String RABBITMQ_PREFIX = CONNECTIVITY_PREFIX + "rabbitmq.";
     private static final String PROPERTY_RABBITMQ_HOSTNAME = RABBITMQ_PREFIX + PROPERTY_LEAF_HOSTNAME;
@@ -257,6 +261,29 @@ public class CommonTestConfig {
 
     private String getWsBaseUrl() {
         return conf.getString(PROPERTY_GATEWAY_WS_URL);
+    }
+
+    public BasicAuth getBasicAuth() {
+        return BasicAuth.newInstance(
+                getBooleanOrDefault(PROPERTY_GATEWAY_BASIC_AUTH_ENABLED, false),
+                getStringOrDefault(PROPERTY_GATEWAY_BASIC_AUTH_USERNAME, ""),
+                getStringOrDefault(PROPERTY_GATEWAY_BASIC_AUTH_PASSWORD, ""));
+    }
+
+    private boolean getBooleanOrDefault(final String path, final boolean defaultValue) {
+        if (conf.hasPath(path)) {
+            return conf.getBoolean(path);
+        } else {
+            return defaultValue;
+        }
+    }
+
+    private String getStringOrDefault(final String path, final String defaultValue) {
+        if (conf.hasPath(path)) {
+            return conf.getString(path);
+        } else {
+            return defaultValue;
+        }
     }
 
     private String getDevopsBaseUrl() {

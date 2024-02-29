@@ -47,8 +47,10 @@ import org.eclipse.ditto.policies.model.PolicyBuilder;
 import org.eclipse.ditto.policies.model.PolicyEntry;
 import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.policies.model.Subject;
+import org.eclipse.ditto.policies.model.SubjectIssuer;
 import org.eclipse.ditto.testing.common.SearchIntegrationTest;
 import org.eclipse.ditto.testing.common.TestConstants;
+import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
 import org.eclipse.ditto.things.model.Thing;
@@ -346,7 +348,7 @@ public final class ThingsWithPoliciesIT extends SearchIntegrationTest {
                         idGenerator().withPrefixedRandomName("createPolicyAndThingWithReferenceToThatPolicy_policy"));
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("FOO_AND_BAR")
-                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject())
+                .setSubject(getSubject(serviceEnv.getDefaultTestingContext()))
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .build();
@@ -559,12 +561,21 @@ public final class ThingsWithPoliciesIT extends SearchIntegrationTest {
                 .fire();
     }
 
+    private static Subject getSubject(final TestingContext context) {
+        if (context.getBasicAuth().isEnabled()) {
+            return Subject.newInstance(
+                    SubjectIssuer.newInstance("nginx"), context.getBasicAuth().getUsername());
+        } else {
+            return context.getOAuthClient().getDefaultSubject();
+        }
+    }
+
     private static JsonObject createPolicyJson(final PolicyId policyId) {
         final JsonObjectBuilder policyJsonObjectBuilder = JsonObject.newBuilder();
         policyJsonObjectBuilder.set(Policy.JsonFields.ID, policyId.toString());
 
-        final var defaultSubject = serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject();
-        final var policyEntryJson = createPolicyEntryJson(Permission.MIN_REQUIRED_POLICY_PERMISSIONS, defaultSubject);
+        final var policyEntryJson = createPolicyEntryJson(Permission.MIN_REQUIRED_POLICY_PERMISSIONS,
+                getSubject(serviceEnv.getDefaultTestingContext()));
 
         final JsonObjectBuilder policyEntriesJsonObjectBuilder = JsonObject.newBuilder();
         policyEntriesJsonObjectBuilder.set("DEFAULT", policyEntryJson);

@@ -13,6 +13,7 @@
 package org.eclipse.ditto.testing.system.gateway;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.Assume.assumeFalse;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -60,13 +61,12 @@ public final class GatewayOAuthJWTAuthorizationIT extends IntegrationTest {
     @Test
     @Category({Acceptance.class})
     public void postThingWithOAuthToken() throws IllegalStateException {
-        final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
-        final String jwtToken = authClient.getAccessToken();
+        final TestingContext context = serviceEnv.getDefaultTestingContext();
 
         final ThingId thingId = ThingId.of(idGenerator(RANDOM_NAMESPACE).withRandomName());
 
         putThing(TestConstants.API_V_2, Thing.newBuilder().setId(thingId).build(), JsonSchemaVersion.V_2)
-                .withJWT(jwtToken)
+                .withConfiguredAuth(context)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -76,23 +76,25 @@ public final class GatewayOAuthJWTAuthorizationIT extends IntegrationTest {
                 Resource.newInstance(PoliciesResourceType.policyResource("/"), readWriteGranted),
                 Resource.newInstance(PoliciesResourceType.thingResource("/"), readWriteGranted));
         final PolicyEntry policyEntry = PoliciesModelFactory.newPolicyEntry(
-                "O-AUTH-CLIENT", Subjects.newInstance(authClient.getSubject()), resources);
+                "O-AUTH-CLIENT", Subjects.newInstance(context.getOAuthClient().getSubject()), resources);
 
         // add permissions user for clean up process
         putPolicyEntry(thingId, policyEntry)
-                .withJWT(jwtToken)
+                .withConfiguredAuth(context)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
         getPolicy(thingId)
-                .withJWT(jwtToken)
+                .withConfiguredAuth(context)
                 .expectingHttpStatus(HttpStatus.OK)
                 .fire();
     }
 
     @Test
-    @Category({Acceptance.class})
+    @Category(Acceptance.class)
     public void refreshJwtViaWebSocket() throws InterruptedException {
+        assumeFalse(serviceEnv.getDefaultTestingContext().getBasicAuth().isEnabled());
+
         final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
         final ThingsWebsocketClient thingsWebsocketClient =
                 newTestWebsocketClient(authClient.getAccessToken(), Collections.emptyMap(),
@@ -118,7 +120,7 @@ public final class GatewayOAuthJWTAuthorizationIT extends IntegrationTest {
         final String wsJwtToken = authClient.getAccessToken();
         final String restJwtToken = authClient2.getAccessToken();
         final ThingsWebsocketClient thingsWebsocketClient = newTestWebsocketClient(wsJwtToken, Collections.emptyMap(),
-                TestConstants.API_V_2, ThingsWebsocketClient.JwtAuthMethod.QUERY_PARAM);
+                TestConstants.API_V_2, ThingsWebsocketClient.AuthMethod.QUERY_PARAM);
         thingsWebsocketClient.connect("enrichMessagesViaWebSocketWithJwtAsQueryParameter-" + UUID.randomUUID());
 
         final List<Adaptable> adaptableList = new CopyOnWriteArrayList<>();
@@ -129,7 +131,8 @@ public final class GatewayOAuthJWTAuthorizationIT extends IntegrationTest {
         });
         assertThat(thingsWebsocketClient.isOpen()).isTrue();
         final CompletableFuture<Void> ackConfirmed =
-                thingsWebsocketClient.sendProtocolCommand("START-SEND-EVENTS?namespaces=" + RANDOM_NAMESPACE + "&extraFields=attributes",
+                thingsWebsocketClient.sendProtocolCommand(
+                        "START-SEND-EVENTS?namespaces=" + RANDOM_NAMESPACE + "&extraFields=attributes",
                         "START-SEND-EVENTS:ACK");
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
@@ -139,7 +142,7 @@ public final class GatewayOAuthJWTAuthorizationIT extends IntegrationTest {
         final ThingId thingId = ThingId.of(idGenerator(RANDOM_NAMESPACE).withRandomName());
         final Thing thing = new ThingJsonProducer().getThing().toBuilder().setId(thingId).build();
         putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
-                .withJWT(restJwtToken)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -148,18 +151,19 @@ public final class GatewayOAuthJWTAuthorizationIT extends IntegrationTest {
         final Resources resources = Resources.newInstance(
                 Resource.newInstance(PoliciesResourceType.policyResource("/"), readWriteGranted),
                 Resource.newInstance(PoliciesResourceType.thingResource("/"), readWriteGranted));
-        final PolicyEntry policyEntry = PoliciesModelFactory.newPolicyEntry(
+        final PolicyEntry policyEntry;
+        policyEntry = PoliciesModelFactory.newPolicyEntry(
                 "O-AUTH-CLIENT", Subjects.newInstance(authClient.getSubject(), authClient2.getSubject()),
                 resources);
 
         putPolicyEntry(thingId, policyEntry)
-                .withJWT(restJwtToken)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire()
                 .print();
 
         patchThing(ThingId.of(thingId), JsonPointer.of("features/Vehicle/properties/status/speed"), JsonValue.of(0))
-                .withJWT(restJwtToken)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire()
                 .print();

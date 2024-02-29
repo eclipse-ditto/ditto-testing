@@ -72,7 +72,7 @@ import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.Solution;
 import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
-import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.conditions.DockerEnvironment;
 import org.eclipse.ditto.testing.common.conditions.RunIf;
 import org.eclipse.ditto.testing.common.matcher.RestMatcherConfigurer;
@@ -176,15 +176,20 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
                 .build();
 
         putThingWithPolicy(API_V_2, thing, policy, JsonSchemaVersion.V_2)
-                .withJWT(testingContext.getOAuthClient().getAccessToken())
+                .withConfiguredAuth(testingContext)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
-        configureRestMatchers(testingContext.getOAuthClient());
+        configureRestMatchers();
     }
 
-    private static void configureRestMatchers(final AuthClient authClient) {
-        restMatcherConfigurer = RestMatcherConfigurer.withJwt(authClient.getAccessToken());
+    private static void configureRestMatchers() {
+        final BasicAuth basicAuth = testingContext.getBasicAuth();
+        if (basicAuth.isEnabled()) {
+            restMatcherConfigurer = RestMatcherConfigurer.withBasicAuth(basicAuth);
+        } else {
+            restMatcherConfigurer = RestMatcherConfigurer.withJwt(testingContext.getOAuthClient().getAccessToken());
+        }
         restMatcherFactory = new RestMatcherFactory(restMatcherConfigurer);
     }
 

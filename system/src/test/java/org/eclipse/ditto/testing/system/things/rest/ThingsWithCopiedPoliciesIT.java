@@ -14,6 +14,7 @@ package org.eclipse.ditto.testing.system.things.rest;
 
 import static org.eclipse.ditto.policies.api.Permission.READ;
 import static org.eclipse.ditto.policies.api.Permission.WRITE;
+import static org.eclipse.ditto.testing.common.TestConstants.API_V_2;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,9 +34,10 @@ import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.policies.model.Resource;
 import org.eclipse.ditto.policies.model.ResourceKey;
 import org.eclipse.ditto.policies.model.Subject;
+import org.eclipse.ditto.policies.model.SubjectIssuer;
+import org.eclipse.ditto.policies.model.Subjects;
 import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.IntegrationTest;
-import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
@@ -90,7 +92,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final Policy originalPolicy = policyWithSpecialLabel(policyId, specialLabel);
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, originalPolicy);
 
-        postThing(TestConstants.API_V_2, originalThingJson)
+        postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -117,7 +119,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 secondClientForDefaultSolution.getSubject());
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, policyWithUser2PermissionOnPolicy);
 
-        postThing(TestConstants.API_V_2, originalThingJson)
+        postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -126,7 +128,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 thingWithCopiedPolicyFromId(policyWithUser2PermissionOnPolicy.getEntityId()
                         .orElseThrow(() -> new IllegalStateException("Policy should have an ID")));
 
-        postThing(TestConstants.API_V_2, thingWithCopiedPolicyJson)
+        postThing(API_V_2, thingWithCopiedPolicyJson)
                 .withJWT(secondClientForDefaultSolution.getAccessToken())
                 .expectingHttpStatus(HttpStatus.FORBIDDEN)
                 .expectingErrorCode("things:thing.notmodifiable")
@@ -141,7 +143,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final Policy originalPolicy = policyWithSpecialLabel(policyId, specialLabel);
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, originalPolicy);
 
-        postThing(TestConstants.API_V_2, originalThingJson)
+        postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -149,7 +151,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final JsonObject thingWithCopiedPolicyJson = thingWithCopiedPolicyFromId(originalPolicy.getEntityId()
                 .orElseThrow(() -> new IllegalStateException("Policy should have an ID")));
 
-        postThing(TestConstants.API_V_2, thingWithCopiedPolicyJson)
+        postThing(API_V_2, thingWithCopiedPolicyJson)
                 .withJWT(secondClientForDefaultSolution.getAccessToken())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .expectingErrorCode("policies:policy.notfound")
@@ -165,7 +167,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final Policy originalPolicy = policyWithSpecialLabel(policyId, specialLabel);
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, originalPolicy);
 
-        final Thing originalThing = parseThingFromResponse(postThing(TestConstants.API_V_2, originalThingJson)
+        final Thing originalThing = parseThingFromResponse(postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
@@ -179,6 +181,8 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         getPolicy(copiedPolicyId)
                 .expectingBody(containsOnly(expectedPolicy))
                 .fire();
+        deleteThing(API_V_2, originalThing.getEntityId().get()).fire();
+        deletePolicy(policyId).fire();
     }
     
     @Test
@@ -192,14 +196,14 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                         secondClientForDefaultSolution.getSubject());
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, policyWithUser2AccessToThing);
 
-        final String originalThingId = parseIdFromResponse(postThing(TestConstants.API_V_2, originalThingJson)
+        final String originalThingId = parseIdFromResponse(postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
         // create thing with copied policy
         final JsonObject thingWithCopiedPolicyJson = thingWithCopiedPolicyFromThingRef(originalThingId);
 
-        postThing(TestConstants.API_V_2, thingWithCopiedPolicyJson)
+        postThing(API_V_2, thingWithCopiedPolicyJson)
                 .withJWT(secondClientForDefaultSolution.getAccessToken())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .expectingErrorCode("policies:policy.notfound")
@@ -214,7 +218,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final Policy originalPolicy = policyWithSpecialLabel(policyId, specialLabel);
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, originalPolicy);
 
-        final Thing originalThing = parseThingFromResponse(postThing(TestConstants.API_V_2, originalThingJson)
+        final Thing originalThing = parseThingFromResponse(postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
@@ -222,7 +226,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final JsonObject thingWithCopiedPolicyJson = thingWithCopiedPolicyFromThingRef(originalThing.getEntityId()
                 .orElseThrow(() -> new IllegalStateException("Thing should have an ID")));
 
-        postThing(TestConstants.API_V_2, thingWithCopiedPolicyJson)
+        postThing(API_V_2, thingWithCopiedPolicyJson)
                 .withJWT(secondClientForDefaultSolution.getAccessToken())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .expectingErrorCode("things:thing.notfound")
@@ -238,7 +242,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final Policy originalPolicy = policyWithSpecialLabel(policyId, specialLabel);
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, originalPolicy);
 
-        final String originalThingId = parseIdFromResponse(postThing(TestConstants.API_V_2, originalThingJson)
+        final String originalThingId = parseIdFromResponse(postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
@@ -266,7 +270,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 secondClientForDefaultSolution.getSubject());
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, policyWithUser2PermissionOnPolicy);
 
-        final String originalThingId = parseIdFromResponse(postThing(TestConstants.API_V_2, originalThingJson)
+        final String originalThingId = parseIdFromResponse(postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
@@ -277,7 +281,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                         .orElseThrow(() -> new IllegalStateException("Policy should have an ID")))
                         .set(Thing.JsonFields.ID, newThingId);
 
-        putThing(TestConstants.API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
+        putThing(API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
                 .withJWT(secondClientForDefaultSolution.getAccessToken())
                 .expectingHttpStatus(HttpStatus.FORBIDDEN)
                 .expectingErrorCode("things:thing.notmodifiable")
@@ -292,7 +296,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final Policy originalPolicy = policyWithSpecialLabel(policyId, specialLabel);
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, originalPolicy);
 
-        final String originalThingId = parseIdFromResponse(postThing(TestConstants.API_V_2, originalThingJson)
+        final String originalThingId = parseIdFromResponse(postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
@@ -302,7 +306,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .orElseThrow(() -> new IllegalStateException("Policy should have an ID")))
                 .set(Thing.JsonFields.ID, newThingId);
 
-        putThing(TestConstants.API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
+        putThing(API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
                 .withJWT(secondClientForDefaultSolution.getAccessToken())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .expectingErrorCode("policies:policy.notfound")
@@ -317,7 +321,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final Policy originalPolicy = policyWithSpecialLabel(policyId, specialLabel);
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, originalPolicy);
 
-        final Thing originalThing = parseThingFromResponse(postThing(TestConstants.API_V_2, originalThingJson)
+        final Thing originalThing = parseThingFromResponse(postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
@@ -347,7 +351,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                         secondClientForDefaultSolution.getSubject());
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, policyWithUser2AccessToThing);
 
-        final String originalThingId = parseIdFromResponse(postThing(TestConstants.API_V_2, originalThingJson)
+        final String originalThingId = parseIdFromResponse(postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
@@ -355,7 +359,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final JsonObject thingWithCopiedPolicyJson = thingWithCopiedPolicyFromThingRef(originalThingId)
                 .set(Thing.JsonFields.ID, originalThingId + "_cp");
 
-        putThing(TestConstants.API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
+        putThing(API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
                 .withJWT(secondClientForDefaultSolution.getAccessToken())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .expectingErrorCode("policies:policy.notfound")
@@ -370,7 +374,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final Policy originalPolicy = policyWithSpecialLabel(policyId, specialLabel);
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, originalPolicy);
 
-        final String originalThingId = parseIdFromResponse(postThing(TestConstants.API_V_2, originalThingJson)
+        final String originalThingId = parseIdFromResponse(postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
@@ -378,7 +382,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final JsonObject thingWithCopiedPolicyJson = thingWithCopiedPolicyFromThingRef(originalThingId)
                 .set(Thing.JsonFields.ID, originalThingId + "_cp");
 
-        putThing(TestConstants.API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
+        putThing(API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
                 .withJWT(secondClientForDefaultSolution.getAccessToken())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .expectingErrorCode("things:thing.notfound")
@@ -393,7 +397,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final Policy originalPolicy = policyWithSpecialLabel(policyId, specialLabel);
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, originalPolicy);
 
-        final Thing originalThing = parseThingFromResponse(postThing(TestConstants.API_V_2, originalThingJson)
+        final Thing originalThing = parseThingFromResponse(postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
@@ -425,7 +429,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final Policy originalPolicy = policyWithSpecialLabel(policyId, specialLabel);
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, originalPolicy);
 
-        final Thing originalThing = parseThingFromResponse(postThing(TestConstants.API_V_2, originalThingJson)
+        final Thing originalThing = parseThingFromResponse(postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
@@ -451,7 +455,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final JsonObject thingWithCopiedPolicyAndInlinePolicy = thingWithCopiedPolicyFromId("any:policy")
                 .set(CreateThing.JSON_INLINE_POLICY, JsonObject.newBuilder().build());
 
-        postThing(TestConstants.API_V_2, thingWithCopiedPolicyAndInlinePolicy)
+        postThing(API_V_2, thingWithCopiedPolicyAndInlinePolicy)
                 .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .expectingErrorCode("things:policy.conflicting")
                 .fire();
@@ -459,7 +463,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final JsonObject thingWithCopiedPolicyAndInlinePolicyAndThingId = thingWithCopiedPolicyAndInlinePolicy
                 .set(Thing.JsonFields.ID, idGenerator().withPrefixedRandomName("otherThing"));
 
-        putThing(TestConstants.API_V_2, thingWithCopiedPolicyAndInlinePolicyAndThingId, JsonSchemaVersion.V_2)
+        putThing(API_V_2, thingWithCopiedPolicyAndInlinePolicyAndThingId, JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .expectingErrorCode("things:policy.conflicting")
                 .fire();
@@ -472,7 +476,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .set(CreateThing.JSON_COPY_POLICY_FROM, invalidRef)
                 .build();
 
-        postThing(TestConstants.API_V_2, thingJson)
+        postThing(API_V_2, thingJson)
                 .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .expectingErrorCode("placeholder:placeholder.reference.notsupported")
                 .fire();
@@ -480,7 +484,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final JsonObject thingJsonWithId = thingJson
                 .set(Thing.JsonFields.ID, idGenerator().withPrefixedRandomName("otherThing"));
 
-        putThing(TestConstants.API_V_2, thingJsonWithId, JsonSchemaVersion.V_2)
+        putThing(API_V_2, thingJsonWithId, JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .expectingErrorCode("placeholder:placeholder.reference.notsupported")
                 .fire();
@@ -497,7 +501,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject());
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, policyWithUser2PermissionOnPolicy);
 
-        final String originalThingId = parseIdFromResponse(postThing(TestConstants.API_V_2, originalThingJson)
+        final String originalThingId = parseIdFromResponse(postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
@@ -512,7 +516,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final JsonObject thingWithCopiedPolicyJson = thingWithCopiedPolicyFromThingRef(originalThingId)
                 .set(Thing.JsonFields.ID, originalThingId + "_cp");
 
-        putThing(TestConstants.API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
+        putThing(API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.FORBIDDEN)
                 .expectingErrorCode("things:thing.notcreatable")
                 .fire();
@@ -531,7 +535,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject());
         final JsonObject originalThingJson = thingWithInlinePolicy(policyId, policyWithUser2PermissionOnPolicy);
 
-        postThing(TestConstants.API_V_2, originalThingJson)
+        postThing(API_V_2, originalThingJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
@@ -563,7 +567,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final JsonObject thingWithCopiedPolicyJson = thingWithCopiedPolicyFromId(originalPolicy.getEntityId()
                 .orElseThrow(() -> new IllegalStateException("Policy should have an ID")));
 
-        return parseThingFromResponse(postThing(TestConstants.API_V_2, thingWithCopiedPolicyJson)
+        return parseThingFromResponse(postThing(API_V_2, thingWithCopiedPolicyJson)
                 .withHeader(HttpHeader.ALLOW_POLICY_LOCKOUT, true)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
@@ -582,7 +586,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final JsonObject thingWithCopiedPolicyJson = thingWithCopiedPolicyFromId(originalPolicy.getEntityId()
                 .orElseThrow(() -> new IllegalStateException("Policy should have an ID")));
 
-        return parseThingFromResponse(postThing(TestConstants.API_V_2, thingWithCopiedPolicyJson)
+        return parseThingFromResponse(postThing(API_V_2, thingWithCopiedPolicyJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
     }
@@ -591,13 +595,13 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         final JsonObject thingWithCopiedPolicyJson = thingWithCopiedPolicyFromThingRef(originalThing.getEntityId()
                 .orElseThrow(() -> new IllegalStateException("Thing should have an ID")));
 
-        return parseThingFromResponse(postThing(TestConstants.API_V_2, thingWithCopiedPolicyJson)
+        return parseThingFromResponse(postThing(API_V_2, thingWithCopiedPolicyJson)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
     }
 
     private static Thing postThingAndExpectCreated(final JsonObject thingToCreate) {
-        return parseThingFromResponse(postThing(TestConstants.API_V_2, thingToCreate)
+        return parseThingFromResponse(postThing(API_V_2, thingToCreate)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
     }
@@ -607,7 +611,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
                 .orElseThrow(() -> new IllegalStateException("Policy should have an ID")))
                 .set(Thing.JsonFields.ID, thingId);
 
-        return parseThingFromResponse(putThing(TestConstants.API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
+        return parseThingFromResponse(putThing(API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
     }
@@ -620,7 +624,7 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
     }
 
     private static Thing putThingAndExpectCreated(final JsonObject thingWithCopiedPolicyJson) {
-        return parseThingFromResponse(putThing(TestConstants.API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
+        return parseThingFromResponse(putThing(API_V_2, thingWithCopiedPolicyJson, JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
     }
@@ -639,9 +643,17 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
     }
 
     private static Policy policyWithSpecialLabel(final PolicyId policyId, final String specialLabel) {
+        final TestingContext context = serviceEnv.getDefaultTestingContext();
+        final Subjects subjects;
+        if (context.getBasicAuth().isEnabled()) {
+            subjects = Subjects.newInstance(Subject.newInstance(
+                    SubjectIssuer.newInstance("nginx"), context.getBasicAuth().getUsername()));
+        } else {
+            subjects = Subjects.newInstance(context.getOAuthClient().getDefaultSubject());
+        }
         return PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel(specialLabel)
-                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject())
+                .setSubjects(subjects)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .build();

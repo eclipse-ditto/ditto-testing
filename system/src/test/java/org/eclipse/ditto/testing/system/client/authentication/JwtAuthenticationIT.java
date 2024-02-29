@@ -21,11 +21,14 @@ import java.util.concurrent.ExecutionException;
 
 import org.eclipse.ditto.client.DittoClient;
 import org.eclipse.ditto.client.configuration.AccessTokenAuthenticationConfiguration;
+import org.eclipse.ditto.client.configuration.BasicAuthenticationConfiguration;
 import org.eclipse.ditto.client.configuration.ProxyConfiguration;
 import org.eclipse.ditto.client.messaging.AuthenticationProviders;
 import org.eclipse.ditto.client.messaging.JsonWebTokenSupplier;
 import org.eclipse.ditto.jwt.model.ImmutableJsonWebToken;
+import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.system.client.AbstractClientIT;
 import org.eclipse.ditto.things.model.Thing;
@@ -70,13 +73,19 @@ public final class JwtAuthenticationIT extends AbstractClientIT {
 
     @Category({Acceptance.class})
     @Test
-    public void authenticationWithOAuth() throws ExecutionException, InterruptedException {
-        dittoClient = buildClient(() -> {
-            final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
-            return ImmutableJsonWebToken.fromToken(authClient.getAccessToken());
-        });
+    public void authentication() throws ExecutionException, InterruptedException {
+        if (serviceEnv.getDefaultTestingContext().getBasicAuth().isEnabled()) {
+            dittoClient = buildClient(serviceEnv.getDefaultTestingContext().getBasicAuth());
+        } else {
+            dittoClient = buildClient(() -> {
+                final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
+                return ImmutableJsonWebToken.fromToken(authClient.getAccessToken());
+            });
+        }
         final Thing thing = dittoClient.twin().create(thingId).toCompletableFuture().get();
         assertThat(thing).isNotNull();
+        dittoClient.twin().delete(thingId).toCompletableFuture().get();
+        dittoClient.policies().delete(PolicyId.of(thingId));
     }
 
     private static DittoClient buildClient(final JsonWebTokenSupplier jsonWebTokenSupplier) {
@@ -89,6 +98,17 @@ public final class JwtAuthenticationIT extends AbstractClientIT {
             configurationBuilder.proxyConfiguration(proxyConfiguration);
         }
         return newDittoClient(AuthenticationProviders.accessToken(configurationBuilder.build()),
+                Collections.emptyList(), Collections.emptyList());
+    }
+
+    private static DittoClient buildClient(final BasicAuth basicAuth) {
+        final BasicAuthenticationConfiguration.BasicAuthenticationConfigurationBuilder configurationBuilder = BasicAuthenticationConfiguration.newBuilder()
+                .username(basicAuth.getUsername())
+                .password(basicAuth.getPassword());
+        if (null != proxyConfiguration()) {
+            configurationBuilder.proxyConfiguration(proxyConfiguration());
+        }
+        return newDittoClient(AuthenticationProviders.basic(configurationBuilder.build()),
                 Collections.emptyList(), Collections.emptyList());
     }
 

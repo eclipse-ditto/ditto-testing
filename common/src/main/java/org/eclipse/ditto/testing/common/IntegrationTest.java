@@ -60,6 +60,7 @@ import org.eclipse.ditto.policies.model.Resource;
 import org.eclipse.ditto.policies.model.Resources;
 import org.eclipse.ditto.policies.model.Subject;
 import org.eclipse.ditto.policies.model.Subjects;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.client.ConnectionsClient;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.common.conditions.ConditionalRunRule;
@@ -255,8 +256,13 @@ public abstract class IntegrationTest {
     }
 
     private static void setUpRestMatchers() {
-        final String jwt = serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken();
-        restMatcherConfigurer = RestMatcherConfigurer.withJwt(jwt);
+        final BasicAuth basicAuth = serviceEnv.getDefaultTestingContext().getBasicAuth();
+        if (basicAuth.isEnabled()) {
+            restMatcherConfigurer = RestMatcherConfigurer.withBasicAuth(basicAuth);
+        } else {
+            final String jwt = serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken();
+            restMatcherConfigurer = RestMatcherConfigurer.withJwt(jwt);
+        }
         restMatcherFactory = new RestMatcherFactory(restMatcherConfigurer);
     }
 
@@ -278,12 +284,22 @@ public abstract class IntegrationTest {
         return newPolicy(policyId, Arrays.asList(readAndWriteSubjects), Arrays.asList(readAndWriteSubjects));
     }
 
+    protected static Policy newPolicy(final PolicyId policyId, final Subject readAndWriteSubject) {
+        final Subjects readAndWriteSubjects = Subjects.newInstance(readAndWriteSubject);
+        return newPolicy(policyId, readAndWriteSubjects, readAndWriteSubjects);
+    }
+
     protected static Policy newPolicy(final PolicyId policyId, final List<AuthClient> readClients,
             final List<AuthClient> writeClients) {
 
         final Subjects readSubjects = toSubjects(readClients);
         final Subjects writeSubjects = toSubjects(writeClients);
 
+        return newPolicy(policyId, readSubjects, writeSubjects);
+    }
+
+    protected static Policy newPolicy(final PolicyId policyId, final Subjects readSubjects,
+            final Subjects writeSubjects) {
         return PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("read")
                 .setSubjects(readSubjects)
@@ -329,7 +345,7 @@ public abstract class IntegrationTest {
             final Map<String, String> additionalHttpHeaders, final int apiVersion) {
 
         return newTestWebsocketClient(jwt, additionalHttpHeaders, apiVersion,
-                ThingsWebsocketClient.JwtAuthMethod.HEADER);
+                    ThingsWebsocketClient.AuthMethod.HEADER);
     }
 
     /**
@@ -338,12 +354,12 @@ public abstract class IntegrationTest {
      * @param jwt the token to use for authentication.
      * @param additionalHttpHeaders additional HTTP headers to set for the initial WS request.
      * @param apiVersion the API version to use for opening the WS.
-     * @param jwtAuthMethod the jwt auth method used.
+     * @param authMethod the jwt auth method used.
      * @return the created ThingsWebsocketClient instance.
      */
     protected static ThingsWebsocketClient newTestWebsocketClient(final String jwt,
             final Map<String, String> additionalHttpHeaders, final int apiVersion, final
-    ThingsWebsocketClient.JwtAuthMethod jwtAuthMethod) {
+    ThingsWebsocketClient.AuthMethod authMethod) {
 
         final ProxyServer proxyServer;
         if (TEST_CONFIG.isHttpProxyEnabled()) {
@@ -353,8 +369,10 @@ public abstract class IntegrationTest {
             proxyServer = null;
         }
 
-        return ThingsWebsocketClient.newInstance(dittoWsUrl(apiVersion), jwt, additionalHttpHeaders, proxyServer,
-                jwtAuthMethod);
+        return ThingsWebsocketClient.newInstance(dittoWsUrl(apiVersion), jwt,
+                serviceEnv.getDefaultTestingContext().getBasicAuth(),
+                additionalHttpHeaders, proxyServer,
+                authMethod);
     }
 
     /**

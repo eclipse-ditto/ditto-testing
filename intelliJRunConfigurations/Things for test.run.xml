@@ -8,6 +8,7 @@
       <env name="LOG_LEVEL_APPLICATION" value="INFO" />
       <env name="THING_SNAPSHOT_INTERVAL" value="1s" />
       <env name="THING_SNAPSHOT_THRESHOLD" value="1" />
+      <env name="MONGO_DB_DATABASE" value="ditto-test" />
     </envs>
     <option name="MAIN_CLASS_NAME" value="org.eclipse.ditto.things.service.starter.ThingsService" />
     <module name="ditto-things-service" />

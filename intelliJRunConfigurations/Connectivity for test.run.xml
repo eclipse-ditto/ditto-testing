@@ -27,6 +27,7 @@
       <env name="KAFKA_CONSUMER_THROTTLING_LIMIT" value="10" />
       <env name="LOG_LEVEL" value="INFO" />
       <env name="LOG_LEVEL_APPLICATION" value="INFO" />
+      <env name="MONGO_DB_DATABASE" value="ditto-test" />
     </envs>
     <option name="MAIN_CLASS_NAME" value="org.eclipse.ditto.connectivity.service.ConnectivityService" />
     <module name="ditto-connectivity-service" />

@@ -174,6 +174,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
     private static final String EMPTY_MOD = "EMPTY_MOD";
     private static final String FILTER_FOR_LIFECYCLE_EVENTS_BY_RQL = "FILTER_FOR_LIFECYCLE_EVENTS_BY_RQL";
+    private static final String FILTER_POLICY_ANNOUNCEMENTS_BY_NAMESPACE = "FILTER_BY_NAMESPACE";
 
     static {
         // adds filtering for twin events - only "created" and "deleted" ones
@@ -189,6 +190,28 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                                                             "in(topic:action,'created','deleted')," +
                                                             "eq(resource:path,'/')" +
                                                         ")")
+                                                .build()
+                                        );
+                                        return ConnectivityModelFactory.newTargetBuilder(target)
+                                                .topics(topics)
+                                                .build();
+                                    })
+                                    .collect(Collectors.toList());
+                    return connection.toBuilder()
+                            .setTargets(adjustedTargets)
+                            .build();
+                }
+        );
+        // adds filtering for namespace
+        addMod(FILTER_POLICY_ANNOUNCEMENTS_BY_NAMESPACE, connection -> {
+                    final List<Target> adjustedTargets =
+                            connection.getTargets().stream()
+                                    .map(target -> {
+                                        final Set<FilteredTopic> topics = new HashSet<>();
+                                        // only subscribe policy announcements
+                                        topics.add(ConnectivityModelFactory
+                                                .newFilteredTopicBuilder(Topic.POLICY_ANNOUNCEMENTS)
+                                                .withNamespaces(Collections.singletonList(serviceEnv.getDefaultNamespaceName()))
                                                 .build()
                                         );
                                         return ConnectivityModelFactory.newTargetBuilder(target)
@@ -267,6 +290,50 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
     @Test
     @Connections(CONNECTION1)
     public void receiveSubjectDeletionNotification() {
+        final var policyId = PolicyId.inNamespaceWithRandomName(serviceEnv.getDefaultNamespaceName());
+        final var subjectId =
+                SubjectId.newInstance(
+                        connectionAuthIdentifier(testingContextWithRandomNs.getSolution().getUsername(),
+                                TestingContext.DEFAULT_SCOPE));
+        final var subjectExpiry = SubjectExpiry.newInstance(Instant.now().plus(Duration.ofSeconds(3600)));
+        final var subjectAnnouncement = SubjectAnnouncement.of(DittoDuration.parseDuration("3599s"), true);
+        final var subject =
+                Subject.newInstance(subjectId, SubjectType.GENERATED, subjectExpiry, subjectAnnouncement);
+        final var subjectForDeletion =
+                Subject.newInstance(subjectId, SubjectType.GENERATED, null, subjectAnnouncement);
+        final var policy = PoliciesModelFactory.newPolicyBuilder(policyId)
+                .forLabel("user1")
+                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject())
+                .setResource(Resource.newInstance("policy", "/",
+                        EffectedPermissions.newInstance(List.of("READ", "WRITE"), List.of())))
+                .forLabel("connection1")
+                .setSubject(subject)
+                .setResource(Resource.newInstance("thing", "/",
+                        EffectedPermissions.newInstance(List.of("READ"), List.of())))
+                .build();
+
+        final C consumer = initTargetsConsumer(cf.connectionName1);
+        LOGGER.info("Creating Policy with subjectExpiry: <{}>", policy);
+        putPolicy(policy).expectingHttpStatus(HttpStatus.CREATED).fire();
+        LOGGER.info("Expecting to receive expiry announcement ...");
+        final var expiryAnnouncement = expectMsgClass(SubjectDeletionAnnouncement.class, cf.connectionName1, consumer);
+        assertThat(expiryAnnouncement).as("Expiry announcement was not received!")
+                .isNotNull();
+        assertThat(expiryAnnouncement.getSubjectIds()).containsExactly(subjectId);
+
+        // modify subject to publish announcement when deleted
+        putPolicyEntrySubject(policyId, "connection1", subjectId.toString(), subjectForDeletion)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        deletePolicy(policyId).expectingHttpStatus(HttpStatus.NO_CONTENT).fire();
+        final var deleteAnnouncement = expectMsgClass(SubjectDeletionAnnouncement.class, cf.connectionName1, consumer);
+        assertThat(deleteAnnouncement.getSubjectIds()).containsExactly(subjectId);
+    }
+
+    @Test
+    @UseConnection(category = ConnectionCategory.CONNECTION1, mod = FILTER_POLICY_ANNOUNCEMENTS_BY_NAMESPACE)
+    public void receiveSubjectDeletionNotificationForNamespace() {
         final var policyId = PolicyId.inNamespaceWithRandomName(serviceEnv.getDefaultNamespaceName());
         final var subjectId =
                 SubjectId.newInstance(

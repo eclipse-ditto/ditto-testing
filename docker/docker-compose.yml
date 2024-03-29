@@ -46,7 +46,7 @@ services:
       - ./mqtt:/mosquitto/config:ro
 
   kafka:
-    image: bitnami/kafka:2.7.0
+    image: bitnami/kafka:3.4.1
     depends_on:
       - zookeeper
     networks:

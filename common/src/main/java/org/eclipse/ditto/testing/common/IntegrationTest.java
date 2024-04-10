@@ -336,28 +336,28 @@ public abstract class IntegrationTest {
     /**
      * Creates a new {@link ThingsWebsocketClient}.
      *
-     * @param jwt the token to use for authentication.
+     * @param testingContext the testing context to be used for authentication.
      * @param additionalHttpHeaders additional HTTP headers to set for the initial WS request.
      * @param apiVersion the API version to use for opening the WS.
      * @return the created ThingsWebsocketClient instance.
      */
-    protected static ThingsWebsocketClient newTestWebsocketClient(final String jwt,
+    protected static ThingsWebsocketClient newTestWebsocketClient(final TestingContext testingContext,
             final Map<String, String> additionalHttpHeaders, final int apiVersion) {
 
-        return newTestWebsocketClient(jwt, additionalHttpHeaders, apiVersion,
+        return newTestWebsocketClient(testingContext, additionalHttpHeaders, apiVersion,
                     ThingsWebsocketClient.AuthMethod.HEADER);
     }
 
     /**
      * Creates a new {@link ThingsWebsocketClient}.
      *
-     * @param jwt the token to use for authentication.
+     * @param testingContext the testing context to be used for authentication.
      * @param additionalHttpHeaders additional HTTP headers to set for the initial WS request.
      * @param apiVersion the API version to use for opening the WS.
-     * @param authMethod the jwt auth method used.
+     * @param authMethod the testingContext auth method used.
      * @return the created ThingsWebsocketClient instance.
      */
-    protected static ThingsWebsocketClient newTestWebsocketClient(final String jwt,
+    protected static ThingsWebsocketClient newTestWebsocketClient(final TestingContext testingContext,
             final Map<String, String> additionalHttpHeaders, final int apiVersion, final
     ThingsWebsocketClient.AuthMethod authMethod) {
 
@@ -369,8 +369,7 @@ public abstract class IntegrationTest {
             proxyServer = null;
         }
 
-        return ThingsWebsocketClient.newInstance(dittoWsUrl(apiVersion), jwt,
-                serviceEnv.getDefaultTestingContext().getBasicAuth(),
+        return ThingsWebsocketClient.newInstance(dittoWsUrl(apiVersion), testingContext,
                 additionalHttpHeaders, proxyServer,
                 authMethod);
     }

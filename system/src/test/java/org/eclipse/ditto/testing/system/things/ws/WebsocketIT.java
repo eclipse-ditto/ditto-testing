@@ -97,6 +97,8 @@ import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.common.conditions.DockerEnvironment;
 import org.eclipse.ditto.testing.common.conditions.RunIf;
+import org.eclipse.ditto.testing.common.config.TestConfig;
+import org.eclipse.ditto.testing.common.config.TestEnvironment;
 import org.eclipse.ditto.testing.common.ws.ThingsWebsocketClient;
 import org.eclipse.ditto.things.model.Feature;
 import org.eclipse.ditto.things.model.FeatureProperties;
@@ -154,21 +156,27 @@ public final class WebsocketIT extends IntegrationTest {
     private ThingsWebsocketClient clientUser5;
     private ThingsWebsocketClient clientUserWithBlockedSolution;
     private ThingsWebsocketClient clientUser2ViaQueryParam;
+    private ThingsWebsocketClient secondClientForDefaultSolution;
 
     private TestingContext testingContext1;
-    private AuthClient user1;
+    private AuthClient user1OAuthClient;
     private TestingContext testingContext2;
-    private AuthClient user2;
-    private ThingsWebsocketClient secondClientForDefaultSolution;
+    private AuthClient user2OAuthClient;
 
     @Before
     public void setUpClients() {
         final Solution solution1 = ServiceEnvironment.createSolutionWithRandomUsernameRandomNamespace();
-        testingContext1 = TestingContext.withGeneratedMockClient(solution1, TEST_CONFIG);
-        user1 = testingContext1.getOAuthClient();
         final Solution solution2 = ServiceEnvironment.createSolutionWithRandomUsernameRandomNamespace();
-        testingContext2 = TestingContext.withGeneratedMockClient(solution2, TEST_CONFIG);
-        user2 = testingContext2.getOAuthClient();
+
+        if (TestConfig.getInstance().getTestEnvironment() == TestEnvironment.DEPLOYMENT) {
+            testingContext1 = serviceEnv.getDefaultTestingContext();
+            testingContext2 = serviceEnv.getTestingContext2();
+        } else {
+            testingContext1 = TestingContext.withGeneratedMockClient(solution1, TEST_CONFIG);
+            testingContext2 = TestingContext.withGeneratedMockClient(solution2, TEST_CONFIG);
+        }
+        user1OAuthClient = testingContext1.getOAuthClient();
+        user2OAuthClient = testingContext2.getOAuthClient();
 
         declaredAckClient1 =
                 MessageFormat.format("{0}:custom1-" + ACK_COUNTER.incrementAndGet(),
@@ -200,9 +208,9 @@ public final class WebsocketIT extends IntegrationTest {
             headers345.putAll(basicAuthHeader1);
         }
 
-        clientUser1 = newTestWebsocketClient(user1.getAccessToken(), headers1, API_V_2);
-        clientUser2 = newTestWebsocketClient(user2.getAccessToken(), headers2, API_V_2);
-        clientUser2ViaQueryParam = newTestWebsocketClient(user2.getAccessToken(), headers345,
+        clientUser1 = newTestWebsocketClient(testingContext1, headers1, API_V_2);
+        clientUser2 = newTestWebsocketClient(testingContext2, headers2, API_V_2);
+        clientUser2ViaQueryParam = newTestWebsocketClient(testingContext2, headers345,
                 API_V_2, ThingsWebsocketClient.AuthMethod.QUERY_PARAM);
 
         clientUser1.connect("ThingsWebsocketClient-User1-" + UUID.randomUUID());
@@ -212,18 +220,18 @@ public final class WebsocketIT extends IntegrationTest {
         final AuthClient user3 = serviceEnv.getTestingContext3().getOAuthClient();
         final AuthClient user4 = serviceEnv.getTestingContext4().getOAuthClient();
         final AuthClient user5 = serviceEnv.getTestingContext5().getOAuthClient();
-        clientUser3 = newTestWebsocketClient(user3.getAccessToken(), headers345, API_V_2);
-        clientUser4 = newTestWebsocketClient(user4.getAccessToken(), headers345, API_V_2);
-        clientUser5 = newTestWebsocketClient(user5.getAccessToken(), headers345, API_V_2);
+        clientUser3 = newTestWebsocketClient(serviceEnv.getTestingContext3(), headers345, API_V_2);
+        clientUser4 = newTestWebsocketClient(serviceEnv.getTestingContext4(), headers345, API_V_2);
+        clientUser5 = newTestWebsocketClient(serviceEnv.getTestingContext5(), headers345, API_V_2);
         clientUserWithBlockedSolution =
-                newTestWebsocketClient(user2.getAccessToken(), Map.of(), API_V_2);
+                newTestWebsocketClient(testingContext2, Map.of(), API_V_2);
 
         clientUser3.connect("ThingsWebsocketClient-User3-" + UUID.randomUUID());
         clientUser4.connect("ThingsWebsocketClient-User4-" + UUID.randomUUID());
         clientUser5.connect("ThingsWebsocketClient-User5-" + UUID.randomUUID());
         clientUserWithBlockedSolution.connect("ThingsWebsocketClient-User4-" + UUID.randomUUID());
 
-        secondClientForDefaultSolution = newTestWebsocketClient(this.user1.getAccessToken(), headers345, API_V_2);
+        secondClientForDefaultSolution = newTestWebsocketClient(testingContext1, headers345, API_V_2);
         secondClientForDefaultSolution.connect("ThingsWebsocketClient-User5-" + UUID.randomUUID());
     }
 
@@ -362,7 +370,7 @@ public final class WebsocketIT extends IntegrationTest {
             return newPolicy(policyId, Subject.newInstance(
                     SubjectIssuer.newInstance("nginx"), basicAuth.getUsername())).toJson();
         } else {
-            return newPolicy(policyId, List.of(user1, user2), List.of(user1)).toJson();
+            return newPolicy(policyId, List.of(user1OAuthClient, user2OAuthClient), List.of(user1OAuthClient)).toJson();
         }
     }
 
@@ -445,8 +453,8 @@ public final class WebsocketIT extends IntegrationTest {
         //  - that the group1 ("All users group") user1 belongs to may not read the "secret" feature
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
 
-        final String clientId1 = user1.getClientId();
-        final String clientId2 = user2.getClientId();
+        final String clientId1 = user1OAuthClient.getClientId();
+        final String clientId2 = user2OAuthClient.getClientId();
 
         final PolicyId policyId = PolicyId.of(thingId);
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
@@ -510,7 +518,7 @@ public final class WebsocketIT extends IntegrationTest {
     public void createGetAndDeleteThingForBlockedSolution()
             throws InterruptedException, TimeoutException, ExecutionException {
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
-        final Policy policy = newPolicy(PolicyId.of(thingId), user1, user2);
+        final Policy policy = newPolicy(PolicyId.of(thingId), user1OAuthClient, user2OAuthClient);
         final Thing thing = Thing.newBuilder()
                 .setId(thingId)
                 .build();
@@ -546,7 +554,7 @@ public final class WebsocketIT extends IntegrationTest {
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
 
         final JsonPointer counterPointer = JsonPointer.of("counter");
-        final Policy policy = newPolicy(PolicyId.of(thingId), user1, user2);
+        final Policy policy = newPolicy(PolicyId.of(thingId), user1OAuthClient, user2OAuthClient);
         final Thing thing = Thing.newBuilder()
                 .setId(thingId)
                 .setAttribute(counterPointer, JsonValue.of(0))
@@ -669,7 +677,7 @@ public final class WebsocketIT extends IntegrationTest {
     @Test
     public void subscribeForSignalsWithExtraFields() throws Exception {
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
-        final Policy policy = newPolicy(PolicyId.of(thingId), user1, user2);
+        final Policy policy = newPolicy(PolicyId.of(thingId), user1OAuthClient, user2OAuthClient);
         final JsonPointer counterPointer = JsonPointer.of("counter");
         final JsonValue counterValue = JsonValue.of(5725);
         final JsonValue counterValueIncrementedByOne = JsonValue.of(5726);
@@ -795,7 +803,7 @@ public final class WebsocketIT extends IntegrationTest {
     @Test
     public void subscribeForSignalsWithExtraFieldsContainingFeatureWildcard() throws Exception {
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
-        final Policy policy = newPolicy(PolicyId.of(thingId), user1, user2);
+        final Policy policy = newPolicy(PolicyId.of(thingId), user1OAuthClient, user2OAuthClient);
         final JsonPointer counterPointer = JsonPointer.of("counter");
         final JsonValue counterValue = JsonValue.of(5725);
         final JsonValue counterValueIncrementedByOne = JsonValue.of(5726);
@@ -941,8 +949,7 @@ public final class WebsocketIT extends IntegrationTest {
         final Duration maxDuration = Duration.ofSeconds(5L);
 
         // create new websocket connection to not influence other tests
-        final AuthClient user1 = testingContext1.getOAuthClient();
-        try (final ThingsWebsocketClient client = newTestWebsocketClient(user1.getAccessToken(), Map.of(), API_V_2)) {
+        try (final ThingsWebsocketClient client = newTestWebsocketClient(testingContext1, Map.of(), API_V_2)) {
 
             client.connect("ThingsWebsocketClient-toBeThrottled-" + UUID.randomUUID());
 
@@ -1022,7 +1029,7 @@ public final class WebsocketIT extends IntegrationTest {
 
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final Policy policy = newPolicy(policyId, List.of(user1, user2), List.of(user1));
+        final Policy policy = newPolicy(policyId, List.of(user1OAuthClient, user2OAuthClient), List.of(user1OAuthClient));
         final Thing thing = Thing.newBuilder()
                 .setId(thingId)
                 .setPolicyId(policyId)

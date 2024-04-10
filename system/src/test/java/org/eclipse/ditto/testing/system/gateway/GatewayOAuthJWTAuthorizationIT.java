@@ -97,7 +97,7 @@ public final class GatewayOAuthJWTAuthorizationIT extends IntegrationTest {
 
         final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
         final ThingsWebsocketClient thingsWebsocketClient =
-                newTestWebsocketClient(authClient.getAccessToken(), Collections.emptyMap(),
+                newTestWebsocketClient(serviceEnv.getDefaultTestingContext(), Collections.emptyMap(),
                         TestConstants.API_V_2);
 
         thingsWebsocketClient.connect("refreshJwtViaWebSocket-" + UUID.randomUUID());
@@ -119,7 +119,8 @@ public final class GatewayOAuthJWTAuthorizationIT extends IntegrationTest {
 
         final String wsJwtToken = authClient.getAccessToken();
         final String restJwtToken = authClient2.getAccessToken();
-        final ThingsWebsocketClient thingsWebsocketClient = newTestWebsocketClient(wsJwtToken, Collections.emptyMap(),
+        final ThingsWebsocketClient thingsWebsocketClient = newTestWebsocketClient(
+                serviceEnv.getDefaultTestingContext(), Collections.emptyMap(),
                 TestConstants.API_V_2, ThingsWebsocketClient.AuthMethod.QUERY_PARAM);
         thingsWebsocketClient.connect("enrichMessagesViaWebSocketWithJwtAsQueryParameter-" + UUID.randomUUID());
 

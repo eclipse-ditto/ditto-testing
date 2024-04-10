@@ -63,6 +63,7 @@ public final class JwtAuthenticationIT extends AbstractClientIT {
         if (dittoClient != null) {
             try {
                 dittoClient.twin().delete(thingId).toCompletableFuture().get(TIMEOUT_SECONDS, SECONDS);
+                dittoClient.policies().delete(PolicyId.of(thingId));
             } catch (final Exception e) {
                 LOGGER.error("Error during Test", e);
             } finally {
@@ -84,8 +85,6 @@ public final class JwtAuthenticationIT extends AbstractClientIT {
         }
         final Thing thing = dittoClient.twin().create(thingId).toCompletableFuture().get();
         assertThat(thing).isNotNull();
-        dittoClient.twin().delete(thingId).toCompletableFuture().get();
-        dittoClient.policies().delete(PolicyId.of(thingId));
     }
 
     private static DittoClient buildClient(final JsonWebTokenSupplier jsonWebTokenSupplier) {
@@ -102,7 +101,8 @@ public final class JwtAuthenticationIT extends AbstractClientIT {
     }
 
     private static DittoClient buildClient(final BasicAuth basicAuth) {
-        final BasicAuthenticationConfiguration.BasicAuthenticationConfigurationBuilder configurationBuilder = BasicAuthenticationConfiguration.newBuilder()
+        final BasicAuthenticationConfiguration.BasicAuthenticationConfigurationBuilder configurationBuilder =
+                BasicAuthenticationConfiguration.newBuilder()
                 .username(basicAuth.getUsername())
                 .password(basicAuth.getPassword());
         if (null != proxyConfiguration()) {

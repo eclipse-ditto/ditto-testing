@@ -55,6 +55,7 @@ import org.eclipse.ditto.protocol.ProtocolFactory;
 import org.eclipse.ditto.protocol.adapter.DittoProtocolAdapter;
 import org.eclipse.ditto.protocol.adapter.ProtocolAdapter;
 import org.eclipse.ditto.testing.common.HttpHeader;
+import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.client.ditto_protocol.DittoProtocolClient;
 import org.eclipse.ditto.testing.common.client.ditto_protocol.HeaderBlocklistChecker;
@@ -148,6 +149,21 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
         return new ThingsWebsocketClient(ConditionChecker.checkNotNull(endpoint, "endpoint"),
                 ConditionChecker.checkNotNull(jwt, "jwt"),
                 basicAuth,
+                ConditionChecker.checkNotNull(additionalHttpHeaders, "additionalHttpHeaders"),
+                proxyServer,
+                ConditionChecker.checkNotNull(authMethod, "authMethod"));
+    }
+
+    public static ThingsWebsocketClient newInstance(final String endpoint,
+            final TestingContext testingContext,
+            final Map<String, String> additionalHttpHeaders,
+            @Nullable final ProxyServer proxyServer,
+            final AuthMethod authMethod) {
+
+        ConditionChecker.checkNotNull(testingContext, "testingContext");
+        return new ThingsWebsocketClient(ConditionChecker.checkNotNull(endpoint, "endpoint"),
+                testingContext.getBasicAuth().isEnabled() ? "" : testingContext.getOAuthClient().getAccessToken(),
+                testingContext.getBasicAuth(),
                 ConditionChecker.checkNotNull(additionalHttpHeaders, "additionalHttpHeaders"),
                 proxyServer,
                 ConditionChecker.checkNotNull(authMethod, "authMethod"));
@@ -577,12 +593,12 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
     public enum AuthMethod {
 
         /**
-         * The JWT is passed as header 'Authorization Bearer [jwt]'
+         * The authentication is passed as header 'Authorization Bearer [jwt]' or 'Authorization Basic [user:pass]'
          */
         HEADER,
 
         /**
-         * The JWT is passed as query parameter 'ws/2?access_token=[jwt]'
+         * The authentication is passed as query parameter 'ws/2?access_token=[jwt]' or 'ws/2?basic=[user:pass]'
          */
         QUERY_PARAM
 

@@ -13,6 +13,7 @@
 package org.eclipse.ditto.testing.common;
 
 import static java.util.Objects.requireNonNull;
+import static org.eclipse.ditto.policies.model.PoliciesModelFactory.newSubjectIssuer;
 
 import java.time.Duration;
 import java.util.List;
@@ -20,6 +21,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
+import org.eclipse.ditto.policies.model.SubjectIssuer;
 import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +73,15 @@ public class CommonTestConfig {
 
     private static final String OAUTH_MOCK_PREFIX = "oauth-mock.";
     private static final String OAUTH_MOCK_TOKEN_ENDPOINT = OAUTH_MOCK_PREFIX + "tokenEndpoint";
+    private static final String OAUTH_PREFIX = "oauth.";
+    private static final String OAUTH_TOKEN_ENDPOINT = OAUTH_PREFIX + "tokenEndpoint";
+    private static final String OAUTH_ISSUER = OAUTH_PREFIX + "issuer";
+    private static final String OAUTH_CLIENT_IDS[]
+            = { OAUTH_PREFIX + "clientId", OAUTH_PREFIX + "client2Id", OAUTH_PREFIX + "client3Id", OAUTH_PREFIX + "client4Id" };
+    private static final String OAUTH_CLIENT_SECRETS[]
+            = { OAUTH_PREFIX + "clientSecret", OAUTH_PREFIX + "client2Secret", OAUTH_PREFIX + "client3Secret", OAUTH_PREFIX + "client4Secret" };
+    private static final String OAUTH_CLIENT_SCOPES[]
+            = { OAUTH_PREFIX + "clientScope", OAUTH_PREFIX + "client2Scope", OAUTH_PREFIX + "client3Scope", OAUTH_PREFIX + "client4Scope" };
 
     private static final String PROPERTY_TEST_ENVIRONMENT = "test.environment";
     private static final String TEST_ENVIRONMENT_LOCAL = "local";
@@ -302,6 +313,31 @@ public class CommonTestConfig {
         return baseUrl + subUrl;
     }
 
-    public String getOAuthMockTokenEndpoint() { return conf.getString(OAUTH_MOCK_TOKEN_ENDPOINT); }
+    public String getOAuthMockTokenEndpoint() {
+        return conf.getString(OAUTH_MOCK_TOKEN_ENDPOINT);
+    }
+
+    public String getOAuthTokenEndpoint() {
+        return conf.getString(OAUTH_TOKEN_ENDPOINT);
+    }
+
+    public SubjectIssuer getOAuthIssuer() {
+        return newSubjectIssuer(conf.getString(OAUTH_ISSUER));
+    }
+
+    public String getOAuthClientId(final int n) {
+        if (n > OAUTH_CLIENT_IDS.length) return "invalidClientId";
+        return conf.getString(OAUTH_CLIENT_IDS[n - 1]);
+    }
+
+    public String getOAuthClientSecret(final int n) {
+        if (n > OAUTH_CLIENT_SECRETS.length) return "invalidClientSecret";
+        return conf.getString(OAUTH_CLIENT_SECRETS[n - 1]);
+    }
+
+    public String getOAuthClientScope(final int n) {
+        if (n > OAUTH_CLIENT_SCOPES.length) return "invalidClientScope";
+        return conf.getString(OAUTH_CLIENT_SCOPES[n - 1]);
+    }
 
 }

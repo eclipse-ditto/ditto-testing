@@ -49,6 +49,8 @@ import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
 import org.eclipse.ditto.testing.common.client.BasicAuth;
+import org.eclipse.ditto.testing.common.config.TestConfig;
+import org.eclipse.ditto.testing.common.config.TestEnvironment;
 import org.eclipse.ditto.testing.common.ws.ThingsWebsocketClient;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingBuilder;
@@ -77,7 +79,9 @@ public final class RequestedAcksIT extends IntegrationTest {
     @BeforeClass
     public static void setUpClients() {
         final Solution solution = ServiceEnvironment.createSolutionWithRandomUsernameRandomNamespace();
-        testingContext = TestingContext.withGeneratedMockClient(solution, TEST_CONFIG);
+        testingContext = TestConfig.getInstance().getTestEnvironment() == TestEnvironment.DEPLOYMENT ?
+                serviceEnv.getDefaultTestingContext() :
+                TestingContext.withGeneratedMockClient(solution, TEST_CONFIG);
 
         ws1Ack = AcknowledgementLabel.of(testingContext.getSolution().getUsername() + ":custom-ack");
         ws2Ack = AcknowledgementLabel.of(testingContext.getSolution().getUsername() + ":another-ack");
@@ -97,9 +101,8 @@ public final class RequestedAcksIT extends IntegrationTest {
             headers2.putAll(basicAuthHeader);
         }
 
-        final String accessToken = testingContext.getOAuthClient().getAccessToken();
-        websocketClient1 = newTestWebsocketClient(accessToken, headers1, TestConstants.API_V_2);
-        websocketClient2 = newTestWebsocketClient(accessToken, headers2, TestConstants.API_V_2);
+        websocketClient1 = newTestWebsocketClient(testingContext, headers1, TestConstants.API_V_2);
+        websocketClient2 = newTestWebsocketClient(testingContext, headers2, TestConstants.API_V_2);
 
         websocketClient1.connect("ThingsWebsocketClient-User1-" + UUID.randomUUID());
         websocketClient2.connect("ThingsWebsocketClient-User1-" + UUID.randomUUID());

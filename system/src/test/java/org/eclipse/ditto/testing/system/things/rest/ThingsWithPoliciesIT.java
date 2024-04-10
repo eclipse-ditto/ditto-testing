@@ -86,10 +86,12 @@ public final class ThingsWithPoliciesIT extends SearchIntegrationTest {
 
         final JsonObject expectedPolicyJson = createPolicyJson(policyId);
 
-        getPolicy(policyId)
+
+        var res = getPolicy(policyId)
                 .expectingHttpStatus(OK)
                 .expectingBody(contains(expectedPolicyJson))
                 .fire();
+        res.print();
 
         deleteThing(TestConstants.API_V_2, thingId)
                 .expectingHttpStatus(NO_CONTENT)

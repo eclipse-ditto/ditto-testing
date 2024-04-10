@@ -60,9 +60,10 @@ public final class SmokeIT extends AbstractClientIT {
     public void setUp() {
         final BasicAuth basicAuth = serviceEnv.getDefaultTestingContext().getBasicAuth();
         basicAuthEnabled = basicAuth.isEnabled();
-        final AuthClient oAuthClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
+        final AuthClient oAuthClient1 = serviceEnv.getDefaultTestingContext().getOAuthClient();
+        final AuthClient oAuthClient2 = serviceEnv.getTestingContext2().getOAuthClient();
         TestingContext testingContextForDittoClientSubscriber =
-                TestingContext.newInstance(serviceEnv.getDefaultTestingContext().getSolution(), oAuthClient, basicAuth);
+                TestingContext.newInstance(serviceEnv.getDefaultTestingContext().getSolution(), oAuthClient1, basicAuth);
 
         if (basicAuthEnabled) {
             dittoClient = newDittoClient(basicAuth, JsonSchemaVersion.V_2);
@@ -70,10 +71,9 @@ public final class SmokeIT extends AbstractClientIT {
             subjects = Subjects.newInstance(
                     Subject.newInstance(SubjectIssuer.newInstance("nginx"), basicAuth.getUsername()));
         } else {
-            dittoClient = newDittoClient(serviceEnv.getDefaultTestingContext().getOAuthClient());
+            dittoClient = newDittoClient(oAuthClient1);
             dittoClientSubscriber = newDittoClient(testingContextForDittoClientSubscriber.getOAuthClient());
-            subjects = Subjects.newInstance(oAuthClient.getDefaultSubject(),
-                    serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject());
+            subjects = Subjects.newInstance(oAuthClient1.getDefaultSubject(), oAuthClient2.getDefaultSubject());
         }
     }
 

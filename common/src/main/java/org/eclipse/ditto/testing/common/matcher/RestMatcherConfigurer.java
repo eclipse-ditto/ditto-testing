@@ -50,9 +50,9 @@ public final class RestMatcherConfigurer {
     }
 
     public static RestMatcherConfigurer withConfiguredAuth(TestingContext context) {
-        final BasicAuth ba = context.getBasicAuth();
-        if (null != ba && ba.isEnabled()) {
-            return new RestMatcherConfigurer(null, null, BasicAuth.newInstance(true, ba.getUsername(), ba.getPassword()));
+        final BasicAuth basicAuth = context.getBasicAuth();
+        if (null != basicAuth && basicAuth.isEnabled()) {
+            return new RestMatcherConfigurer(null, null, BasicAuth.newInstance(true, basicAuth.getUsername(), basicAuth.getPassword()));
         } else {
             return new RestMatcherConfigurer(context.getOAuthClient().getAccessToken(), null, null);
         }

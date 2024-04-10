@@ -67,7 +67,9 @@ public final class TestingContext {
                 solution.getUsername(),
                 solution.getSecret(),
                 DEFAULT_SCOPE,
-                httpClient);
+                httpClient,
+                solution.getUsername(),
+                solution.getUsername());
 
         return newInstance(solution, oAuthClient, config.getBasicAuth());
     }

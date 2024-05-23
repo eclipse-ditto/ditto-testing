@@ -63,10 +63,10 @@ public final class QueryThingsIT {
     @RunWith(Parameterized.class)
     public static final class QueryThingsWithV2 extends VersionedSearchIntegrationTest {
 
-        private static final String ATTR1_KEY = "attr1";
-        private static final String ATTR2_KEY = "attr2";
-        private static final String ATTR3_KEY = "attr3";
-        private static final String ATTR4_KEY = "attr4";
+        private static final String ATTR1_KEY = "queryThingsWithV2It-attr1";
+        private static final String ATTR2_KEY = "queryThingsWithV2It-attr2";
+        private static final String ATTR3_KEY = "queryThingsWithV2It-attr3";
+        private static final String ATTR4_KEY = "queryThingsWithV2It-attr4";
 
         private static final String THING1_ATTR1_VALUE = "value1_1";
         private static final int THING1_ATTR2_VALUE = 1234;

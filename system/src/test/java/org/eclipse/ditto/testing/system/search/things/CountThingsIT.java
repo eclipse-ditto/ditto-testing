@@ -51,15 +51,15 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CountThingsIT.class);
 
-    private static final String ATTR1_KEY = "attr1";
-    private static final String ATTR2_KEY = "attr2";
-    private static final String ATTR3_KEY = "attr3";
-    private static final String ATTR4_KEY = "attr4";
+    private static final String ATTR1_KEY = "countThingsIt-attr1";
+    private static final String ATTR2_KEY = "countThingsIt-attr2";
+    private static final String ATTR3_KEY = "countThingsIt-attr3";
+    private static final String ATTR4_KEY = "countThingsIt-attr4";
 
     private static final String THING1_ATTR1_VALUE = "value1_1";
-    private static final int THING1_ATTR2_VALUE = 1234;
+    private static final int THING1_ATTR2_VALUE = 9876;
     private static final boolean THING1_ATTR3_VALUE = true;
-    private static final double THING1_ATTR4_VALUE = 12.987;
+    private static final double THING1_ATTR4_VALUE = 13.163;
 
     private static final String THING2_ATTR1_VALUE = "value2_1";
     private static final String THING2_ATTR2_VALUE = "value2_2";

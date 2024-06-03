@@ -276,7 +276,7 @@
                 <configuration>
                     <header>${project.basedir}/legal/headers/license-header.txt</header>
                     <validHeaders>
-<!--                        <header>${project.basedir}/legal/headers/license-header-2021.txt</header>-->
+                        <header>${project.basedir}/legal/headers/license-header-2023.txt</header>
                     </validHeaders>
                     <headerDefinitions>
                         <headerDefinition>${project.basedir}/legal/headers/license-header-xml-def.xml</headerDefinition>

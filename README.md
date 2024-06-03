@@ -66,3 +66,44 @@ cd docker
 # OAuth mock server
 docker-compose up -d oauth
 ```
+
+# Acceptance tests
+A subset of the system tests, called `Acceptance tests`, could be run against remote Ditto deployment.
+These need some environment variables set before execution, depending on authentication method configured in Ditto deployment.
+The following variables must be set:
+
+   * for BasicAuth:
+```
+      BASIC_AUTH_ENABLED = true     # boolean to configure tests
+      DEFAULT_HOSTNAME              # the hostname of the Ditto deployment
+      BASIC_AUTH_USERNAME           # Ditto username for basic auth
+      BASIC_AUTH_PASSWORD           # the password for the user
+```
+  * for OAuth - the tests need an OAuth provider and 4 separate OAuth clients:
+```
+      BASIC_AUTH_ENABLED = false  # default value, could be skipped
+      DEFAULT_HOSTNAME            # the hostname of the Ditto deployment
+
+      OAUTH_TOKEN_ENDPOINT        # OAuth token endpoint for getting tokens
+      OAUTH_ISSUER                # should match the value configured in Ditto
+
+      OAUTH_CLIENT_ID             # main client id
+      OAUTH_CLIENT_SECRET         # main client secret
+      OAUTH_CLIENT_SCOPE          # main client scope
+
+      OAUTH_CLIENT2_ID            # 2nd client id
+      OAUTH_CLIENT2_SECRET        # 2nd client secret
+      OAUTH_CLIENT2_SCOPE         # 2nd client scope
+
+      OAUTH_CLIENT3_ID            # 3rd client id
+      OAUTH_CLIENT3_SECRET        # 3rd client secret
+      OAUTH_CLIENT3_SCOPE         # 3rd client scope
+
+      OAUTH_CLIENT4_ID            # 4th client id
+      OAUTH_CLIENT4_SECRET        # 4th client secret
+      OAUTH_CLIENT4_SCOPE         # 4th client scope
+```
+Run maven with profile `acceptance` and set property `test.environment=deployment`, e.g. with the following command:
+```
+mvn verify -am -amd --projects=system -Pacceptance -Dtest.environment=deployment -Dtest.timeoutMs=240000 -Dskip.categories=ServiceBus
+```

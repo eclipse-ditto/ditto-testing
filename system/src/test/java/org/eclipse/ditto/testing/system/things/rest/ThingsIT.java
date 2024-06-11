@@ -600,13 +600,11 @@ public final class ThingsIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
-        if (null == basicAuth || !basicAuth.isEnabled()) {
-            // update the Thing with a different solution
-            putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
-                    .expectingHttpStatus(HttpStatus.NO_CONTENT)
-                    .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
-                    .fire();
-        }
+        // update the Thing with a different context (in case of OAuth)
+        putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .fire();
     }
 
     @Test

@@ -181,8 +181,6 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         getPolicy(copiedPolicyId)
                 .expectingBody(containsOnly(expectedPolicy))
                 .fire();
-        deleteThing(API_V_2, originalThing.getEntityId().get()).fire();
-        deletePolicy(policyId).fire();
     }
     
     @Test

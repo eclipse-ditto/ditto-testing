@@ -601,7 +601,6 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
          * The authentication is passed as query parameter 'ws/2?access_token=[jwt]' or 'ws/2?basic=[user:pass]'
          */
         QUERY_PARAM
-
     }
 
 }

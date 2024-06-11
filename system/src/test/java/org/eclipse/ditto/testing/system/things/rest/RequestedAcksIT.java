@@ -23,7 +23,6 @@ import static org.eclipse.ditto.json.assertions.DittoJsonAssertions.assertThat;
 
 import java.time.Duration;
 import java.util.Base64;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -86,12 +85,10 @@ public final class RequestedAcksIT extends IntegrationTest {
         ws1Ack = AcknowledgementLabel.of(testingContext.getSolution().getUsername() + ":custom-ack");
         ws2Ack = AcknowledgementLabel.of(testingContext.getSolution().getUsername() + ":another-ack");
 
-        final Map<String, String> headers1 = new HashMap<>() {{
-            put(DittoHeaderDefinition.DECLARED_ACKS.getKey(), String.format("[\"%s\"]", ws1Ack));
-        }};
-        final Map<String, String> headers2 = new HashMap<>() {{
-            put(DittoHeaderDefinition.DECLARED_ACKS.getKey(), String.format("[\"%s\"]", ws2Ack));
-        }};
+        final Map<String, String> headers1 =
+                Map.of(DittoHeaderDefinition.DECLARED_ACKS.getKey(), String.format("[\"%s\"]", ws1Ack));
+        final Map<String, String> headers2 =
+                Map.of(DittoHeaderDefinition.DECLARED_ACKS.getKey(), String.format("[\"%s\"]", ws2Ack));
         final BasicAuth basicAuth = testingContext.getBasicAuth();
         if (basicAuth.isEnabled()) {
             final String credentials = basicAuth.getUsername() + ":" + basicAuth.getPassword();

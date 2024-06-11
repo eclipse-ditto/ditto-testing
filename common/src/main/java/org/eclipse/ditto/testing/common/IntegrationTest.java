@@ -648,9 +648,18 @@ public abstract class IntegrationTest {
             if (null == location) {
                 return;
             }
+
             final String thingId = parseIdFromLocation(location);
             rememberForCleanUp(deleteThing(version, thingId));
-            rememberForCleanUpLast(deletePolicy(thingId));
+            String policyId;
+            try {
+                policyId =
+                        JsonObject.of(response.getBody().asByteArray()).getValue("policyId").get().asString();
+            } catch (final Exception ex) {
+                LOGGER.warn("Could not parse policyId of Thing {} to remember for cleanup: {}", thingId, ex.getMessage());
+                policyId = thingId;
+            }
+            rememberForCleanUpLast(deletePolicy(policyId));
         });
         return result;
     }

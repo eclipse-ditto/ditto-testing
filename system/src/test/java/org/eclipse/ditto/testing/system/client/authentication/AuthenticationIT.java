@@ -43,9 +43,9 @@ import org.slf4j.LoggerFactory;
 /**
  * Tests Client JWT Authentication.
  */
-public final class JwtAuthenticationIT extends AbstractClientIT {
+public final class AuthenticationIT extends AbstractClientIT {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(JwtAuthenticationIT.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuthenticationIT.class);
 
     private DittoClient dittoClient;
     private ThingId thingId;

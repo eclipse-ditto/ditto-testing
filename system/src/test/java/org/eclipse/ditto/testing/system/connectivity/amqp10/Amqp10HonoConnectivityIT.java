@@ -308,7 +308,7 @@ public class Amqp10HonoConnectivityIT extends AbstractConnectivityITCommon<Block
 
         // get the thing via http-api
         final Response response = getThing(2, thingId)
-                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .withConfiguredAuth(testingContextWithRandomNs)
                 .expectingHttpStatus(HttpStatus.OK)
                 .useAwaitility(Awaitility.await().atMost(Duration.ofSeconds(10)))
                 .withLogging(LOGGER, "thing")

@@ -20,6 +20,7 @@ import org.eclipse.ditto.base.model.common.ConditionChecker;
 import org.eclipse.ditto.base.model.headers.DittoHeaders;
 import org.eclipse.ditto.jwt.model.JsonWebToken;
 import org.eclipse.ditto.testing.common.authentication.AccessTokenSupplier;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.config.TestConfig;
 import org.eclipse.ditto.testing.common.gateway.GatewayConfig;
 import org.eclipse.ditto.testing.common.http.HttpProxyConfig;
@@ -36,6 +37,7 @@ public final class ThingsWebSocketClientFactory {
 
     public static ThingsWebsocketClient getWebSocketClient(final TestConfig testConfig,
             final AccessTokenSupplier<JsonWebToken> jwtSupplier,
+            final BasicAuth basicAuth,
             final DittoHeaders additionalHeaders) {
 
         ConditionChecker.checkNotNull(testConfig, "testConfig");
@@ -45,9 +47,10 @@ public final class ThingsWebSocketClientFactory {
         final var jsonWebToken = jwtSupplier.getAccessToken();
         return ThingsWebsocketClient.newInstance(getEndpoint(testConfig),
                 jsonWebToken.getToken(),
+                basicAuth,
                 additionalHeaders,
                 getProxyServerOrNull(testConfig),
-                ThingsWebsocketClient.JwtAuthMethod.HEADER);
+                ThingsWebsocketClient.AuthMethod.HEADER);
     }
 
     private static String getEndpoint(final TestConfig testConfig) {

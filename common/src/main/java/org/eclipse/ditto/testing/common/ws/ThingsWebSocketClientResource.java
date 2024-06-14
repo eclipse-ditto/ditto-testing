@@ -22,6 +22,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 import org.eclipse.ditto.base.model.headers.DittoHeaders;
 import org.eclipse.ditto.jwt.model.JsonWebToken;
 import org.eclipse.ditto.testing.common.authentication.AccessTokenSupplier;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.config.TestConfig;
 import org.eclipse.ditto.testing.common.correlationid.CorrelationId;
 import org.junit.rules.ExternalResource;
@@ -66,7 +67,10 @@ public final class ThingsWebSocketClientResource extends ExternalResource {
     }
 
     private ThingsWebsocketClient createThingsWebsocketClient() {
-        return ThingsWebSocketClientFactory.getWebSocketClient(testConfig, jwtSupplier, DittoHeaders.empty());
+        // Mock basicAuth parameter as no acceptance tests uses this method
+        final BasicAuth basicAuth = BasicAuth.newInstance(false, "", "");
+
+        return ThingsWebSocketClientFactory.getWebSocketClient(testConfig, jwtSupplier, basicAuth, DittoHeaders.empty());
     }
 
     private static void connect(final ThingsWebsocketClient thingsWebsocketClient) {

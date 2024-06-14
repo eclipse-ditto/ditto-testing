@@ -62,13 +62,13 @@ public class QueryThingsWithFilterByThingDefinitionIT extends SearchIntegrationT
 
     protected void createTestData() {
         thing1Id = persistThingAndWaitTillAvailable(createThing1(), JsonSchemaVersion.V_2,
-                serviceEnv.getDefaultTestingContext().getOAuthClient());
+                serviceEnv.getDefaultTestingContext());
         thing2Id = persistThingAndWaitTillAvailable(createThing2(), JsonSchemaVersion.V_2,
-                serviceEnv.getDefaultTestingContext().getOAuthClient());
+                serviceEnv.getDefaultTestingContext());
         thing3Id = persistThingAndWaitTillAvailable(createThing3(), JsonSchemaVersion.V_2,
-                serviceEnv.getDefaultTestingContext().getOAuthClient());
+                serviceEnv.getDefaultTestingContext());
         thing4Id = persistThingAndWaitTillAvailable(createThing4(), JsonSchemaVersion.V_2,
-                serviceEnv.getDefaultTestingContext().getOAuthClient());
+                serviceEnv.getDefaultTestingContext());
     }
 
     private Thing createThing1() {

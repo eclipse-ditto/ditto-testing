@@ -62,7 +62,7 @@ public final class ThingsWithImportedPoliciesIT extends IntegrationTest {
                 .fire();
 
         getThing(TestConstants.API_V_2, thingId)
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .fire();
 
@@ -71,7 +71,7 @@ public final class ThingsWithImportedPoliciesIT extends IntegrationTest {
                 .fire();
 
         getThing(TestConstants.API_V_2, thingId)
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.OK)
                 .fire();
 

@@ -23,7 +23,9 @@ public enum TestEnvironment {
 
     DOCKER_COMPOSE("docker-compose"),
 
-    LOCAL("local");
+    LOCAL("local"),
+
+    DEPLOYMENT("deployment");
 
     private final String configValue;
 

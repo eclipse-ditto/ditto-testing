@@ -16,6 +16,7 @@ import javax.annotation.concurrent.Immutable;
 
 import org.eclipse.ditto.base.model.common.ConditionChecker;
 import org.eclipse.ditto.jwt.model.JsonWebToken;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 
 /**
  * Provides {@link AuthenticationSetter}s for various authentication schemes.
@@ -52,6 +53,16 @@ public final class AuthenticationSetters {
      */
     public static AuthenticationSetter devopsAuthentication() {
         return authSpec -> authSpec.preemptive().basic("devops", "foobar");
+    }
+
+    /**
+     * Gets an {@link AuthenticationSetter} that uses "ditto" username and password as
+     * preemptive basic auth authentication.
+     *
+     * @return the {@code AuthenticationSetter}.
+     */
+    public static AuthenticationSetter basicAuthentication(BasicAuth basicAuth) {
+        return authSpec -> authSpec.preemptive().basic(basicAuth.getUsername(), basicAuth.getPassword());
     }
 
 }

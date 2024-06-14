@@ -138,6 +138,10 @@ public final class ThingsHttpClient {
         checkNotNull(thingId, "thingId");
     }
 
+    private static void requirePolicyIdNotNull(final PolicyId policyId) {
+        checkNotNull(policyId, "policyId");
+    }
+
     private static void requireThingNotNull(final Thing thing) {
         checkNotNull(thing, "thing");
     }
@@ -293,6 +297,23 @@ public final class ThingsHttpClient {
             RestAssured.given(getBasicRequestSpec(correlationId, Set.of(HttpStatus.SC_NO_CONTENT), filter))
                     .delete("/{thingId}", thingId.toString());
             LOGGER.info("Deleted thing <{}>.", thingId);
+        } finally {
+            LOGGER.discardCorrelationId();
+        }
+    }
+
+    public void deletePolicy(final PolicyId policyId, final CorrelationId correlationId, final Filter... filter) {
+        requirePolicyIdNotNull(policyId);
+        requireCorrelationIdNotNull(correlationId);
+        requireFilterNotNull(filter);
+
+        LOGGER.withCorrelationId(correlationId);
+        LOGGER.info("Deleting policy <{}> …", policyId);
+
+        try {
+            RestAssured.given(getBasicRequestSpec(correlationId, Set.of(HttpStatus.SC_NO_CONTENT), filter))
+                    .delete("/{policyId}", policyId.toString());
+            LOGGER.info("Deleted policy <{}>.", policyId);
         } finally {
             LOGGER.discardCorrelationId();
         }

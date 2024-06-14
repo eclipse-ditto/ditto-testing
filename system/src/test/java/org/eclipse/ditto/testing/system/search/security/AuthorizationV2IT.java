@@ -73,8 +73,7 @@ public final class AuthorizationV2IT extends SearchIntegrationTest {
         final Thing thingWithDefaultPermissions = ThingsModelFactory.newThingBuilder()
                 .setId(thingId)
                 .build();
-        persistThingAndWaitTillAvailable(thingWithDefaultPermissions, V_2,
-                serviceEnv.getDefaultTestingContext().getOAuthClient());
+        persistThingAndWaitTillAvailable(thingWithDefaultPermissions, V_2, serviceEnv.getDefaultTestingContext());
 
         // test: USER_2 has no permissions on the thing and thus is not able to see the thing
         final SearchFilter thingIdIsEqual = idFilter(thingId);
@@ -388,7 +387,6 @@ public final class AuthorizationV2IT extends SearchIntegrationTest {
     private static void persistThingWithPolicy(final Thing thing, final Policy policy) {
         final JsonObject thingJson = thing.toJson(V_2, FieldType.notHidden())
                 .setAll(policy.toInlinedJson(V_2, FieldType.notHidden()));
-        persistThingsAndWaitTillAvailable(thingJson.toString(), 1L, V_2,
-                serviceEnv.getDefaultTestingContext().getOAuthClient());
+        persistThingsAndWaitTillAvailable(thingJson.toString(), 1L, V_2, serviceEnv.getDefaultTestingContext());
     }
 }

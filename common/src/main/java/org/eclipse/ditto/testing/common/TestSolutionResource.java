@@ -19,6 +19,7 @@ import org.eclipse.ditto.jwt.model.JsonWebToken;
 import org.eclipse.ditto.testing.common.authentication.AccessTokenSupplier;
 import org.eclipse.ditto.testing.common.authentication.AccessTokenSuppliers;
 import org.eclipse.ditto.testing.common.authentication.OAuthMockConfig;
+import org.eclipse.ditto.testing.common.client.oauth.AuthConfig;
 import org.eclipse.ditto.testing.common.config.TestConfig;
 import org.eclipse.ditto.testing.common.config.TestEnvironment;
 import org.junit.rules.ExternalResource;
@@ -46,11 +47,13 @@ public final class TestSolutionResource extends ExternalResource
     private final TestConfig testConfig;
     private Solution solution;
     private AccessTokenSupplier<JsonWebToken> accessTokenSupplier;
+    private final boolean basicAuthEnabled;
 
     private TestSolutionResource(final TestConfig testConfig) {
         this.testConfig = testConfig;
         solution = null;
         accessTokenSupplier = null;
+        basicAuthEnabled = CommonTestConfig.getInstance().getBasicAuth().isEnabled();
     }
 
     /**
@@ -62,15 +65,32 @@ public final class TestSolutionResource extends ExternalResource
      */
     public static TestSolutionResource newInstance(final TestConfig testConfig) {
         ConditionChecker.checkNotNull(testConfig, "testConfig");
-        return new TestSolutionResource(
-                testConfig
-        );
+        return new TestSolutionResource(testConfig);
     }
 
     @Override
     protected void before() throws Throwable {
         solution = createDefaultSolution();
-        accessTokenSupplier = getCachingAuthMockJwtSupplier();
+        if (!basicAuthEnabled) {
+            if (isLocalOrDockerEnvironment()) {
+                accessTokenSupplier = getCachingAuthMockJwtSupplier();
+            } else {
+                final var authConfig = AuthConfig.of(testConfig);
+                accessTokenSupplier = getCachingAuthJwtSupplier(authConfig);
+            }
+        }
+    }
+
+    private boolean isLocalOrDockerEnvironment() {
+        final var testEnvironment = testConfig.getTestEnvironment();
+        return TestEnvironment.LOCAL == testEnvironment || TestEnvironment.DOCKER_COMPOSE == testEnvironment;
+    }
+
+    private AccessTokenSupplier<JsonWebToken> getCachingAuthJwtSupplier(final AuthConfig authConfig) {
+        return AccessTokenSuppliers.getCachingAuthJwtSupplier(authConfig.getTokenEndpointUri(),
+                authConfig.getClientId(),
+                authConfig.getClientSecret(),
+                authConfig.getClientScope());
     }
 
     private AccessTokenSupplier<JsonWebToken> getCachingAuthMockJwtSupplier() {

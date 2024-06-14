@@ -32,13 +32,15 @@ public final class AuthClient extends CommonOAuth2Client {
             final String clientId,
             final String clientSecret,
             final String scope,
-            final AsyncHttpClient httpClient) {
+            final AsyncHttpClient httpClient,
+            final String subject,
+            final String defaultSubject) {
 
         super(tokenEndpoint, clientId, clientSecret, scope, httpClient);
-        this.subject = Subject.newInstance(subjectIssuer, clientId, SubjectType.newInstance("ditto-auth"));
-
+        this.subject =
+                Subject.newInstance(subjectIssuer, subject, SubjectType.newInstance("ditto-auth"));
         this.defaultSubject =
-                Subject.newInstance(subjectIssuer, clientId, SubjectType.newInstance("ditto-auth"));
+                Subject.newInstance(subjectIssuer, defaultSubject, SubjectType.newInstance("ditto-auth"));
     }
 
     public static AuthClient newInstance(final String tokenEndpoint,
@@ -46,16 +48,19 @@ public final class AuthClient extends CommonOAuth2Client {
             final String clientId,
             final String clientSecret,
             final String scope,
-            final AsyncHttpClient httpClient) {
+            final AsyncHttpClient httpClient,
+            final String subject,
+            final String defaultSubject) {
 
         checkNotNull(subjectIssuer, "subjectIssuer");
         checkNotNull(scope, "scope");
+        checkNotNull(subject, "subject");
 
-        return new AuthClient(tokenEndpoint, subjectIssuer, clientId, clientSecret, scope, httpClient);
+        return new AuthClient(tokenEndpoint, subjectIssuer, clientId, clientSecret, scope, httpClient, subject, defaultSubject);
     }
 
     /**
-     * Returns the Suite Auth client id subject, e.g. ditto:0a61b502-4ce2-4d11-a962-80f6d3521875
+     * Returns the OAuth client id subject, e.g. ditto:0a61b502-4ce2-4d11-a962-80f6d3521875
      *
      * @return the subject.
      */

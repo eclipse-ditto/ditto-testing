@@ -97,7 +97,7 @@ services:
       - ./fluentbit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
 
   oauth:
-    image: ghcr.io/navikt/mock-oauth2-server:0.5.7
+    image: ghcr.io/navikt/mock-oauth2-server:2.1.3
     networks:
       - test
     expose:

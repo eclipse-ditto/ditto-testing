@@ -57,7 +57,7 @@ final class SseTestDriver {
 
         final CompletableFuture<List<SseTestHandler.Message>> future =
                 client.prepareGet(url)
-                        .setHeader("Authorization", "Bearer " + authorization)
+                        .setHeader("Authorization", authorization)
                         .addHeader("Accept", "text/event-stream")
                         .addHeader("Cache-Control", "no-cache")
                         .execute(new SseTestHandler(expectedMessagesCount))

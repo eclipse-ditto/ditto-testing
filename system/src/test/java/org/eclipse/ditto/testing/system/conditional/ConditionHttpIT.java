@@ -24,10 +24,12 @@ import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.policies.model.PoliciesModelFactory;
 import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.PolicyId;
+import org.eclipse.ditto.testing.common.CommonTestConfig;
 import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.TestSolutionResource;
 import org.eclipse.ditto.testing.common.ThingJsonProducer;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.config.TestConfig;
 import org.eclipse.ditto.testing.common.correlationid.CorrelationId;
 import org.eclipse.ditto.testing.common.correlationid.TestNameCorrelationId;
@@ -37,6 +39,7 @@ import org.eclipse.ditto.testing.common.things.ThingsHttpClient;
 import org.eclipse.ditto.testing.common.things.ThingsHttpClientResource;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -45,6 +48,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import io.restassured.RestAssured;
+import io.restassured.authentication.AuthenticationScheme;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
@@ -98,6 +102,8 @@ public final class ConditionHttpIT {
 
     private static final TestConfig TEST_CONFIG = TestConfig.getInstance();
 
+    private static final CommonTestConfig COMMON_TEST_CONFIG = CommonTestConfig.getInstance();
+
     private static final String FEATURE_ID = "EnvironmentScanner";
 
     @ClassRule(order = 0)
@@ -135,6 +141,12 @@ public final class ConditionHttpIT {
         thingId = newThing.getEntityId().orElseThrow();
     }
 
+    @After
+    public void after() {
+        postDeleteThing(thingId);
+        deletePolicy(PolicyId.of(thingId), testNameCorrelationId.getCorrelationId().withSuffix(".deleteAdjustedPolicy"));
+    }
+
     private static Thing getThing() {
         final var thingJsonProducer = new ThingJsonProducer();
         return thingJsonProducer.getThing();
@@ -142,6 +154,10 @@ public final class ConditionHttpIT {
 
     private Thing postNewThing(final Thing thing) {
         return thingsHttpClient.postThing(thing, testNameCorrelationId.getCorrelationId(".postThing"));
+    }
+
+    private void postDeleteThing(final ThingId thingId) {
+        thingsHttpClient.deleteThing(thingId, testNameCorrelationId.getCorrelationId(".deleteThing"));
     }
 
     @Test
@@ -672,9 +688,17 @@ public final class ConditionHttpIT {
     private static RequestSpecification getBasicThingsRequestSpec(final CorrelationId correlationId) {
         final var correlationIdHeader = correlationId.toHeader();
 
+        final BasicAuth basicAuth = COMMON_TEST_CONFIG.getBasicAuth();
+        final AuthenticationScheme auth;
+        if (basicAuth.isEnabled()) {
+            auth = RestAssured.basic(basicAuth.getUsername(), basicAuth.getPassword());
+        } else {
+            auth = RestAssured.oauth2(TEST_SOLUTION_RESOURCE.getAccessToken().getToken());
+        }
+
         return new RequestSpecBuilder()
                 .setBaseUri(thingsBaseUri)
-                .setAuth(RestAssured.oauth2(TEST_SOLUTION_RESOURCE.getAccessToken().getToken()))
+                .setAuth(auth)
                 .setContentType(ContentType.JSON)
                 .addHeader(correlationIdHeader.getName(), correlationIdHeader.getValue())
                 .build();
@@ -688,6 +712,11 @@ public final class ConditionHttpIT {
     private static void putPolicy(final PolicyId policyId, final Policy policy, final CorrelationId correlationId) {
         final var policiesClient = POLICIES_HTTP_CLIENT_RESOURCE.getPoliciesClient();
         policiesClient.putPolicy(policyId, policy, correlationId);
+    }
+
+    private static void deletePolicy(final PolicyId policyId, final CorrelationId correlationId) {
+        final var policiesClient = POLICIES_HTTP_CLIENT_RESOURCE.getPoliciesClient();
+        policiesClient.deletePolicy(policyId, correlationId);
     }
 
     private static void putMetadata(final ThingId thingId, final CorrelationId correlationId) {

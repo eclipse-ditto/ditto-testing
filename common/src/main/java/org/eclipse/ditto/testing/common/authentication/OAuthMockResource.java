@@ -22,7 +22,7 @@ import org.eclipse.ditto.testing.common.junit.ExternalResourcePlus;
 import org.junit.runner.Description;
 
 /**
- * This external resource registers a client at the Suite Auth Mock and provides access tokens for that client.
+ * This external resource registers a client at the OAuth Mock and provides access tokens for that client.
  * To register the client, the service instance ID of the solution is used, that is provided by the
  * {@link TestSolutionSupplierRule}.
  * <p>

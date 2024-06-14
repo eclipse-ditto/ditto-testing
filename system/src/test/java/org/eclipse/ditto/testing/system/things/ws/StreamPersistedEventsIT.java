@@ -183,7 +183,8 @@ public final class StreamPersistedEventsIT extends IntegrationTest {
         }
 
         return ThingsWebsocketClient.newInstance(dittoWsUrl(JsonSchemaVersion.V_2.toInt()), suiteAuthToken,
-                additionalHttpHeaders, proxyServer, ThingsWebsocketClient.JwtAuthMethod.HEADER);
+                serviceEnv.getDefaultTestingContext().getBasicAuth(),
+                additionalHttpHeaders, proxyServer, ThingsWebsocketClient.AuthMethod.HEADER);
     }
 
     @Test

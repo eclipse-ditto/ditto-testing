@@ -45,8 +45,13 @@ public final class PoliciesHttpClientResource extends ExternalResource {
             final AccessTokenSupplier<JsonWebToken> jwtSupplier) {
 
         final var gatewayConfig = GatewayConfig.of(testConfig);
-        return new PoliciesHttpClientResource(gatewayConfig.getHttpUriApi2(),
-                AuthenticationSetters.oauth2AccessToken(jwtSupplier));
+        if (gatewayConfig.getBasicAuth().isEnabled()) {
+            return new PoliciesHttpClientResource(gatewayConfig.getHttpUriApi2(),
+                    AuthenticationSetters.basicAuthentication(gatewayConfig.getBasicAuth()));
+        } else {
+            return new PoliciesHttpClientResource(gatewayConfig.getHttpUriApi2(),
+                    AuthenticationSetters.oauth2AccessToken(jwtSupplier));
+        }
     }
 
     @Override

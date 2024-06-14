@@ -24,6 +24,7 @@ import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.newSizeOpti
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.newSortOption;
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.or;
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.property;
+import static org.junit.Assume.assumeFalse;
 
 import org.eclipse.ditto.base.model.acks.DittoAcknowledgementLabel;
 import org.eclipse.ditto.base.model.headers.DittoHeaderDefinition;
@@ -32,10 +33,10 @@ import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.testing.common.IdGenerator;
 import org.eclipse.ditto.testing.common.SearchIntegrationTest;
+import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.Timeout;
 import org.eclipse.ditto.testing.common.VersionedSearchIntegrationTest;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
-import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.common.matcher.search.SearchMatcher;
 import org.eclipse.ditto.testing.common.matcher.search.SortProperties;
 import org.eclipse.ditto.things.model.Attributes;
@@ -62,10 +63,10 @@ public final class QueryThingsIT {
     @RunWith(Parameterized.class)
     public static final class QueryThingsWithV2 extends VersionedSearchIntegrationTest {
 
-        private static final String ATTR1_KEY = "attr1";
-        private static final String ATTR2_KEY = "attr2";
-        private static final String ATTR3_KEY = "attr3";
-        private static final String ATTR4_KEY = "attr4";
+        private static final String ATTR1_KEY = "queryThingsWithV2It-attr1";
+        private static final String ATTR2_KEY = "queryThingsWithV2It-attr2";
+        private static final String ATTR3_KEY = "queryThingsWithV2It-attr3";
+        private static final String ATTR4_KEY = "queryThingsWithV2It-attr4";
 
         private static final String THING1_ATTR1_VALUE = "value1_1";
         private static final int THING1_ATTR2_VALUE = 1234;
@@ -87,10 +88,9 @@ public final class QueryThingsIT {
                     createThingWithRandomAttrValues(createThingId("user1", idGenerator())), 10);
             thing1Id = persistThingAndWaitTillAvailable(createThing1());
             thing2Id = persistThingAndWaitTillAvailable(createThing2());
-            final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
             persistThingsAndWaitTillAvailable(
                     i -> createThingWithRandomAttrValues(createThingId("user2", idGenerator())),
-                    authClient, 4, V_2);
+                    serviceEnv.getDefaultTestingContext(), 4, V_2);
         }
 
         private static Thing createThingWithRandomAttrValues(final ThingId thingId) {
@@ -224,6 +224,8 @@ public final class QueryThingsIT {
 
         @Test
         public void searchForThingsWithoutPermission() {
+            assumeFalse("Test 'searchForThingsWithoutPermission' skipped due to enabled Basic Auth configuration.",
+                    serviceEnv.getDefaultTestingContext().getBasicAuth().isEnabled());
             unauthorizedSearch(attribute(ATTR1_KEY).eq(THING1_ATTR1_VALUE))
                     .expectingBody(isEmpty())
                     .fire();
@@ -274,10 +276,10 @@ public final class QueryThingsIT {
         private static ThingId thing1Id;
 
         protected void createTestData() {
-            final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
+            final TestingContext context = serviceEnv.getDefaultTestingContext();
             final Thing thing1 =
                     ThingsModelFactory.newThingBuilder().setId(createThingId("thing1", idGenerator())).build();
-            thing1Id = persistThingAndWaitTillAvailable(thing1, JSON_SCHEMA_VERSION, authClient);
+            thing1Id = persistThingAndWaitTillAvailable(thing1, JSON_SCHEMA_VERSION, context);
         }
 
         @Test

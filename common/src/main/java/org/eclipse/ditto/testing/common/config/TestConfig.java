@@ -98,7 +98,7 @@ public final class TestConfig {
                     final var pattern = "Failed to determine test environment: <{0}> is unknown.";
                     throw new ConfigError(MessageFormat.format(pattern, testEnvironmentConfigValue));
                 });
-        LOGGER.info("Running against test environment <{}>.", result);
+        LOGGER.info("Running against test environment <{}>.", result.name());
         return result;
     }
 

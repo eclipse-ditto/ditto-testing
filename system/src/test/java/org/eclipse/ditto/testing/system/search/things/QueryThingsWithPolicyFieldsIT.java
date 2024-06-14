@@ -41,9 +41,11 @@ import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.policies.model.Resource;
 import org.eclipse.ditto.policies.model.Resources;
 import org.eclipse.ditto.policies.model.Subject;
+import org.eclipse.ditto.policies.model.SubjectIssuer;
 import org.eclipse.ditto.policies.model.SubjectType;
 import org.eclipse.ditto.policies.model.Subjects;
 import org.eclipse.ditto.testing.common.SearchIntegrationTest;
+import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
 import org.eclipse.ditto.things.model.Feature;
 import org.eclipse.ditto.things.model.Thing;
@@ -76,8 +78,7 @@ public final class QueryThingsWithPolicyFieldsIT extends SearchIntegrationTest {
         final Thing thing = createThing();
         final ThingId thingId = thing.getEntityId().orElseThrow(IllegalStateException::new);
         final PolicyId policyId = PolicyId.of(thingId);
-        persistThingAndWaitTillAvailable(thing, JsonSchemaVersion.V_2,
-                serviceEnv.getDefaultTestingContext().getOAuthClient());
+        persistThingAndWaitTillAvailable(thing, JsonSchemaVersion.V_2, serviceEnv.getDefaultTestingContext());
 
         // WHEN / THEN
         final JsonObject expectedSingleResult = createExpectedThing(createDefaultPolicy(policyId));
@@ -97,8 +98,7 @@ public final class QueryThingsWithPolicyFieldsIT extends SearchIntegrationTest {
         final Thing thing = createThingBuilder().setPolicyId(customPolicyId).build();
         putPolicy(customPolicy).expectingHttpStatus(HttpStatus.CREATED).fire();
         final ThingId thingId = thing.getEntityId().orElseThrow(IllegalStateException::new);
-        persistThingAndWaitTillAvailable(thing, JsonSchemaVersion.V_2,
-                serviceEnv.getDefaultTestingContext().getOAuthClient());
+        persistThingAndWaitTillAvailable(thing, JsonSchemaVersion.V_2, serviceEnv.getDefaultTestingContext());
 
         // WHEN / THEN
         final JsonObject expectedSingleResult = createExpectedThing(customPolicy);
@@ -119,8 +119,7 @@ public final class QueryThingsWithPolicyFieldsIT extends SearchIntegrationTest {
         final Thing thing = createThingBuilder().setFeature(feature).build();
         final ThingId thingId = thing.getEntityId().orElseThrow();
         final PolicyId policyId = PolicyId.of(thingId);
-        persistThingAndWaitTillAvailable(thing, JsonSchemaVersion.V_2,
-                serviceEnv.getDefaultTestingContext().getOAuthClient());
+        persistThingAndWaitTillAvailable(thing, JsonSchemaVersion.V_2, serviceEnv.getDefaultTestingContext());
 
         final PolicyEntry policyEntry = createPolicyEntryWithGrantOnFeaturesAndRevokeOn1Feature(
                 "TEST", serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject(), feature.getId());
@@ -131,7 +130,7 @@ public final class QueryThingsWithPolicyFieldsIT extends SearchIntegrationTest {
         searchThings(JsonSchemaVersion.V_2)
                 .namespaces(thingId.getNamespace())
                 .filter(idFilter(thingId))
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .useAwaitility(Awaitility.await().pollInterval(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(30)))
                 .expectingBody(isSingleResult(result -> {}))
                 .fire();
@@ -157,8 +156,7 @@ public final class QueryThingsWithPolicyFieldsIT extends SearchIntegrationTest {
                         ThingsModelFactory.newFeatureProperties(JsonObject.newBuilder().set("k", 2).build()));
         final Thing thing = createThingBuilder().setFeature(feature0).setFeature(feature2).build();
         final ThingId thingId = thing.getEntityId().orElseThrow();
-        persistThingAndWaitTillAvailable(thing, JsonSchemaVersion.V_2,
-                serviceEnv.getDefaultTestingContext().getOAuthClient());
+        persistThingAndWaitTillAvailable(thing, JsonSchemaVersion.V_2, serviceEnv.getDefaultTestingContext());
 
         // WHEN
         putFeature(2, thingId, feature1.getId(), feature1.toJson())
@@ -207,17 +205,24 @@ public final class QueryThingsWithPolicyFieldsIT extends SearchIntegrationTest {
         return PoliciesModelFactory.newPolicy(policyId, entry);
     }
 
+    private static Subject getSubject(final TestingContext context) {
+        if (context.getBasicAuth().isEnabled()) {
+            return Subject.newInstance(
+                    SubjectIssuer.newInstance("nginx"), context.getBasicAuth().getUsername());
+        } else {
+            return context.getOAuthClient().getDefaultSubject();
+        }
+    }
+
     private static Policy createCustomPolicy(final PolicyId policyId) {
-        final Subject subject = serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject();
-        final Subjects subjects = Subjects.newInstance(subject);
+        final Subjects subjects = Subjects.newInstance(getSubject(serviceEnv.getDefaultTestingContext()));
         final String label = "myCustomPolicyEntry";
         final Resource policyResource = Resource.newInstance(PoliciesResourceType.policyResource("/"),
                 RW_PERMISSIONS);
         final Resource thingResource = Resource.newInstance(PoliciesResourceType.thingResource("/"),
                 RW_PERMISSIONS);
         final Resources resources = Resources.newInstance(policyResource, thingResource);
-        final PolicyEntry entry = PolicyEntry.newInstance(label,
-                subjects, resources);
+        final PolicyEntry entry = PolicyEntry.newInstance(label, subjects, resources);
         return PoliciesModelFactory.newPolicy(policyId, entry);
     }
 

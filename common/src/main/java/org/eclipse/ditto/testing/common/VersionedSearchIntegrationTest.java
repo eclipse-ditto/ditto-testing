@@ -91,8 +91,7 @@ public abstract class VersionedSearchIntegrationTest extends SearchIntegrationTe
     }
 
     protected ThingId persistThingAndWaitTillAvailable(final Thing thing) {
-        return persistThingAndWaitTillAvailable(thing, apiVersion,
-                serviceEnv.getDefaultTestingContext().getOAuthClient());
+        return persistThingAndWaitTillAvailable(thing, apiVersion, serviceEnv.getDefaultTestingContext());
     }
 
     private static Optional<List<JsonSchemaVersion>> getConfiguredApiVersions() {

@@ -176,7 +176,8 @@ public class StreamThingsIT extends IntegrationTest {
         }
 
         return ThingsWebsocketClient.newInstance(dittoWsUrl(JsonSchemaVersion.V_2.toInt()), authToken,
-                additionalHttpHeaders, proxyServer, ThingsWebsocketClient.JwtAuthMethod.HEADER);
+                serviceEnv.getDefaultTestingContext().getBasicAuth(),
+                additionalHttpHeaders, proxyServer, ThingsWebsocketClient.AuthMethod.HEADER);
     }
 
     @Test

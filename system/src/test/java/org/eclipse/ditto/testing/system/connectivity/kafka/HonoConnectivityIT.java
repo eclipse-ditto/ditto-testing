@@ -234,7 +234,7 @@ public final class HonoConnectivityIT extends
         // expect all messages are processed
         getThing(2, thingId)
                 .withParam("fields", "_revision")
-                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .withConfiguredAuth(testingContextWithRandomNs)
                 .useAwaitility(Awaitility.await()
                         .pollInterval(Duration.ofSeconds(1))
                         .atMost(Duration.ofMinutes(1)))

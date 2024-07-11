@@ -19,16 +19,17 @@ import static org.eclipse.ditto.testing.common.matcher.search.SearchResponseMatc
 import static org.eclipse.ditto.testing.common.matcher.search.SearchResponseMatchers.isCountGte;
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.and;
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.or;
+import static org.junit.Assume.assumeFalse;
 
 import java.time.Duration;
 
 import org.assertj.core.api.Assumptions;
 import org.eclipse.ditto.base.model.common.HttpStatus;
+import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.Timeout;
 import org.eclipse.ditto.testing.common.VersionedSearchIntegrationTest;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
-import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.common.matcher.search.SearchProperties;
 import org.eclipse.ditto.things.model.Attributes;
 import org.eclipse.ditto.things.model.Thing;
@@ -50,15 +51,15 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CountThingsIT.class);
 
-    private static final String ATTR1_KEY = "attr1";
-    private static final String ATTR2_KEY = "attr2";
-    private static final String ATTR3_KEY = "attr3";
-    private static final String ATTR4_KEY = "attr4";
+    private static final String ATTR1_KEY = "countThingsIt-attr1";
+    private static final String ATTR2_KEY = "countThingsIt-attr2";
+    private static final String ATTR3_KEY = "countThingsIt-attr3";
+    private static final String ATTR4_KEY = "countThingsIt-attr4";
 
     private static final String THING1_ATTR1_VALUE = "value1_1";
-    private static final int THING1_ATTR2_VALUE = 1234;
+    private static final int THING1_ATTR2_VALUE = 9876;
     private static final boolean THING1_ATTR3_VALUE = true;
-    private static final double THING1_ATTR4_VALUE = 12.987;
+    private static final double THING1_ATTR4_VALUE = 13.163;
 
     private static final String THING2_ATTR1_VALUE = "value2_1";
     private static final String THING2_ATTR2_VALUE = "value2_2";
@@ -72,9 +73,8 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
         persistThingsAndWaitTillAvailable(i -> createRandomThing(createThingId("user1")), 10);
         persistThingAndWaitTillAvailable(createThing1());
         persistThingAndWaitTillAvailable(createThing2());
-        final AuthClient authClient = serviceEnv.getDefaultTestingContext().getOAuthClient();
         persistThingsAndWaitTillAvailable(i -> createRandomThing(createThingId("user2")),
-                authClient, 4, V_2);
+                serviceEnv.getDefaultTestingContext(), 4, V_2);
     }
 
     private static Thing createThing1() {
@@ -103,7 +103,8 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
     }
 
     private static ThingId createThingId(final String prefix) {
-        return ThingId.of(idGenerator(RANDOM_NAMESPACE).withPrefixedRandomName(CountThingsIT.class.getSimpleName(), prefix));
+        return ThingId.of(
+                idGenerator(RANDOM_NAMESPACE).withPrefixedRandomName(CountThingsIT.class.getSimpleName(), prefix));
     }
 
     @Test
@@ -167,9 +168,10 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
 
     @Test
     public void countThingsWithoutPermission() {
+        assumeFalse(serviceEnv.getDefaultTestingContext().getBasicAuth().isEnabled());
         searchCount(apiVersion).filter(attribute(ATTR1_KEY).eq(THING1_ATTR1_VALUE))
                 .namespaces(RANDOM_NAMESPACE)
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingBody(isCount(0))
                 .fire();
     }
@@ -187,6 +189,8 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
                 .expectingBody(isCount(1))
                 .fire();
 
+        final Response policy = getPolicy(thingId).fire();
+
         // delete the thing's policy. the thing is locked and should be removed from search index eventually.
         deletePolicy(thingId)
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
@@ -198,6 +202,9 @@ public final class CountThingsIT extends VersionedSearchIntegrationTest {
                 .useAwaitility(await().atMost(Duration.ofMinutes(2)).pollInterval(Duration.ofSeconds(10)))
                 .expectingBody(isCount(0))
                 .fire();
+
+        // Put the policy back to allow final cleanup of the Thing
+        putPolicy(thingId, JsonObject.of(policy.print())).fire();
     }
 
     private void assertCount(final SearchFilter searchFilter, final long expected) {

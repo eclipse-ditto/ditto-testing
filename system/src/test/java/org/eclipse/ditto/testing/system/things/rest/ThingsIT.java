@@ -28,12 +28,16 @@ import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.policies.api.Permission;
 import org.eclipse.ditto.policies.model.PoliciesResourceType;
 import org.eclipse.ditto.policies.model.Policy;
+import org.eclipse.ditto.policies.model.Subject;
+import org.eclipse.ditto.policies.model.SubjectIssuer;
+import org.eclipse.ditto.policies.model.Subjects;
 import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.HttpParameter;
 import org.eclipse.ditto.testing.common.HttpResource;
 import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.ThingsModelFactory;
@@ -158,7 +162,7 @@ public final class ThingsIT extends IntegrationTest {
                 .header("Location"));
 
         getThing(TestConstants.API_V_2, thingId)
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .fire();
 
@@ -239,7 +243,7 @@ public final class ThingsIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
     }
-    
+
     @Test
     public void getThingsByIdWithFieldSelectors() {
         final List<JsonFieldDefinition<?>> expectedJsonFieldDefinitions = List.of(Thing.JsonFields.ID);
@@ -380,7 +384,7 @@ public final class ThingsIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
     }
-    
+
     @Test
     public void postAndPutSameThing() {
         final ThingId thingId = ThingId.of(parseIdFromLocation(postThing(TestConstants.API_V_2, JsonFactory.newObject())
@@ -398,7 +402,7 @@ public final class ThingsIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
     }
-    
+
     @Test
     public void putThingWithInvalidId() {
         final String thingId = "invalidThingId";
@@ -561,7 +565,7 @@ public final class ThingsIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
     }
-    
+
     @Test
     public void tryToDeleteUnknownThing() {
         deleteThing(TestConstants.API_V_2, serviceEnv.getDefaultNamespaceName() + ":unknownThingId")
@@ -571,13 +575,22 @@ public final class ThingsIT extends IntegrationTest {
 
     @Test
     public void putThingIsAllowedWhenThingAlreadyExists() {
+        final BasicAuth basicAuth = serviceEnv.getDefaultTestingContext().getBasicAuth();
+        final Subjects subjects;
+        if (basicAuth.isEnabled()) {
+            subjects = Subjects.newInstance(Subject.newInstance(
+                    SubjectIssuer.newInstance("nginx"), basicAuth.getUsername()));
+        } else {
+            subjects = Subjects.newInstance(
+                    serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject(),
+                    serviceEnv.getTestingContext2().getOAuthClient().getSubject());
+        }
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
-
         final Thing thing = Thing.newBuilder().setId(thingId).build();
+
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject())
-                .setSubject(serviceEnv.getTestingContext2().getOAuthClient().getSubject())
+                .setSubjects(subjects)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), Permission.READ, Permission.WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), Permission.READ, Permission.WRITE)
                 .setGrantedPermissions(PoliciesResourceType.messageResource("/"), Permission.READ, Permission.WRITE)
@@ -587,10 +600,10 @@ public final class ThingsIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
-        // update the Thing with a different solution
+        // update the Thing with a different context (in case of OAuth)
         putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .fire();
     }
 

@@ -51,8 +51,13 @@ public final class ThingsHttpClientResource extends ExternalResource {
             final AccessTokenSupplier<JsonWebToken> jwtSupplier) {
 
         final var gatewayConfig = GatewayConfig.of(testConfig);
-        return new ThingsHttpClientResource(gatewayConfig.getHttpUriApi2(),
-                AuthenticationSetters.oauth2AccessToken(jwtSupplier));
+        if (gatewayConfig.getBasicAuth().isEnabled()) {
+            return new ThingsHttpClientResource(gatewayConfig.getHttpUriApi2(),
+                    AuthenticationSetters.basicAuthentication(gatewayConfig.getBasicAuth()));
+        } else {
+            return new ThingsHttpClientResource(gatewayConfig.getHttpUriApi2(),
+                    AuthenticationSetters.oauth2AccessToken(jwtSupplier));
+        }
     }
 
     @Override

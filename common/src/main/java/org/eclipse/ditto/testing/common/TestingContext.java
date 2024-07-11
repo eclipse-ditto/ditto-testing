@@ -15,6 +15,7 @@ package org.eclipse.ditto.testing.common;
 import static org.eclipse.ditto.base.model.common.ConditionChecker.checkNotNull;
 
 import org.asynchttpclient.AsyncHttpClient;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.client.http.AsyncHttpClientFactory;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 
@@ -29,10 +30,12 @@ public final class TestingContext {
 
     private final Solution solution;
     private final AuthClient oAuthClient;
+    private final BasicAuth basicAuth;
 
-    private TestingContext(final Solution solution, final AuthClient oAuthClient) {
+    private TestingContext(final Solution solution, final AuthClient oAuthClient, final BasicAuth basicAuth) {
         this.solution = solution;
         this.oAuthClient = oAuthClient;
+        this.basicAuth = basicAuth;
     }
 
     public Solution getSolution() {
@@ -43,10 +46,16 @@ public final class TestingContext {
         return oAuthClient;
     }
 
-    public static TestingContext newInstance(final Solution solution, final AuthClient oAuthClient) {
+    public BasicAuth getBasicAuth() {
+        return basicAuth;
+    }
+
+    public static TestingContext newInstance(final Solution solution, final AuthClient oAuthClient,
+            final BasicAuth basicAuth) {
         checkNotNull(solution, "solution");
         checkNotNull(oAuthClient, "oAuthClient");
-        return new TestingContext(solution, oAuthClient);
+        checkNotNull(basicAuth, "BasicAuth");
+        return new TestingContext(solution, oAuthClient, basicAuth);
     }
 
     public static TestingContext withGeneratedMockClient(final Solution solution, final CommonTestConfig config) {
@@ -58,9 +67,11 @@ public final class TestingContext {
                 solution.getUsername(),
                 solution.getSecret(),
                 DEFAULT_SCOPE,
-                httpClient);
+                httpClient,
+                solution.getUsername(),
+                solution.getUsername());
 
-        return newInstance(solution, oAuthClient);
+        return newInstance(solution, oAuthClient, config.getBasicAuth());
     }
 
 }

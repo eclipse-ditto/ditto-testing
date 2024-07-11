@@ -28,8 +28,13 @@ import org.eclipse.ditto.client.DittoClient;
 import org.eclipse.ditto.policies.model.PoliciesResourceType;
 import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.PolicyId;
+import org.eclipse.ditto.policies.model.Subject;
+import org.eclipse.ditto.policies.model.SubjectIssuer;
+import org.eclipse.ditto.policies.model.Subjects;
 import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
+import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.system.client.AbstractClientIT;
 import org.eclipse.ditto.testing.system.client.util.ThingFactory;
 import org.eclipse.ditto.things.model.Thing;
@@ -48,15 +53,28 @@ public final class SmokeIT extends AbstractClientIT {
 
     private DittoClient dittoClient;
     private DittoClient dittoClientSubscriber;
+    private Subjects subjects;
+    private boolean basicAuthEnabled;
 
     @Before
     public void setUp() {
+        final BasicAuth basicAuth = serviceEnv.getDefaultTestingContext().getBasicAuth();
+        basicAuthEnabled = basicAuth.isEnabled();
+        final AuthClient oAuthClient1 = serviceEnv.getDefaultTestingContext().getOAuthClient();
+        final AuthClient oAuthClient2 = serviceEnv.getTestingContext2().getOAuthClient();
         TestingContext testingContextForDittoClientSubscriber =
-                TestingContext.newInstance(serviceEnv.getDefaultTestingContext().getSolution(),
-                        serviceEnv.getDefaultTestingContext().getOAuthClient());
+                TestingContext.newInstance(serviceEnv.getDefaultTestingContext().getSolution(), oAuthClient1, basicAuth);
 
-        dittoClient = newDittoClient(serviceEnv.getDefaultTestingContext().getOAuthClient());
-        dittoClientSubscriber = newDittoClient(testingContextForDittoClientSubscriber.getOAuthClient());
+        if (basicAuthEnabled) {
+            dittoClient = newDittoClient(basicAuth, JsonSchemaVersion.V_2);
+            dittoClientSubscriber = newDittoClient(basicAuth, JsonSchemaVersion.V_2);
+            subjects = Subjects.newInstance(
+                    Subject.newInstance(SubjectIssuer.newInstance("nginx"), basicAuth.getUsername()));
+        } else {
+            dittoClient = newDittoClient(oAuthClient1);
+            dittoClientSubscriber = newDittoClient(testingContextForDittoClientSubscriber.getOAuthClient());
+            subjects = Subjects.newInstance(oAuthClient1.getDefaultSubject(), oAuthClient2.getDefaultSubject());
+        }
     }
 
     @After
@@ -73,10 +91,16 @@ public final class SmokeIT extends AbstractClientIT {
 
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
         final Thing thing = ThingFactory.newThing(thingId);
-        final Policy policy = newPolicy(PolicyId.of(thingId),
-                serviceEnv.getDefaultTestingContext().getOAuthClient(),
-                serviceEnv.getTestingContext2().getOAuthClient());
-
+        final Policy policy;
+        if (basicAuthEnabled) {
+            policy = newPolicy(PolicyId.of(thingId),
+                    Subject.newInstance(SubjectIssuer.newInstance("nginx"),
+                            serviceEnv.getDefaultTestingContext().getBasicAuth().getUsername()));
+        } else {
+            policy = newPolicy(PolicyId.of(thingId),
+                    serviceEnv.getDefaultTestingContext().getOAuthClient(),
+                    serviceEnv.getTestingContext2().getOAuthClient());
+        }
         LOGGER.info("The THING to be inserted: {}", thing.toJsonString(JsonSchemaVersion.V_2));
 
         registerForThingChange(dittoClientSubscriber, thingId, createLatch, modifiedLatch, deleteLatch);
@@ -97,6 +121,7 @@ public final class SmokeIT extends AbstractClientIT {
                         LOGGER.error("Error in Test", throwable);
                     }
                     dittoClient.twin().delete(thingId);
+                    dittoClient.policies().delete(policy.getEntityId().get());
                 })
                 .toCompletableFuture()
                 .get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -116,8 +141,8 @@ public final class SmokeIT extends AbstractClientIT {
         final Thing thing = ThingFactory.newThing(thingId);
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
-                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject())
-                .setSubject(serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject())
+                .setSubjects(subjects)
+                .setSubject(SubjectIssuer.newInstance("nginx"), "ditto")
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
                 .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
@@ -134,16 +159,16 @@ public final class SmokeIT extends AbstractClientIT {
                     }
                     try {
                         putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
-                                .withJWT(serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken())
+                                .withConfiguredAuth(serviceEnv.getDefaultTestingContext())
                                 .expectingHttpStatus(HttpStatus.CREATED)
                                 .fire();
                         final Thing modified = thing.setAttribute("hello", "world");
                         putThing(2, modified, JsonSchemaVersion.V_2)
-                                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                                .withConfiguredAuth(serviceEnv.getTestingContext2())
                                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                                 .fire();
                         deleteThing(2, thingId)
-                                .withJWT(serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken())
+                                .withConfiguredAuth(serviceEnv.getDefaultTestingContext())
                                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                                 .fire();
                     } catch (final Exception e) {

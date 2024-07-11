@@ -14,6 +14,8 @@ package org.eclipse.ditto.testing.common.ws;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -53,6 +55,8 @@ import org.eclipse.ditto.protocol.ProtocolFactory;
 import org.eclipse.ditto.protocol.adapter.DittoProtocolAdapter;
 import org.eclipse.ditto.protocol.adapter.ProtocolAdapter;
 import org.eclipse.ditto.testing.common.HttpHeader;
+import org.eclipse.ditto.testing.common.TestingContext;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.client.ditto_protocol.DittoProtocolClient;
 import org.eclipse.ditto.testing.common.client.ditto_protocol.HeaderBlocklistChecker;
 import org.eclipse.ditto.testing.common.client.ditto_protocol.options.Option;
@@ -84,22 +88,21 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
     private final DefaultAsyncHttpClient client;
     private final ProtocolAdapter protocolAdapter;
     private final String endpoint;
-    private final String jwt;
 
     private final AtomicReference<WebSocket> webSocketReference = new AtomicReference<>();
     private final AtomicReference<Consumer<Adaptable>> adaptableConsumerReference = new AtomicReference<>();
     private final ConcurrentHashMap<String, PendingResponse> pendingResponses;
     private final ConcurrentHashMap<String, CompletableFuture<Void>> waitForAckStages;
     private final Map<String, String> additionalHttpHeaders;
-    private final JwtAuthMethod authMethod;
 
     private final List<Throwable> errors;
 
-    private ThingsWebsocketClient(final String endpoint,
+    private ThingsWebsocketClient(String endpoint,
             final String jwt,
+            final BasicAuth basicAuth,
             final Map<String, String> additionalHttpHeaders,
             @Nullable final ProxyServer proxyServer,
-            final JwtAuthMethod authMethod) {
+            final AuthMethod authMethod) {
 
         final var configBuilder = new DefaultAsyncHttpClientConfig.Builder();
         configBuilder.setThreadPoolName("things-ws");
@@ -113,23 +116,54 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
 
         client = new DefaultAsyncHttpClient(configBuilder.build());
         protocolAdapter = DittoProtocolAdapter.of(HeaderTranslator.empty());
-        this.endpoint = endpoint;
-        this.jwt = jwt;
+        this.additionalHttpHeaders = new HashMap<>(additionalHttpHeaders);
+        final StringBuilder queryParams = new StringBuilder(endpoint);
+        if (basicAuth.isEnabled()) {
+            final String basicAuthEncoded = Base64.getEncoder().encodeToString(
+                    (basicAuth.getUsername() + ":" + basicAuth.getPassword()).getBytes());
+            if (authMethod == AuthMethod.QUERY_PARAM) {
+                queryParams.append(String.format("?%s=%s", "basic", basicAuthEncoded));
+            } else {
+                this.additionalHttpHeaders.put(HttpHeader.AUTHORIZATION.getName(), "Basic " + basicAuthEncoded);
+            }
+        } else {
+            if (authMethod == AuthMethod.QUERY_PARAM) {
+                queryParams.append(String.format("?%s=%s", "access_token", jwt));
+            } else {
+                this.additionalHttpHeaders.put(HttpHeader.AUTHORIZATION.getName(), "Bearer " + jwt);
+            }
+        }
+        this.endpoint = queryParams.toString();
         pendingResponses = new ConcurrentHashMap<>();
         waitForAckStages = new ConcurrentHashMap<>();
-        this.additionalHttpHeaders = Map.copyOf(additionalHttpHeaders);
-        this.authMethod = authMethod;
         this.errors = new ArrayList<>();
     }
 
     public static ThingsWebsocketClient newInstance(final String endpoint,
             final String jwt,
+            final BasicAuth basicAuth,
             final Map<String, String> additionalHttpHeaders,
             @Nullable final ProxyServer proxyServer,
-            final JwtAuthMethod authMethod) {
+            final AuthMethod authMethod) {
 
         return new ThingsWebsocketClient(ConditionChecker.checkNotNull(endpoint, "endpoint"),
                 ConditionChecker.checkNotNull(jwt, "jwt"),
+                basicAuth,
+                ConditionChecker.checkNotNull(additionalHttpHeaders, "additionalHttpHeaders"),
+                proxyServer,
+                ConditionChecker.checkNotNull(authMethod, "authMethod"));
+    }
+
+    public static ThingsWebsocketClient newInstance(final String endpoint,
+            final TestingContext testingContext,
+            final Map<String, String> additionalHttpHeaders,
+            @Nullable final ProxyServer proxyServer,
+            final AuthMethod authMethod) {
+
+        ConditionChecker.checkNotNull(testingContext, "testingContext");
+        return new ThingsWebsocketClient(ConditionChecker.checkNotNull(endpoint, "endpoint"),
+                testingContext.getBasicAuth().isEnabled() ? "" : testingContext.getOAuthClient().getAccessToken(),
+                testingContext.getBasicAuth(),
                 ConditionChecker.checkNotNull(additionalHttpHeaders, "additionalHttpHeaders"),
                 proxyServer,
                 ConditionChecker.checkNotNull(authMethod, "authMethod"));
@@ -157,19 +191,9 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
         final var upgradeHandler = new WebSocketUpgradeHandler.Builder()
                 .addWebSocketListener(this)
                 .build();
-        final String endpointWithParameter;
-        if (authMethod == JwtAuthMethod.QUERY_PARAM) {
-            endpointWithParameter = String.format("%s?%s=%s", endpoint, "access_token", jwt);
-        } else {
-            endpointWithParameter = endpoint;
-        }
 
-        final var requestBuilder = client.prepareGet(endpointWithParameter)
+        final var requestBuilder = client.prepareGet(this.endpoint)
                 .addHeader(HttpHeader.X_CORRELATION_ID.getName(), correlationId);
-
-        if (authMethod == JwtAuthMethod.HEADER) {
-            requestBuilder.addHeader(HttpHeader.AUTHORIZATION.getName(), "Bearer " + jwt);
-        }
 
         additionalHttpHeaders.forEach(requestBuilder::addHeader);
         final var execute = requestBuilder.execute(upgradeHandler);
@@ -566,15 +590,15 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
         }
     }
 
-    public enum JwtAuthMethod {
+    public enum AuthMethod {
 
         /**
-         * The JWT is passed as header 'Authorization Bearer [jwt]'
+         * The authentication is passed as header 'Authorization Bearer [jwt]' or 'Authorization Basic [user:pass]'
          */
         HEADER,
 
         /**
-         * The JWT is passed as query parameter 'ws/2?access_token=[jwt]'
+         * The authentication is passed as query parameter 'ws/2?access_token=[jwt]' or 'ws/2?basic=[user:pass]'
          */
         QUERY_PARAM
     }

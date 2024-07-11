@@ -16,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.eclipse.ditto.base.model.assertions.DittoBaseAssertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
@@ -35,6 +36,7 @@ import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.client.http.AsyncHttpClientFactory;
 import org.eclipse.ditto.things.model.Attributes;
 import org.eclipse.ditto.things.model.Feature;
@@ -639,9 +641,16 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
         final String url = dittoUrl(TestConstants.API_V_2, path);
         LOGGER.info("Opening SSE on url '{}'", url);
 
-        final String authJWTToken = serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken();
+        final String authorization;
+        final BasicAuth basicAuth = serviceEnv.getDefaultTestingContext().getBasicAuth();
+        if (basicAuth.isEnabled()) {
+            final String credentials = basicAuth.getUsername() + ":" + basicAuth.getPassword();
+            authorization = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
+        } else {
+            authorization = "Bearer " + serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken();
+        }
 
-        return new SseTestDriver(client, url, authJWTToken, expectedMessagesCount);
+        return new SseTestDriver(client, url, authorization, expectedMessagesCount);
     }
 
     private String getDefaultPath() {

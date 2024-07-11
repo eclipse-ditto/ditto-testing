@@ -269,14 +269,14 @@ public final class HandleFeatureMessagesIT extends AbstractClientIT {
         // not authorized = forbidden
         postMessage(2, thingId, FEATURE_ID_1, FROM, "subject", "text/plain",
                 "test message", TIMEOUT)
-                .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.FORBIDDEN)
                 .fire();
 
         // no WRITE access = forbidden
         postMessage(2, thingId, FEATURE_ID_1, FROM, "subject", "text/plain",
                 "test message", TIMEOUT)
-                .withJWT(serviceEnv.getTestingContext3().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getTestingContext3())
                 .expectingHttpStatus(HttpStatus.FORBIDDEN)
                 .fire();
 

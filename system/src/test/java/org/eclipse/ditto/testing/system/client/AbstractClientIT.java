@@ -53,6 +53,7 @@ import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.messages.model.MessageDirection;
 import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.Solution;
+import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
 import org.eclipse.ditto.testing.system.client.util.ClientFactory;
 import org.eclipse.ditto.things.model.Thing;
@@ -134,6 +135,15 @@ public abstract class AbstractClientIT extends IntegrationTest {
                 .build());
     }
 
+    protected static DittoClient newDittoClient(final BasicAuth basicAuth, final JsonSchemaVersion schemaVersion) {
+        final AuthenticationProvider<WebSocket> authenticationProvider =
+                AuthenticationProviders.basic(BasicAuthenticationConfiguration.newBuilder()
+                        .username(basicAuth.getUsername())
+                        .password(basicAuth.getPassword())
+                        .build());
+        return newDittoClient(authenticationProvider, schemaVersion, Collections.emptyList(), Collections.emptyList());
+    }
+
     protected static DittoClient newDittoClient(final Solution solution, final JsonSchemaVersion schemaVersion) {
         final AuthenticationProvider<WebSocket> authenticationProvider =
                 AuthenticationProviders.basic(BasicAuthenticationConfiguration.newBuilder()
@@ -169,7 +179,7 @@ public abstract class AbstractClientIT extends IntegrationTest {
 
     protected static ThingId postEmptyThing() {
         final Response response = postThing(JsonSchemaVersion.V_2.toInt(), JsonFactory.newObject())
-                .withJWT(serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken())
+                .withConfiguredAuth(serviceEnv.getDefaultTestingContext())
                 .fire();
         return ThingId.of(parseIdFromLocation(response.getHeader("Location")));
     }

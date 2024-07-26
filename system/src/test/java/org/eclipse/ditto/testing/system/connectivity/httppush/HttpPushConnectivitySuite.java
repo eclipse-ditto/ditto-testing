@@ -26,6 +26,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import org.apache.pekko.http.javadsl.model.HttpMethods;
+import org.apache.pekko.http.javadsl.model.HttpRequest;
+import org.apache.pekko.http.javadsl.model.headers.Authorization;
+import org.apache.pekko.http.javadsl.model.headers.HttpCredentials;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.ListenableFuture;
 import org.asynchttpclient.Response;
@@ -82,11 +86,6 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-
-import org.apache.pekko.http.javadsl.model.HttpMethods;
-import org.apache.pekko.http.javadsl.model.HttpRequest;
-import org.apache.pekko.http.javadsl.model.headers.Authorization;
-import org.apache.pekko.http.javadsl.model.headers.HttpCredentials;
 
 /**
  * System tests for HTTP-push connections.
@@ -512,7 +511,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
 
         final ListenableFuture<Response> postMessageResponse = client.preparePost(url)
                 .setHeader(HttpHeader.X_CORRELATION_ID.getName(), correlationId)
-                .setHeader("Authorization", authorization)
+                .addHeader("Authorization", authorization)
                 .addHeader("Cache-Control", "no-cache")
                 .execute();
         consumeAndAssert(connectionName, thingId, correlationId, eventConsumer,
@@ -595,7 +594,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
 
         final ListenableFuture<Response> postMessageResponse = client.preparePost(url)
                 .setHeader(HttpHeader.X_CORRELATION_ID.getName(), correlationId)
-                .setHeader("Authorization", authorization)
+                .addHeader("Authorization", authorization)
                 .addHeader("Cache-Control", "no-cache")
                 .setBody("This is my request")
                 .execute();
@@ -651,7 +650,7 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
 
         final ListenableFuture<Response> postMessageResponse = client.preparePost(url)
                 .setHeader(HttpHeader.X_CORRELATION_ID.getName(), correlationId)
-                .setHeader("Authorization", authorization)
+                .addHeader("Authorization", authorization)
                 .addHeader("Cache-Control", "no-cache")
                 .setBody("This is my request")
                 .execute();

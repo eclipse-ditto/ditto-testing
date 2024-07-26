@@ -181,6 +181,8 @@ public final class ThingsWithCopiedPoliciesIT extends IntegrationTest {
         getPolicy(copiedPolicyId)
                 .expectingBody(containsOnly(expectedPolicy))
                 .fire();
+        // Delete the original thing as cleanup will delete the common Policy with the second Thing
+        deleteThing(API_V_2, originalThing.getEntityId().get()).fire();
     }
     
     @Test

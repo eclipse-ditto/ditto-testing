@@ -191,7 +191,7 @@ public final class WebsocketIT extends IntegrationTest {
             put(DittoHeaderDefinition.DECLARED_ACKS.getKey(), "[\"" + declaredAckClient1 + "\"]");
         }};
         final Map<String, String> headers2 = new HashMap<>() {{
-            put(DittoHeaderDefinition.DECLARED_ACKS.getKey(), "[\"" + declaredAckClient2+ "\"]");
+            put(DittoHeaderDefinition.DECLARED_ACKS.getKey(), "[\"" + declaredAckClient2 + "\"]");
         }};
         final Map<String, String> headers345 = new HashMap<>();
         final BasicAuth basicAuth = testingContext1.getBasicAuth();
@@ -414,12 +414,14 @@ public final class WebsocketIT extends IntegrationTest {
     public void consumeThingCreated() throws InterruptedException {
         final CountDownLatch latch = new CountDownLatch(1);
 
+        final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+
         clientUser2.startConsumingEvents(event -> {
-            assertThat(event).isInstanceOf(ThingCreated.class);
-            latch.countDown();
+            if (event instanceof final ThingCreated tce && tce.getThing().getEntityId().equals(Optional.of(thingId))) {
+                latch.countDown();
+            }
         }).join();
 
-        final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
         final BasicAuth basicAuth = serviceEnv.getDefaultTestingContext().getBasicAuth();
         final Thing thing = Thing.newBuilder()
                 .setId(thingId)
@@ -427,7 +429,6 @@ public final class WebsocketIT extends IntegrationTest {
 
         final CreateThing createThing =
                 CreateThing.of(thing, getPolicyJsonForAuth(PolicyId.of(thingId), basicAuth), COMMAND_HEADERS_V2);
-
 
         clientUser1.send(createThing).whenComplete((commandResponse, throwable) -> {
             assertThat(throwable).isNull();

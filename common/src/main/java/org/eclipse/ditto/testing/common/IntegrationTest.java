@@ -1698,6 +1698,18 @@ public abstract class IntegrationTest {
     }
 
     /**
+     * Sends a POST request to the /checkPermissions endpoint with the specified JSON payload.
+     *
+     * @param payload the JSON payload to post.
+     * @return the wrapped request.
+     */
+    protected static PostMatcher postCheckPermissions(@Nullable final String payload) {
+        final String path = ResourcePathBuilder.forCheckPermissions().toString();
+        return post(dittoUrl(TestConstants.API_V_2, path), payload)
+                .withLogging(LOGGER, "CheckPermissions");
+    }
+
+    /**
      * Wraps a POST message request for the specified {@code thingId}, {@code direction} and {@code messageSubject}
      * combination.
      *

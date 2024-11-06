@@ -69,7 +69,9 @@ public enum HttpResource {
 
     USAGE("/usage"),
 
-    WHOAMI("/whoami");
+    WHOAMI("/whoami"),
+
+    CHECK_PERMISSIONS("/checkPermissions");
 
     private final String path;
 

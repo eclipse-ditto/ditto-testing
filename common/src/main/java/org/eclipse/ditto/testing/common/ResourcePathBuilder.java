@@ -67,6 +67,30 @@ public final class ResourcePathBuilder {
     }
 
     /**
+     * Returns a path builder for the CheckPermissions resource.
+     *
+     * @return the builder.
+     */
+    public static CheckPermissions forCheckPermissions() {
+        return new ResourcePathBuilder().new CheckPermissions();
+    }
+
+    /**
+     * Inner class to build paths for CheckPermissions.
+     */
+    public final class CheckPermissions extends AbstractPathBuilder {
+
+        private CheckPermissions() {
+            stringBuilder.append(HttpResource.CHECK_PERMISSIONS);
+        }
+
+        @Override
+        public String toString() {
+            return stringBuilder.toString();
+        }
+    }
+
+    /**
      * Returns a path builder for all Connections.
      *
      * @return the builder.

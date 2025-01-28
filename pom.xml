@@ -185,7 +185,6 @@
 
         <!-- plugin versions -->
         <gatling-maven-plugin.version>3.1.2</gatling-maven-plugin.version>
-        <scala-maven-plugin.version>4.5.3</scala-maven-plugin.version>
         <maven-failsafe-plugin.version>3.0.0-M5</maven-failsafe-plugin.version>
         <port-allocator-maven-plugin.version>1.2</port-allocator-maven-plugin.version>
         <gmaven-plugin.version>1.5</gmaven-plugin.version>
@@ -259,11 +258,6 @@
                     <groupId>io.gatling</groupId>
                     <artifactId>gatling-maven-plugin</artifactId>
                     <version>${gatling-maven-plugin.version}</version>
-                </plugin>
-                <plugin>
-                    <groupId>net.alchim31.maven</groupId>
-                    <artifactId>scala-maven-plugin</artifactId>
-                    <version>${scala-maven-plugin.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>

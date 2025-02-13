@@ -363,7 +363,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .set(MigrateThingDefinition.JsonFields.JSON_THING_DEFINITION_URL, THING_DEFINITION_URL)
                 .build();
         final MigrateThingDefinition migrateThingDefinition = MigrateThingDefinition.of(
-                thingId, THING_DEFINITION_URL, migrationPayload, null, true,createDittoHeaders(correlationId));
+                thingId, THING_DEFINITION_URL, migrationPayload, Collections.emptyMap(), true,createDittoHeaders(correlationId));
 
         // When
         final C eventConsumer = initTargetsConsumer(cf.connectionName2);
@@ -377,7 +377,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 sendCommandAndEnsureResponseIsSentBack(cf.connectionName1, migrateThingDefinition);
         LOGGER.info("Received response: {}", commandResponse);
         assertThat(commandResponse).isInstanceOf(MigrateThingDefinitionResponse.class);
-        assertThat(commandResponse.getHttpStatus()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(commandResponse.getHttpStatus()).isEqualTo(HttpStatus.OK);
 
         // Then wait for all events generated (order independent)
         consumeAndAssertEvents(cf.connectionName2, eventConsumer, Arrays.asList(

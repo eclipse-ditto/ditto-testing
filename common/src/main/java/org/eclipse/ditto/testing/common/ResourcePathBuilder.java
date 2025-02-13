@@ -172,6 +172,11 @@ public final class ResourcePathBuilder {
             return this;
         }
 
+        public Thing migrateDefinition() {
+            stringBuilder.append(HttpResource.MIGRATE_DEFINITION);
+            return this;
+        }
+
     }
 
     public final class Policy extends AbstractPathBuilder {

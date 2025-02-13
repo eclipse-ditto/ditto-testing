@@ -29,10 +29,16 @@ import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.ThingsModelFactory;
+import org.eclipse.ditto.things.model.signals.commands.ThingCommand;
+import org.eclipse.ditto.things.model.signals.commands.modify.MigrateThingDefinition;
+import org.eclipse.ditto.things.model.signals.commands.modify.MigrateThingDefinitionResponse;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.eclipse.ditto.policies.model.Subjects;
+import org.junit.FixMethodOrder;
+import org.junit.runners.MethodSorters;
 
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public final class MigrateDefinitionIT extends IntegrationTest {
 
     private static ThingId testThingId;
@@ -50,31 +56,73 @@ public final class MigrateDefinitionIT extends IntegrationTest {
     }
 
     @Test
-    public void testMigrateDefinitionDryRun() {
+    public void test1_MigrateDefinitionDryRun() {
         final JsonObject migrationPayload = buildMigrationPayload();
 
         postMigrateDefinition(testThingId, migrationPayload.toString(), true)
-                .expectingHttpStatus(HttpStatus.OK)
+                .expectingHttpStatus(HttpStatus.ACCEPTED)
                 .expectingBody(contains(buildExpectedResponse(testThingId, true)))
                 .fire();
     }
 
     @Test
-    public void testMigrateDefinitionSuccess() {
+    public void test2_MigrateDefinitionSuccess() {
         final JsonObject migrationPayload = buildMigrationPayload();
 
         postMigrateDefinition(testThingId, migrationPayload.toString(), false)
-                .expectingHttpStatus(HttpStatus.OK)
-                .fire();
-
-        getDefinition(TestConstants.API_V_2, testThingId.toString())
                 .expectingHttpStatus(HttpStatus.OK)
                 .expectingBody(contains(buildExpectedResponse(testThingId, false)))
                 .fire();
     }
 
     @Test
-    public void testMigrateDefinitionWithInvalidThingId() {
+    public void test4_MigrateDefinitionWithWotValidationError() {
+        final JsonObject migrationPayload = JsonObject.newBuilder()
+                .set(MigrateThingDefinition.JsonFields.JSON_THING_DEFINITION_URL, THING_DEFINITION_URL)
+                .set(MigrateThingDefinition.JsonFields.JSON_MIGRATION_PAYLOAD, JsonFactory.newObjectBuilder()
+                        .set("attributes", JsonFactory.newObjectBuilder()
+                                .set("dimmer-level", JsonFactory.nullLiteral())
+                                .build())
+                        .build())
+                .build();
+
+        postMigrateDefinition(testThingId, migrationPayload.toString(), false)
+                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
+                .expectingBody(contains(JsonObject.newBuilder().set("error", "wot:payload.validation.error").build()))
+                .fire();
+    }
+
+    @Test
+    public void test5_MigrateDefinitionWithWotValidationError() {
+        final JsonObject migrationPayload = JsonObject.newBuilder()
+                .set(MigrateThingDefinition.JsonFields.JSON_THING_DEFINITION_URL, THING_DEFINITION_URL)
+                .set(MigrateThingDefinition.JsonFields.JSON_MIGRATION_PAYLOAD, JsonFactory.newObjectBuilder()
+                        .set("attributes", JsonFactory.newObjectBuilder()
+                                .set("dimmer-level", 0.5)
+                                .build())
+                        .build())
+                .set(MigrateThingDefinition.JsonFields.JSON_PATCH_CONDITIONS, JsonObject.newBuilder()
+                        .set("thing:/features/thermostat", "eq(attributes/dimmer-level,1.0)")
+                        .build())
+                .build();
+
+        postMigrateDefinition(testThingId, migrationPayload.toString(), false)
+                .expectingHttpStatus(HttpStatus.OK)
+                .expectingBody(contains(JsonObject.newBuilder()
+                        .set(ThingCommand.JsonFields.JSON_THING_ID, testThingId.toString())
+                        .set(MigrateThingDefinitionResponse.JsonFields.JSON_PATCH, JsonFactory.newObjectBuilder()
+                                .set("definition", THING_DEFINITION_URL)
+                                .set("attributes", JsonFactory.newObjectBuilder()
+                                        .set("dimmer-level", 0.5)
+                                        .build())
+                                .build())
+                        .set(MigrateThingDefinitionResponse.JsonFields.JSON_MERGE_STATUS,  "APPLIED")
+                        .build()))
+                .fire();
+    }
+
+    @Test
+    public void test6_MigrateDefinitionWithInvalidThingId() {
         final JsonObject migrationPayload = buildMigrationPayload();
 
         postMigrateDefinition(serviceEnv.getDefaultNamespaceName() + ":unknownThingId", migrationPayload.toString(), false)
@@ -83,7 +131,7 @@ public final class MigrateDefinitionIT extends IntegrationTest {
     }
 
     @Test
-    public void testMigrateDefinitionWithInvalidPayload() {
+    public void test7_MigrateDefinitionWithInvalidPayload() {
         final JsonObject invalidPayload = JsonFactory.newObjectBuilder()
                 .set("invalid_field", "some_value")
                 .build();
@@ -101,9 +149,9 @@ public final class MigrateDefinitionIT extends IntegrationTest {
     }
 
     private static JsonObject buildMigrationPayload() {
-        return JsonFactory.newObjectBuilder()
-                .set("thingDefinitionUrl", THING_DEFINITION_URL)
-                .set("migrationPayload", JsonFactory.newObjectBuilder()
+        return JsonObject.newBuilder()
+                .set(MigrateThingDefinition.JsonFields.JSON_THING_DEFINITION_URL, THING_DEFINITION_URL)
+                .set(MigrateThingDefinition.JsonFields.JSON_MIGRATION_PAYLOAD, JsonFactory.newObjectBuilder()
                         .set("attributes", JsonFactory.newObjectBuilder()
                                 .set("manufacturer", JsonFactory.nullLiteral())
                                 .set("color", JsonFactory.newObjectBuilder()
@@ -112,15 +160,17 @@ public final class MigrateDefinitionIT extends IntegrationTest {
                                 .set("dimmer-level", 1.0)
                                 .build())
                         .build())
-                .set("initializeMissingPropertiesFromDefaults", true)
+                .set(MigrateThingDefinition.JsonFields.JSON_INITIALIZE_MISSING_PROPERTIES_FROM_DEFAULTS, true)
                 .build();
     }
 
     private static JsonObject buildExpectedResponse(ThingId thingId, boolean dryRun) {
-        return JsonFactory.newObjectBuilder()
-                .set("thingId", thingId.toString())
-                .set("patch", JsonFactory.newObjectBuilder()
+        return JsonObject.newBuilder()
+                .set(ThingCommand.JsonFields.JSON_THING_ID, thingId.toString())
+                .set(MigrateThingDefinitionResponse.JsonFields.JSON_PATCH, JsonFactory.newObjectBuilder()
+                        .set("definition", THING_DEFINITION_URL)
                         .set("attributes", JsonFactory.newObjectBuilder()
+                                .set("manufacturer", JsonFactory.nullLiteral())
                                 .set("on", false)
                                 .set("color", JsonFactory.newObjectBuilder()
                                         .set("r", 0)
@@ -130,7 +180,7 @@ public final class MigrateDefinitionIT extends IntegrationTest {
                                 .set("dimmer-level", 1.0)
                                 .build())
                         .build())
-                .set("mergeStatus", dryRun ? "DRY_RUN" : "APPLIED")
+                .set(MigrateThingDefinitionResponse.JsonFields.JSON_MERGE_STATUS, dryRun ? "DRY_RUN" : "APPLIED")
                 .build();
     }
 

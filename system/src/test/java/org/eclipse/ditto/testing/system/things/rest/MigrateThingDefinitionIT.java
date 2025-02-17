@@ -39,7 +39,7 @@ import org.junit.FixMethodOrder;
 import org.junit.runners.MethodSorters;
 
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public final class MigrateDefinitionIT extends IntegrationTest {
+public final class MigrateThingDefinitionIT extends IntegrationTest {
 
     private static ThingId testThingId;
     private static Policy testPolicy;

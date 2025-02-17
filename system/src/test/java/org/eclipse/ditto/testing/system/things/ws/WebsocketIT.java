@@ -127,7 +127,6 @@ import org.eclipse.ditto.things.model.signals.events.FeatureDesiredPropertyModif
 import org.eclipse.ditto.things.model.signals.events.FeaturePropertyModified;
 import org.eclipse.ditto.things.model.signals.events.ThingCreated;
 import org.eclipse.ditto.things.model.signals.events.ThingMerged;
-import org.eclipse.ditto.things.model.signals.events.ThingMigrated;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;

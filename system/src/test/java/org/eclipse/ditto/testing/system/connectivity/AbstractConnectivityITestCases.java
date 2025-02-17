@@ -151,7 +151,7 @@ import org.eclipse.ditto.things.model.signals.events.ThingCreated;
 import org.eclipse.ditto.things.model.signals.events.ThingDeleted;
 import org.eclipse.ditto.things.model.signals.events.ThingEvent;
 import org.eclipse.ditto.things.model.signals.events.ThingMerged;
-import org.eclipse.ditto.things.model.signals.events.ThingMigrated;
+import org.eclipse.ditto.things.model.signals.events.ThingDefinitionMigrated;
 import org.eclipse.ditto.things.model.signals.events.ThingModified;
 import org.eclipse.ditto.thingsearch.model.signals.commands.subscription.CreateSubscription;
 import org.eclipse.ditto.thingsearch.model.signals.commands.subscription.RequestFromSubscription;
@@ -338,7 +338,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
     @Test
     @Category(RequireSource.class)
     @Connections({CONNECTION1, CONNECTION2})
-    public void sendMigrateThingAndEnsureEventsAreProduced() {
+    public void sendMigrateThingDefinitionAndEnsureEventsAreProduced() {
         // Given
         final String correlationId = createNewCorrelationId();
         final ThingId thingId = generateThingId();
@@ -388,7 +388,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 },
                 e -> {
                     LOGGER.info("Received event: {}", e);
-                    final ThingMigrated tm = thingEventForJson(e, ThingMigrated.class, correlationId, thingId);
+                    final ThingDefinitionMigrated tm = thingEventForJson(e, ThingDefinitionMigrated.class, correlationId, thingId);
                     assertThat(tm.getRevision()).isEqualTo(2L);
                 }), "ThingCreated", "ThingModified");
     }

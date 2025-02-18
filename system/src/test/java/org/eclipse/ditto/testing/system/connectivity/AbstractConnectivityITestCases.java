@@ -136,6 +136,8 @@ import org.eclipse.ditto.things.model.signals.commands.modify.CreateThingRespons
 import org.eclipse.ditto.things.model.signals.commands.modify.DeleteThing;
 import org.eclipse.ditto.things.model.signals.commands.modify.MergeThing;
 import org.eclipse.ditto.things.model.signals.commands.modify.MergeThingResponse;
+import org.eclipse.ditto.things.model.signals.commands.modify.MigrateThingDefinition;
+import org.eclipse.ditto.things.model.signals.commands.modify.MigrateThingDefinitionResponse;
 import org.eclipse.ditto.things.model.signals.commands.modify.ModifyAttribute;
 import org.eclipse.ditto.things.model.signals.commands.modify.ModifyAttributeResponse;
 import org.eclipse.ditto.things.model.signals.commands.modify.ModifyFeature;
@@ -149,6 +151,7 @@ import org.eclipse.ditto.things.model.signals.events.ThingCreated;
 import org.eclipse.ditto.things.model.signals.events.ThingDeleted;
 import org.eclipse.ditto.things.model.signals.events.ThingEvent;
 import org.eclipse.ditto.things.model.signals.events.ThingMerged;
+import org.eclipse.ditto.things.model.signals.events.ThingDefinitionMigrated;
 import org.eclipse.ditto.things.model.signals.events.ThingModified;
 import org.eclipse.ditto.thingsearch.model.signals.commands.subscription.CreateSubscription;
 import org.eclipse.ditto.thingsearch.model.signals.commands.subscription.RequestFromSubscription;
@@ -175,6 +178,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
     private static final String EMPTY_MOD = "EMPTY_MOD";
     private static final String FILTER_FOR_LIFECYCLE_EVENTS_BY_RQL = "FILTER_FOR_LIFECYCLE_EVENTS_BY_RQL";
     private static final String FILTER_POLICY_ANNOUNCEMENTS_BY_NAMESPACE = "FILTER_BY_NAMESPACE";
+    private static final String THING_DEFINITION_URL = "https://eclipse-ditto.github.io/ditto-examples/wot/models/dimmable-colored-lamp-1.0.0.tm.jsonld";
 
     static {
         // adds filtering for twin events - only "created" and "deleted" ones
@@ -329,6 +333,64 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         deletePolicy(policyId).expectingHttpStatus(HttpStatus.NO_CONTENT).fire();
         final var deleteAnnouncement = expectMsgClass(SubjectDeletionAnnouncement.class, cf.connectionName1, consumer);
         assertThat(deleteAnnouncement.getSubjectIds()).containsExactly(subjectId);
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION2})
+    public void sendMigrateThingDefinitionAndEnsureEventsAreProduced() {
+        // Given
+        final String correlationId = createNewCorrelationId();
+        final ThingId thingId = generateThingId();
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .build();
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionName2))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final JsonObject migrationPayload = JsonObject.newBuilder()
+                .set(MigrateThingDefinition.JsonFields.JSON_THING_DEFINITION_URL, THING_DEFINITION_URL)
+                .build();
+        final MigrateThingDefinition migrateThingDefinition = MigrateThingDefinition.of(
+                thingId, THING_DEFINITION_URL, migrationPayload, Collections.emptyMap(), true,createDittoHeaders(correlationId));
+
+        // When
+        final C eventConsumer = initTargetsConsumer(cf.connectionName2);
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        final CommandResponse<?> commandResponse =
+                sendCommandAndEnsureResponseIsSentBack(cf.connectionName1, migrateThingDefinition);
+        LOGGER.info("Received response: {}", commandResponse);
+        assertThat(commandResponse).isInstanceOf(MigrateThingDefinitionResponse.class);
+        assertThat(commandResponse.getHttpStatus()).isEqualTo(HttpStatus.OK);
+
+        // Then wait for all events generated (order independent)
+        consumeAndAssertEvents(cf.connectionName2, eventConsumer, Arrays.asList(
+                e -> {
+                    LOGGER.info("Received event: {}", e);
+                    final ThingCreated tc = thingEventForJson(e, ThingCreated.class, correlationId, thingId);
+                    assertThat(tc.getRevision()).isEqualTo(1L);
+                },
+                e -> {
+                    LOGGER.info("Received event: {}", e);
+                    final ThingDefinitionMigrated tm = thingEventForJson(e, ThingDefinitionMigrated.class, correlationId, thingId);
+                    assertThat(tm.getRevision()).isEqualTo(2L);
+                }), "ThingCreated", "ThingModified");
     }
 
     @Test

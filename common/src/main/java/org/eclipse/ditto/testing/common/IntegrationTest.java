@@ -1172,6 +1172,19 @@ public abstract class IntegrationTest {
     }
 
     /**
+     * Sends a POST request to the /migrateDefinition endpoint with the specified JSON payload.
+     *
+     * @param payload the JSON payload to post.
+     * @return the wrapped request.
+     */
+    protected static PostMatcher postMigrateDefinition(final CharSequence thingId, @Nullable final String payload, final boolean dryRun) {
+        final String path = ResourcePathBuilder.forThing(thingId).migrateDefinition().toString();
+        return post(dittoUrl(TestConstants.API_V_2, path), payload)
+                .withParam("dry-run", String.valueOf(dryRun))
+                .withLogging(LOGGER, "MigrateDefinition");
+    }
+
+    /**
      * Puts a Feature's Properties.
      *
      * @param version the API version.

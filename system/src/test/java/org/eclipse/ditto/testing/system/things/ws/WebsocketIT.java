@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -111,6 +112,8 @@ import org.eclipse.ditto.things.model.signals.commands.modify.CreateThingRespons
 import org.eclipse.ditto.things.model.signals.commands.modify.DeleteThing;
 import org.eclipse.ditto.things.model.signals.commands.modify.DeleteThingResponse;
 import org.eclipse.ditto.things.model.signals.commands.modify.MergeThing;
+import org.eclipse.ditto.things.model.signals.commands.modify.MigrateThingDefinition;
+import org.eclipse.ditto.things.model.signals.commands.modify.MigrateThingDefinitionResponse;
 import org.eclipse.ditto.things.model.signals.commands.modify.ModifyAttribute;
 import org.eclipse.ditto.things.model.signals.commands.modify.ModifyFeature;
 import org.eclipse.ditto.things.model.signals.commands.modify.ModifyFeatureDesiredPropertyResponse;
@@ -139,6 +142,8 @@ public final class WebsocketIT extends IntegrationTest {
     private static final Logger LOGGER = LoggerFactory.getLogger(WebsocketIT.class);
     private static final long LATCH_TIMEOUT_SECONDS = 30;
     private static final AtomicInteger ACK_COUNTER = new AtomicInteger(0);
+    private static final String THING_DEFINITION_URL = "https://eclipse-ditto.github.io/ditto-examples/wot/models/dimmable-colored-lamp-1.0.0.tm.jsonld";
+
 
     // not static: refresh correlation ID for each test
     private final DittoHeaders COMMAND_HEADERS_V2 = DittoHeaders.newBuilder()
@@ -404,6 +409,42 @@ public final class WebsocketIT extends IntegrationTest {
             assertThat(throwable).isNull();
             assertThat(commandResponse).isInstanceOf(RetrieveThingResponse.class);
         }).get(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        clientUser1.send(DeleteThing.of(thingId, COMMAND_HEADERS_V2));
+        clientUser1.send(DeletePolicy.of(PolicyId.of(thingId), COMMAND_HEADERS_V2));
+
+    }
+
+    @Test
+    @Category(Acceptance.class)
+    public void migrateThingDefinition() throws InterruptedException, TimeoutException, ExecutionException {
+        final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .build();
+
+        final CreateThing createThing = CreateThing.of(thing, newPolicy(PolicyId.of(thingId), user1OAuthClient, user2OAuthClient).toJson(),
+                commandHeadersWithOwnCorrelationId());
+
+        clientUser1.send(createThing).whenComplete((commandResponse, throwable) -> {
+            assertThat(throwable).isNull();
+            assertThat(commandResponse).isInstanceOf(CreateThingResponse.class);
+        }).get(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+
+        final JsonObject migrationPayload = JsonObject.newBuilder()
+                .set(MigrateThingDefinition.JsonFields.JSON_THING_DEFINITION_URL, THING_DEFINITION_URL)
+                .build();
+        final MigrateThingDefinition migrateThingDefinition = MigrateThingDefinition.of(
+                thingId, THING_DEFINITION_URL, migrationPayload, Collections.emptyMap(), true,COMMAND_HEADERS_V2.toBuilder()
+                        .randomCorrelationId()
+                        .build());
+
+        clientUser2.send(migrateThingDefinition).whenComplete((commandResponse, throwable) -> {
+            assertThat(throwable).isNull();
+            assertThat(commandResponse).isInstanceOf(MigrateThingDefinitionResponse.class);
+        }).get(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
         clientUser1.send(DeleteThing.of(thingId, COMMAND_HEADERS_V2));
         clientUser1.send(DeletePolicy.of(PolicyId.of(thingId), COMMAND_HEADERS_V2));
 

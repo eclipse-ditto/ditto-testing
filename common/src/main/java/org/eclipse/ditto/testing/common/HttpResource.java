@@ -71,7 +71,9 @@ public enum HttpResource {
 
     WHOAMI("/whoami"),
 
-    CHECK_PERMISSIONS("/checkPermissions");
+    CHECK_PERMISSIONS("/checkPermissions"),
+
+    MIGRATE_DEFINITION("/migrateDefinition");
 
     private final String path;
 

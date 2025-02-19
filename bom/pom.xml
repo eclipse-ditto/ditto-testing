@@ -32,7 +32,7 @@
 
         <jackson-bom.version>2.17.3</jackson-bom.version>
         <asynchttpclient.version>2.10.2</asynchttpclient.version>
-        <netty-bom.version>4.1.116.Final</netty-bom.version>
+        <netty-bom.version>4.1.118.Final</netty-bom.version>
         <amqp-client.version>3.5.4</amqp-client.version>
         <kafka-client.version>3.9.0</kafka-client.version>
         <typesafe-config.version>1.4.3</typesafe-config.version>

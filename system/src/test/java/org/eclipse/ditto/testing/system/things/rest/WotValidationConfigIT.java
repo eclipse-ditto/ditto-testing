@@ -46,10 +46,18 @@ public final class WotValidationConfigIT extends IntegrationTest {
 
     @BeforeClass
     public static void setup() {
+        LOGGER.info("Setup thing, policy and wotValidationConfig for the test: WotValidationConfigIT");
         testThingId = ThingId.of(idGenerator().withRandomName());
         testPolicy = createPolicy();
 
         putThingWithPolicy(TestConstants.API_V_2, newThing(testThingId), testPolicy, JsonSchemaVersion.V_2)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // Create initial config - should return CREATED since it doesn't exist
+        put(BASE_URL, defaultValidationConfig().toString())
+                .withLogging(LOGGER, "wotValidationConfig")
+                .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
     }
@@ -127,13 +135,6 @@ public final class WotValidationConfigIT extends IntegrationTest {
 
     @Test
     public void test01_createInitialConfig() {
-        // Create initial config - should return CREATED since it doesn't exist
-        put(BASE_URL, defaultValidationConfig().toString())
-                .withLogging(LOGGER, "wotValidationConfig")
-                .withDevopsAuth()
-                .expectingHttpStatus(HttpStatus.CREATED)
-                .fire();
-
         // Verify the config was created
         get(BASE_URL)
                 .withLogging(LOGGER, "wotValidationConfig")

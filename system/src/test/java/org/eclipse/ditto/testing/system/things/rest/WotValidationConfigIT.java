@@ -47,7 +47,7 @@ public final class WotValidationConfigIT extends IntegrationTest {
     @BeforeClass
     public static void setup() {
         LOGGER.info("Setup thing, policy and wotValidationConfig for the test: WotValidationConfigIT");
-        testThingId = ThingId.of(idGenerator().withRandomName());
+        testThingId = ThingId.of("namespace.default:wotvalidationConfig");
         testPolicy = createPolicy();
 
         putThingWithPolicy(TestConstants.API_V_2, newThing(testThingId), testPolicy, JsonSchemaVersion.V_2)

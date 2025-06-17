@@ -28,6 +28,7 @@ import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.ThingsModelFactory;
+import org.eclipse.ditto.testing.common.CommonTestConfig;
 import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -51,13 +52,6 @@ public final class WotValidationConfigIT extends IntegrationTest {
         testPolicy = createPolicy();
 
         putThingWithPolicy(TestConstants.API_V_2, newThing(testThingId), testPolicy, JsonSchemaVersion.V_2)
-                .expectingHttpStatus(HttpStatus.CREATED)
-                .fire();
-
-        // Create initial config - should return CREATED since it doesn't exist
-        put(BASE_URL, defaultValidationConfig().toString())
-                .withLogging(LOGGER, "wotValidationConfig")
-                .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
     }
@@ -135,8 +129,15 @@ public final class WotValidationConfigIT extends IntegrationTest {
 
     @Test
     public void test01_createInitialConfig() {
+        // Create initial config - should return CREATED since it doesn't exist
+        put(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL), defaultValidationConfig().toString())
+                .withLogging(LOGGER, "wotValidationConfig")
+                .withDevopsAuth()
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
         // Verify the config was created
-        get(BASE_URL)
+        get(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL))
                 .withLogging(LOGGER, "wotValidationConfig")
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.OK)
@@ -167,14 +168,14 @@ public final class WotValidationConfigIT extends IntegrationTest {
                 .set("logWarningInsteadOfFailingApiCalls", true)
                 .build();
 
-        put(BASE_URL, modifiedConfig.toString())
+        put(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL), modifiedConfig.toString())
                 .withLogging(LOGGER, "wotValidationConfig")
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
 
         // Verify the modification
-        get(BASE_URL)
+        get(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL))
                 .withLogging(LOGGER, "wotValidationConfig")
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.OK)
@@ -186,14 +187,14 @@ public final class WotValidationConfigIT extends IntegrationTest {
     @Test
     public void test04_addDynamicConfig() {
         // Add dynamic config
-        put(BASE_URL + "/dynamicConfigs/" + DYNAMIC_CONFIG_SCOPE, dynamicValidationConfig().toString())
+        put(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL + "/dynamicConfigs/" + DYNAMIC_CONFIG_SCOPE), dynamicValidationConfig().toString())
                 .withLogging(LOGGER, "wotValidationConfig")
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
 
         // Verify dynamic config was added
-        get(BASE_URL + "/dynamicConfigs/" + DYNAMIC_CONFIG_SCOPE)
+        get(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL + "/dynamicConfigs/" + DYNAMIC_CONFIG_SCOPE))
                 .withLogging(LOGGER, "wotValidationConfig")
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.OK)
@@ -220,7 +221,7 @@ public final class WotValidationConfigIT extends IntegrationTest {
     @Test
     public void test06_getFullConfig() {
         // Get the full config including dynamic configs
-        get(BASE_URL)
+        get(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL))
                 .withLogging(LOGGER, "wotValidationConfig")
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.OK)
@@ -231,14 +232,14 @@ public final class WotValidationConfigIT extends IntegrationTest {
     @Test
     public void test07_deleteDynamicConfig() {
         // Delete the dynamic config
-        delete(BASE_URL + "/dynamicConfigs/" + DYNAMIC_CONFIG_SCOPE)
+        delete(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL + "/dynamicConfigs/" + DYNAMIC_CONFIG_SCOPE))
                 .withLogging(LOGGER, "wotValidationConfig")
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
 
         // Verify dynamic config was deleted
-        get(BASE_URL + "/dynamicConfigs/" + DYNAMIC_CONFIG_SCOPE)
+        get(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL + "/dynamicConfigs/" + DYNAMIC_CONFIG_SCOPE))
                 .withLogging(LOGGER, "wotValidationConfig")
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
@@ -248,14 +249,14 @@ public final class WotValidationConfigIT extends IntegrationTest {
     @Test
     public void test08_deleteFullConfig() {
         // Delete the full config
-        delete(BASE_URL)
+        delete(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL))
                 .withLogging(LOGGER, "wotValidationConfig")
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
 
         // Verify full config was deleted
-        get(BASE_URL)
+        get(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL))
                 .withLogging(LOGGER, "wotValidationConfig")
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)

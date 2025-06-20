@@ -14,8 +14,10 @@ package org.eclipse.ditto.testing.system.things.rest;
 
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
+import org.eclipse.ditto.json.JsonArray;
 import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonObject;
+import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.policies.api.Permission;
 import org.eclipse.ditto.policies.model.PoliciesResourceType;
 import org.eclipse.ditto.policies.model.Policy;
@@ -29,10 +31,15 @@ import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.ThingsModelFactory;
 import org.eclipse.ditto.testing.common.CommonTestConfig;
+import org.hamcrest.Description;
+import org.hamcrest.Matcher;
+import org.hamcrest.TypeSafeMatcher;
 import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
+
+import java.util.Optional;
 
 
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
@@ -202,9 +209,32 @@ public final class WotValidationConfigIT extends IntegrationTest {
                 .fire();
     }
 
+    @Test
+    public void test07_getMergedConfig() {
+        // Get the full config including dynamic configs
+        get(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL + "/merged"))
+                .withLogging(LOGGER, "wotValidationConfig")
+                .withDevopsAuth()
+                .expectingHttpStatus(HttpStatus.OK)
+                .expectingBody(contains(JsonFactory.newObjectBuilder()
+                        .set("thing", JsonFactory.newObjectBuilder()
+                                .set("enforce", JsonFactory.newObjectBuilder()
+                                        .set("thingDescriptionModification", false)
+                                        .build())
+                                .build())
+                        .build()))
+                .expectingBody(contains(JsonFactory.newObjectBuilder()
+                        .set("dynamicConfig", JsonFactory.newArrayBuilder()
+                                .add(JsonFactory.newObjectBuilder().set("scopeId", "test-scope").build())
+                                .add(JsonFactory.newObjectBuilder().set("scopeId", "ditto:static").build())
+                                .add(JsonFactory.newObjectBuilder().set("scopeId", "ditto:static").build())
+                                .build())
+                        .build()))
+                .fire();
+    }
 
     @Test
-    public void test05_createNonCompliantThing_success() {
+    public void test06_createNonCompliantThing_success() {
 
         try {
             Thread.sleep(1000);
@@ -219,7 +249,7 @@ public final class WotValidationConfigIT extends IntegrationTest {
                 .fire();
     }
     @Test
-    public void test06_getFullConfig() {
+    public void test07_getFullConfig() {
         // Get the full config including dynamic configs
         get(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL))
                 .withLogging(LOGGER, "wotValidationConfig")
@@ -229,8 +259,10 @@ public final class WotValidationConfigIT extends IntegrationTest {
                 .fire();
     }
 
+
+
     @Test
-    public void test07_deleteDynamicConfig() {
+    public void test09_deleteDynamicConfig() {
         // Delete the dynamic config
         delete(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL + "/dynamicConfigs/" + DYNAMIC_CONFIG_SCOPE))
                 .withLogging(LOGGER, "wotValidationConfig")
@@ -247,7 +279,7 @@ public final class WotValidationConfigIT extends IntegrationTest {
     }
 
     @Test
-    public void test08_deleteFullConfig() {
+    public void test10_deleteFullConfig() {
         // Delete the full config
         delete(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL))
                 .withLogging(LOGGER, "wotValidationConfig")
@@ -262,5 +294,4 @@ public final class WotValidationConfigIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .fire();
     }
-
 } 

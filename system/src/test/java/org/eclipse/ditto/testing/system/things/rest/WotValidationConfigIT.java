@@ -14,32 +14,25 @@ package org.eclipse.ditto.testing.system.things.rest;
 
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
-import org.eclipse.ditto.json.JsonArray;
 import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonObject;
-import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.policies.api.Permission;
 import org.eclipse.ditto.policies.model.PoliciesResourceType;
 import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.Subject;
 import org.eclipse.ditto.policies.model.SubjectIssuer;
 import org.eclipse.ditto.policies.model.Subjects;
+import org.eclipse.ditto.testing.common.CommonTestConfig;
 import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.ThingsModelFactory;
-import org.eclipse.ditto.testing.common.CommonTestConfig;
-import org.hamcrest.Description;
-import org.hamcrest.Matcher;
-import org.hamcrest.TypeSafeMatcher;
 import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-
-import java.util.Optional;
 
 
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
@@ -92,28 +85,28 @@ public final class WotValidationConfigIT extends IntegrationTest {
     private static JsonObject defaultValidationConfig() {
         return JsonFactory.newObjectBuilder()
                 .set("enabled", true)
-                .set("logWarningInsteadOfFailingApiCalls",false)
+                .set("log-warning-instead-of-failing-api-calls", false)
                 .set("thing", JsonFactory.newObjectBuilder()
                         .set("enforce", JsonFactory.newObjectBuilder()
-                                .set("thingDescriptionModification", false)
+                                .set("thing-description-modification", false)
                                 .set("attributes", true)
-                                .set("inboxMessagesInput", true)
-                                .set("inboxMessagesOutput", true)
-                                .set("outboxMessages", true)
+                                .set("inbox-messages-input", true)
+                                .set("inbox-messages-output", true)
+                                .set("outbox-messages", true)
                                 .build())
                         .set("forbid", JsonFactory.newObjectBuilder()
-                                .set("nonModeledInboxMessages", true)
-                                .set("nonModeledOutboxMessages", true)
+                                .set("non-modeled-inbox-messages", true)
+                                .set("non-modeled-outbox-messages", true)
                                 .build())
                         .build())
                 .set("feature", JsonFactory.newObjectBuilder()
                         .set("enforce", JsonFactory.newObjectBuilder()
-                                .set("featureDescriptionModification", false)
-                                .set("presenceOfModeledFeatures", false)
+                                .set("feature-description-modification", false)
+                                .set("presence-of-modeled-features", false)
                                 .build())
                         .set("forbid", JsonFactory.newObjectBuilder()
-                                .set("featureDescriptionDeletion", false)
-                                .set("nonModeledOutboxMessages", false)
+                                .set("feature-description-deletion", false)
+                                .set("non-modeled-outbox-messages", false)
                                 .build())
                         .build())
                 .build();
@@ -121,15 +114,15 @@ public final class WotValidationConfigIT extends IntegrationTest {
 
     private static JsonObject dynamicValidationConfig() {
         return JsonFactory.newObjectBuilder()
-                .set("scopeId", DYNAMIC_CONFIG_SCOPE)
-                .set("validationContext", JsonFactory.newObjectBuilder()
-                        .set("thingDefinitionPatterns", JsonFactory.newArrayBuilder()
+                .set("scope-id", DYNAMIC_CONFIG_SCOPE)
+                .set("validation-context", JsonFactory.newObjectBuilder()
+                        .set("thing-definition-patterns", JsonFactory.newArrayBuilder()
                                 .add("^https://eclipse-ditto.github.io/ditto-examples/wot/models/.*$")
                                 .build())
                         .build())
-                .set("configOverrides", JsonFactory.newObjectBuilder()
+                .set("config-overrides", JsonFactory.newObjectBuilder()
                         .set("enabled", true)
-                        .set("logWarningInsteadOfFailingApiCalls", true)
+                        .set("log-warning-instead-of-failing-api-calls", true)
                         .build())
                 .build();
     }
@@ -162,7 +155,6 @@ public final class WotValidationConfigIT extends IntegrationTest {
             throw new RuntimeException(e);
         }
 
-
         putAttribute(TestConstants.API_V_2, testThingId, "foo", "\"test\"")
                 .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .fire();
@@ -172,7 +164,7 @@ public final class WotValidationConfigIT extends IntegrationTest {
     public void test03_modifyExistingConfig() {
         // Modify existing config - should return NO_CONTENT since it exists
         JsonObject modifiedConfig = defaultValidationConfig().toBuilder()
-                .set("logWarningInsteadOfFailingApiCalls", true)
+                .set("log-warning-instead-of-failing-api-calls", true)
                 .build();
 
         put(CommonTestConfig.getInstance().getDevopsUrl(BASE_URL), modifiedConfig.toString())
@@ -189,7 +181,6 @@ public final class WotValidationConfigIT extends IntegrationTest {
                 .expectingBody(contains(JsonFactory.newKey("enabled")))
                 .fire();
     }
-
 
     @Test
     public void test04_addDynamicConfig() {
@@ -219,15 +210,15 @@ public final class WotValidationConfigIT extends IntegrationTest {
                 .expectingBody(contains(JsonFactory.newObjectBuilder()
                         .set("thing", JsonFactory.newObjectBuilder()
                                 .set("enforce", JsonFactory.newObjectBuilder()
-                                        .set("thingDescriptionModification", false)
+                                        .set("thing-description-modification", false)
                                         .build())
                                 .build())
                         .build()))
                 .expectingBody(contains(JsonFactory.newObjectBuilder()
-                        .set("dynamicConfig", JsonFactory.newArrayBuilder()
-                                .add(JsonFactory.newObjectBuilder().set("scopeId", "test-scope").build())
-                                .add(JsonFactory.newObjectBuilder().set("scopeId", "ditto:static").build())
-                                .add(JsonFactory.newObjectBuilder().set("scopeId", "ditto:static").build())
+                        .set("dynamic-config", JsonFactory.newArrayBuilder()
+                                .add(JsonFactory.newObjectBuilder().set("scope-id", "ditto:static").build())
+                                .add(JsonFactory.newObjectBuilder().set("scope-id", "ditto:static").build())
+                                .add(JsonFactory.newObjectBuilder().set("scope-id", "test-scope").build())
                                 .build())
                         .build()))
                 .fire();
@@ -243,7 +234,6 @@ public final class WotValidationConfigIT extends IntegrationTest {
             throw new RuntimeException(e);
         }
 
-
         putAttribute(TestConstants.API_V_2, testThingId, "foo", "\"test\"")
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
@@ -255,11 +245,9 @@ public final class WotValidationConfigIT extends IntegrationTest {
                 .withLogging(LOGGER, "wotValidationConfig")
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.OK)
-                .expectingBody(contains(JsonFactory.newKey("dynamicConfig")))
+                .expectingBody(contains(JsonFactory.newKey("dynamic-config")))
                 .fire();
     }
-
-
 
     @Test
     public void test09_deleteDynamicConfig() {
@@ -294,4 +282,4 @@ public final class WotValidationConfigIT extends IntegrationTest {
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .fire();
     }
-} 
+}

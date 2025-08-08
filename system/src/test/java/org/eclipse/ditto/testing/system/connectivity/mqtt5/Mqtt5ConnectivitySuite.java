@@ -59,7 +59,7 @@ import org.eclipse.ditto.protocol.JsonifiableAdaptable;
 import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.client.ConnectionsClient;
 import org.eclipse.ditto.testing.common.matcher.StatusCodeSuccessfulMatcher;
-import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityITestCases;
+import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityResponseDiversionITestCases;
 import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityWorker;
 import org.eclipse.ditto.testing.system.connectivity.ConnectionCategory;
 import org.eclipse.ditto.testing.system.connectivity.Connections;
@@ -99,7 +99,7 @@ import io.restassured.response.Response;
  * </p>
  */
 public final class Mqtt5ConnectivitySuite
-        extends AbstractConnectivityITestCases<BlockingQueue<Mqtt5Publish>, Mqtt5Publish> {
+        extends AbstractConnectivityResponseDiversionITestCases<BlockingQueue<Mqtt5Publish>, Mqtt5Publish> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Mqtt5ConnectivitySuite.class);
 

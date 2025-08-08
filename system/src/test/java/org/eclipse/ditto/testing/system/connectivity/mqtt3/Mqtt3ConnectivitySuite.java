@@ -59,7 +59,7 @@ import org.eclipse.ditto.protocol.JsonifiableAdaptable;
 import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.client.ConnectionsClient;
 import org.eclipse.ditto.testing.common.matcher.StatusCodeSuccessfulMatcher;
-import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityITestCases;
+import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityResponseDiversionITestCases;
 import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityWorker;
 import org.eclipse.ditto.testing.system.connectivity.ConnectionCategory;
 import org.eclipse.ditto.testing.system.connectivity.Connections;
@@ -100,7 +100,7 @@ import io.restassured.response.Response;
  * </p>
  */
 public final class Mqtt3ConnectivitySuite
-        extends AbstractConnectivityITestCases<BlockingQueue<Mqtt3Publish>, Mqtt3Publish> {
+        extends AbstractConnectivityResponseDiversionITestCases<BlockingQueue<Mqtt3Publish>, Mqtt3Publish> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Mqtt3ConnectivitySuite.class);
 
@@ -422,6 +422,14 @@ public final class Mqtt3ConnectivitySuite
         testConnectionWithErrorExpected(connectionStr, ConnectionFailedException.ERROR_CODE);
     }
 
+    @Override
+    protected String getTargetAddress(final Connection targetConnection) {
+        final String address = super.getTargetAddress(targetConnection);
+        if (address.contains("{{") && address.contains("connection:id") && address.contains("}}")) {
+            return address.replaceAll("\\{\\{.*}}", targetConnection.getId().toString());
+        }
+        return address;
+    }
 
     @Override
     protected String targetAddressForTargetPlaceHolderSubstitution() {

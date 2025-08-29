@@ -17,15 +17,6 @@ networks:
 
 services:
 
-  zookeeper:
-    networks:
-      - test
-    image: bitnami/zookeeper:3.6.2
-    expose:
-      - "2181"
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
-
   artemis:
     image: vromero/activemq-artemis:2.16.0-alpine
     networks:
@@ -46,9 +37,7 @@ services:
       - ./mqtt:/mosquitto/config:ro
 
   kafka:
-    image: bitnami/kafka:3.4.1
-    depends_on:
-      - zookeeper
+    image: apache/kafka:4.0.0
     networks:
       - test
     expose:

@@ -22,10 +22,6 @@ services:
       - ${MQTT_PORT_TCP:-1883}:1883
       - ${MQTT_PORT_SSL:-8883}:8883
 
-  zookeeper:
-    ports:
-      - ${ZOOKEEPER_PORT_TCP:-2181}:2181
-
   kafka:
     ports:
       - ${KAFKA_PORT_TCP:-9092}:9092

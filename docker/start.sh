@@ -36,9 +36,6 @@ trap cleanup SIGHUP SIGINT SIGQUIT SIGABRT SIGALRM SIGTERM
   (docker-compose pull)
   assert_success $?
 
-  printf "\n Starting Zookeeper ...\n\n"
-  (docker-compose up -d zookeeper)
-
   printf "\n"
   read -r -p "Waiting for 10 seconds ..." -t 10
   printf "\n"
@@ -76,7 +73,6 @@ trap cleanup SIGHUP SIGINT SIGQUIT SIGABRT SIGALRM SIGTERM
 
   TAG="${TAG:-$(date -Iseconds)}"
   printf "\nAppend container logs to files...\n\n"
-  docker-compose logs -f zookeeper &> "zookeeper-$TAG.log" &
   docker-compose logs -f oauth &> "oauth-$TAG.log" &
   docker-compose logs -f mongodb &> "mongodb-$TAG.log" &
   docker-compose logs -f ssh &> "ssh-$TAG.log" &

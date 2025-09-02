@@ -91,7 +91,7 @@ trap cleanup SIGHUP SIGINT SIGQUIT SIGABRT SIGALRM SIGTERM
   read -r -p "Waiting for 20 seconds ..." -t 20
   printf "\n"
 
-  EXPECTED_CONTAINERS="zookeeper mongodb mqtt kafka rabbitmq artemis policies things \
+  EXPECTED_CONTAINERS="mongodb mqtt kafka rabbitmq artemis policies things \
   things-search connectivity gateway"
   for CONTAINER in $EXPECTED_CONTAINERS
   do

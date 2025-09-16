@@ -467,6 +467,6 @@ public class Amqp10HonoConnectivityIT extends AbstractConnectivityITCommon<Block
 
     private static String getAmqpUri(final boolean tunnel, final boolean basicAuth) {
         final String host = tunnel ? CONFIG.getAmqp10HonoTunnel() : CONFIG.getAmqp10HonoHostName();
-        return "amqp://" + host + ":" + CONFIG.getAmqp10HonoPort();
+        return "amqp://" + host + ":" + AMQP10_HONO_PORT;
     }
 }

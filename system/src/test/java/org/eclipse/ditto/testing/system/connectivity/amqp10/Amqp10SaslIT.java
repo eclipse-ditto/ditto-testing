@@ -43,6 +43,8 @@ import org.junit.Test;
 @RunIf(DockerEnvironment.class)
 public class Amqp10SaslIT extends AbstractConnectivityITCommon<BlockingQueue<Message>, Message> {
 
+    private static final int AMQP10_PORT = CONFIG.getAmqp10HonoPort() + 10;
+
     private Amqp10TestServer amqp10Server;
 
     public Amqp10SaslIT() {
@@ -67,7 +69,7 @@ public class Amqp10SaslIT extends AbstractConnectivityITCommon<BlockingQueue<Mes
     @Override
     public void setupConnectivity() throws Exception {
         super.setupConnectivity();
-        amqp10Server = new Amqp10TestServer(CONFIG.getAmqp10HonoPort());
+        amqp10Server = new Amqp10TestServer(AMQP10_PORT);
         amqp10Server.startServer();
     }
 
@@ -137,6 +139,6 @@ public class Amqp10SaslIT extends AbstractConnectivityITCommon<BlockingQueue<Mes
 
     private static String getAmqpUri(final boolean tunnel, final boolean basicAuth) {
         final String host = tunnel ? CONFIG.getAmqp10HonoTunnel() : CONFIG.getAmqp10HonoHostName();
-        return "amqp://" + host + ":" + CONFIG.getAmqp10HonoPort();
+        return "amqp://" + host + ":" + AMQP10_PORT;
     }
 }

@@ -119,13 +119,13 @@ public final class Mqtt3ConnectivitySuite
                             "{{entity:id | fn:substring-before(':') | fn:substring-before('not-matching') | fn:default(entity:namespace)}}/"
                             + "{{ entity:id | fn:substring-after(\":\") | fn:default('should-not-happen') }}");
 
-    private static final String ADD_MQTT_TARGET_HEADER_MAPPING = "ADD_MQTT_TARGET_HEADER_MAPPING";
-    private static final String ADD_MQTT_SOURCE_HEADER_MAPPING = "ADD_MQTT_SOURCE_HEADER_MAPPING";
-    private static final String REMOVE_MQTT_HEADER_MAPPINGS = "REMOVE_MQTT_MAPPINGS";
+    private static final String ADD_MQTT_3_TARGET_HEADER_MAPPING = "ADD_MQTT3_TARGET_HEADER_MAPPING";
+    private static final String ADD_MQTT_3_SOURCE_HEADER_MAPPING = "ADD_MQTT3_SOURCE_HEADER_MAPPING";
+    private static final String REMOVE_MQTT_3_MAPPINGS = "REMOVE_MQTT3_MAPPINGS";
 
     static {
         // adds mqtt source header mapping
-        addMod(ADD_MQTT_SOURCE_HEADER_MAPPING, connection -> {
+        addMod(ADD_MQTT_3_SOURCE_HEADER_MAPPING, connection -> {
                     final HeaderMapping headerMapping = ConnectivityModelFactory.newHeaderMapping(Map.of(
                             "custom.topic", "{{ header:mqtt.topic }}",
                             "custom.qos", "{{ header:mqtt.qos }}",
@@ -140,7 +140,7 @@ public final class Mqtt3ConnectivitySuite
                 }
         );
         // adds mqtt target header mapping
-        addMod(ADD_MQTT_TARGET_HEADER_MAPPING, connection -> {
+        addMod(ADD_MQTT_3_TARGET_HEADER_MAPPING, connection -> {
                     final HeaderMapping headerMapping = ConnectivityModelFactory.newHeaderMapping(Map.of(
                             "mqtt.topic", "{{ header:custom.topic }}",
                             "mqtt.qos", "{{ header:custom.qos }}",
@@ -155,7 +155,7 @@ public final class Mqtt3ConnectivitySuite
                 }
         );
         // removes mqtt header mappings
-        addMod(REMOVE_MQTT_HEADER_MAPPINGS, connection -> connection.toBuilder()
+        addMod(REMOVE_MQTT_3_MAPPINGS, connection -> connection.toBuilder()
                 .setSources(connection.getSources().stream()
                         .map(ConnectivityModelFactory::newSourceBuilder)
                         .map(sb -> sb.headerMapping(null))
@@ -340,7 +340,7 @@ public final class Mqtt3ConnectivitySuite
     }
 
     @Test
-    @UseConnection(category = ConnectionCategory.CONNECTION1, mod = ADD_MQTT_SOURCE_HEADER_MAPPING)
+    @UseConnection(category = ConnectionCategory.CONNECTION1, mod = ADD_MQTT_3_SOURCE_HEADER_MAPPING)
     public void allowedHeadersAreMappedFromInboundMqttMessage() {
 
         final ConnectivityTestWebsocketClient websocketClient =
@@ -372,7 +372,7 @@ public final class Mqtt3ConnectivitySuite
     }
 
     @Test
-    @UseConnection(category = ConnectionCategory.CONNECTION1, mod = ADD_MQTT_TARGET_HEADER_MAPPING)
+    @UseConnection(category = ConnectionCategory.CONNECTION1, mod = ADD_MQTT_3_TARGET_HEADER_MAPPING)
     public void allowedHeadersAreMappedToOutboundMqttMessage() throws InterruptedException {
 
         final ConnectivityTestWebsocketClient websocketClient =
@@ -458,7 +458,7 @@ public final class Mqtt3ConnectivitySuite
 
     @Override
     @Test
-    @UseConnection(category = ConnectionCategory.CONNECTION_WITH_CONNECTION_ANNOUNCEMENTS, mod = REMOVE_MQTT_HEADER_MAPPINGS)
+    @UseConnection(category = ConnectionCategory.CONNECTION_WITH_CONNECTION_ANNOUNCEMENTS, mod = REMOVE_MQTT_3_MAPPINGS)
     public void sendsConnectionAnnouncements() {
         LOGGER.info("Running sendsConnectionAnnouncements without header mappings for MQTT");
         super.sendsConnectionAnnouncements();

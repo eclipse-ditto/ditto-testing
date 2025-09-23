@@ -118,13 +118,13 @@ public final class Mqtt5ConnectivitySuite
                             "{{entity:id | fn:substring-before(':') | fn:substring-before('not-matching') | fn:default(entity:namespace)}}/"
                             + "{{ entity:id | fn:substring-after(\":\") | fn:default('should-not-happen') }}");
 
-    private static final String ADD_MQTT_TARGET_HEADER_MAPPING = "ADD_MQTT_TARGET_HEADER_MAPPING";
-    private static final String ADD_MQTT_SOURCE_HEADER_MAPPING = "ADD_MQTT_SOURCE_HEADER_MAPPING";
-    private static final String REMOVE_MQTT_HEADER_MAPPINGS = "REMOVE_MQTT_MAPPINGS";
+    private static final String ADD_MQTT_5_TARGET_HEADER_MAPPING = "ADD_MQTT5_TARGET_HEADER_MAPPING";
+    private static final String ADD_MQTT_5_SOURCE_HEADER_MAPPING = "ADD_MQTT5_SOURCE_HEADER_MAPPING";
+    private static final String REMOVE_MQTT_5_MAPPINGS = "REMOVE_MQTT5_MAPPINGS";
 
     static {
         // adds mqtt source header mapping
-        addMod(ADD_MQTT_SOURCE_HEADER_MAPPING, connection -> {
+        addMod(ADD_MQTT_5_SOURCE_HEADER_MAPPING, connection -> {
                     final HeaderMapping headerMapping = ConnectivityModelFactory.newHeaderMapping(Map.of(
                             "custom.topic", "{{ header:mqtt.topic }}",
                             "custom.qos", "{{ header:mqtt.qos }}",
@@ -139,7 +139,7 @@ public final class Mqtt5ConnectivitySuite
                 }
         );
         // adds mqtt target header mapping
-        addMod(ADD_MQTT_TARGET_HEADER_MAPPING, connection -> {
+        addMod(ADD_MQTT_5_TARGET_HEADER_MAPPING, connection -> {
                     final HeaderMapping headerMapping = ConnectivityModelFactory.newHeaderMapping(Map.of(
                             "mqtt.topic", "{{ header:custom.topic }}",
                             "mqtt.qos", "{{ header:custom.qos }}",
@@ -154,7 +154,7 @@ public final class Mqtt5ConnectivitySuite
                 }
         );
         // removes mqtt header mappings
-        addMod(REMOVE_MQTT_HEADER_MAPPINGS, connection -> connection.toBuilder()
+        addMod(REMOVE_MQTT_5_MAPPINGS, connection -> connection.toBuilder()
                 .setSources(connection.getSources().stream()
                         .map(ConnectivityModelFactory::newSourceBuilder)
                         .map(sb -> sb.headerMapping(null))
@@ -334,7 +334,7 @@ public final class Mqtt5ConnectivitySuite
     }
 
     @Test
-    @UseConnection(category = ConnectionCategory.CONNECTION1, mod = ADD_MQTT_SOURCE_HEADER_MAPPING)
+    @UseConnection(category = ConnectionCategory.CONNECTION1, mod = ADD_MQTT_5_SOURCE_HEADER_MAPPING)
     public void allowedHeadersAreMappedFromInboundMqttMessage() {
 
         final ConnectivityTestWebsocketClient websocketClient = ConnectivityTestWebsocketClient
@@ -366,7 +366,7 @@ public final class Mqtt5ConnectivitySuite
     }
 
     @Test
-    @UseConnection(category = ConnectionCategory.CONNECTION1, mod = ADD_MQTT_TARGET_HEADER_MAPPING)
+    @UseConnection(category = ConnectionCategory.CONNECTION1, mod = ADD_MQTT_5_TARGET_HEADER_MAPPING)
     public void allowedHeadersAreMappedToOutboundMqttMessage() throws InterruptedException {
 
         final ConnectivityTestWebsocketClient websocketClient = ConnectivityTestWebsocketClient

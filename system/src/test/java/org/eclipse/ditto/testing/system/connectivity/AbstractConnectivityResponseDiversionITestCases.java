@@ -21,6 +21,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.eclipse.ditto.base.model.auth.AuthorizationModelFactory;
 import org.eclipse.ditto.base.model.auth.DittoAuthorizationContextType;
@@ -29,11 +32,13 @@ import org.eclipse.ditto.base.model.headers.DittoHeaders;
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
 import org.eclipse.ditto.base.model.signals.Signal;
 import org.eclipse.ditto.connectivity.model.Connection;
+import org.eclipse.ditto.connectivity.model.ConnectionBuilder;
 import org.eclipse.ditto.connectivity.model.ConnectivityModelFactory;
 import org.eclipse.ditto.connectivity.model.HeaderMapping;
 import org.eclipse.ditto.connectivity.model.Source;
 import org.eclipse.ditto.connectivity.model.Target;
 import org.eclipse.ditto.testing.common.categories.RequireSource;
+import org.eclipse.ditto.testing.common.matcher.StatusCodeSuccessfulMatcher;
 import org.eclipse.ditto.things.model.signals.commands.ThingErrorResponse;
 import org.eclipse.ditto.things.model.signals.commands.modify.CreateThing;
 import org.eclipse.ditto.things.model.signals.commands.modify.CreateThingResponse;
@@ -70,7 +75,7 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
                     .replyTargetEnabled(true)
                     .headerMapping(ConnectivityModelFactory.newHeaderMapping(mapping))
                     .build());
-            if (connection.getSources().size() > 1){
+            if (connection.getSources().size() > 1) {
                 final Source secondSource = connection.getSources().getLast();
                 final Source source = ConnectivityModelFactory.newSourceBuilder(secondSource)
                         .replyTargetEnabled(true)
@@ -115,11 +120,11 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
     @Category(RequireSource.class)
     @UseConnection(category = ConnectionCategory.CONNECTION1, mod = DIVERSION_SOURCE)
     @UseConnection(category = ConnectionCategory.CONNECTION2, mod = DIVERSION_TARGET)
-    public void divertResponseBasedOnConnectionHeaderMapping() {
+    public void divertResponseBasedOnConnectionHeaderMapping()
+            throws ExecutionException, InterruptedException, TimeoutException {
         final Connection targetConnection = getConnectionExistingByNameForUser(DIVERSION_TARGET, getUsername());
-        final String targetConnectionId = targetConnection.getId().toString();
         final Connection sourceConnection = getConnectionExistingByNameForUser(DIVERSION_SOURCE, getUsername());
-        prepareConnectionsForDiversion(sourceConnection, targetConnectionId, targetConnection, true);
+        prepareConnectionsForDiversion(sourceConnection, true, false, targetConnection, true);
 
         // Given
         final String sendingConnectionName = cf.connectionName1;
@@ -148,16 +153,63 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
         assertThat(getCorrelationId(divertedMessage)).isEqualTo(correlationId);
     }
 
+
+    @Test
+    @Category(RequireSource.class)
+    @UseConnection(category = ConnectionCategory.CONNECTION1, mod = DIVERSION_SOURCE)
+    @UseConnection(category = ConnectionCategory.CONNECTION2, mod = DIVERSION_TARGET)
+    public void divertAndPreserveOriginalResponseInSourceConnection()
+            throws ExecutionException, InterruptedException, TimeoutException {
+        final Connection targetConnection = getConnectionExistingByNameForUser(DIVERSION_TARGET, getUsername());
+        final Connection sourceConnection = getConnectionExistingByNameForUser(DIVERSION_SOURCE, getUsername());
+        prepareConnectionsForDiversion(sourceConnection, true, true, targetConnection, true);
+
+        // Given
+        final String sendingConnectionName = cf.connectionName1;
+        final String divertedConnectionName = cf.connectionName2;
+        final CreateThing createThing = newCreateThing(sendingConnectionName, false);
+        sendSignal(sendingConnectionName, createThing);
+
+        final String correlationId = UUID.randomUUID().toString();
+        // When: Send command with divert-response-to-connection header
+        final RetrieveThing retrieveThing = RetrieveThing.of(createThing.getEntityId(),
+                DittoHeaders.newBuilder()
+                        .correlationId(correlationId)
+                        .schemaVersion(JsonSchemaVersion.V_2)
+                        .build());
+
+        final C responseConsumer = initResponseConsumer(sendingConnectionName, correlationId);
+        final String divertAddress = getTargetAddress(targetConnection);
+        final C divertedResponseConsumer = initTargetsConsumer(divertedConnectionName, divertAddress);
+        sendSignal(sendingConnectionName, retrieveThing);
+
+        // Then: Response should be received at source address
+        final M response = consumeResponse(correlationId, responseConsumer);
+        assertThat(response).isNotNull();
+        // Then: Response should be received at diverted address as well
+        final M divertedResponse = consumeFromTarget(divertedConnectionName, divertedResponseConsumer);
+        assertThat(divertedResponse).isNotNull();
+
+        final Signal<?> signal = PROTOCOL_ADAPTER.fromAdaptable(jsonifiableAdaptableFrom(divertedResponse));
+        assertThat(signal).isInstanceOf(RetrieveThingResponse.class);
+        assertThat(getCorrelationId(divertedResponse)).isEqualTo(correlationId);
+
+        final Signal<?> originalSignal = PROTOCOL_ADAPTER.fromAdaptable(jsonifiableAdaptableFrom(response));
+        assertThat(originalSignal).isInstanceOf(RetrieveThingResponse.class);
+        assertThat(getCorrelationId(response)).isEqualTo(correlationId);
+    }
+
     @Test
     @UseConnection(category = ConnectionCategory.CONNECTION1, mod = DIVERSION_SOURCE)
     @UseConnection(category = ConnectionCategory.CONNECTION2, mod = DIVERSION_TARGET)
-    public void divertResponseBasedOnHeaderInTheMessageItself() {
+    public void divertResponseBasedOnHeaderInTheMessageItself()
+            throws ExecutionException, InterruptedException, TimeoutException {
         final Connection targetConnection = getConnectionExistingByNameForUser(DIVERSION_TARGET,
                 getUsername());
         final Connection sourceConnection = getConnectionExistingByNameForUser(DIVERSION_SOURCE,
                 getUsername());
         final String targetConnectionId = targetConnection.getId().toString();
-        prepareConnectionsForDiversion(sourceConnection, targetConnectionId, targetConnection, false);
+        prepareConnectionsForDiversion(sourceConnection, false, false, targetConnection, true);
 
         // Given
         final String sendingConnectionName = cf.connectionName1;
@@ -189,12 +241,12 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
     @Test
     @UseConnection(category = ConnectionCategory.CONNECTION1, mod = DIVERSION_SOURCE)
     @UseConnection(category = ConnectionCategory.CONNECTION2, mod = DIVERSION_TARGET)
-    public void doNotPublishDivertedResponseIfNotAuthorized() {
+    public void doNotPublishDivertedResponseIfNotAuthorized()
+            throws ExecutionException, InterruptedException, TimeoutException {
         final Connection targetConnection = getConnectionExistingByNameForUser(DIVERSION_TARGET,
                 getUsername());
         final Connection sourceConnection = getConnectionExistingByNameForUser(DIVERSION_SOURCE,
                 getUsername());
-        final String targetConnectionId = targetConnection.getId().toString();
 
         // Given
         final String sendingConnectionName = cf.connectionName1;
@@ -202,7 +254,7 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
         final CreateThing createThing = newCreateThing(sendingConnectionName, false);
         sendSignal(sendingConnectionName, createThing);
 
-        addDiversionHeaderMappingToConnectionSource(sourceConnection, targetConnectionId);
+        prepareConnectionsForDiversion(sourceConnection, false, false, targetConnection, true);
 
         final String correlationId = UUID.randomUUID().toString();
         final String divertAddress = getTargetAddress(targetConnection);
@@ -224,12 +276,11 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
     @UseConnection(category = ConnectionCategory.CONNECTION1, mod = DIVERSION_TARGET)
     @UseConnection(category = ConnectionCategory.CONNECTION2, mod = NO_OP)
     @UseConnection(category = ConnectionCategory.CONNECTION_WITH_2_SOURCES, mod = DIVERSION_SOURCE)
-    public void testErrorResponseDiversion() {
+    public void testErrorResponseDiversion() throws ExecutionException, InterruptedException, TimeoutException {
 
         final Connection targetConnection = getConnectionExistingByNameForUser(DIVERSION_TARGET, getUsername());
-        final String targetConnectionId = targetConnection.getId().toString();
         final Connection sourceConnection = getConnectionExistingByNameForUser(DIVERSION_SOURCE, getUsername());
-        prepareConnectionsForDiversion(sourceConnection, targetConnectionId, targetConnection, true);
+        prepareConnectionsForDiversion(sourceConnection, true, false, targetConnection, true);
 
         final CreateThing createThing = newCreateThing(cf.connectionName2, true);
 
@@ -262,61 +313,41 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
         assertThat(errorResponseSignal).isInstanceOf(ThingErrorResponse.class);
     }
 
-    @Test
-    @Category(RequireSource.class)
-    @UseConnection(category = ConnectionCategory.CONNECTION1, mod = DIVERSION_SOURCE)
-    @UseConnection(category = ConnectionCategory.CONNECTION2, mod = DIVERSION_TARGET)
-    public void divertAndPreserveOriginalResponseInSourceConnection() {
-        final Connection targetConnection = getConnectionExistingByNameForUser(DIVERSION_TARGET, getUsername());
-        final String targetConnectionId = targetConnection.getId().toString();
-        final Connection sourceConnection = getConnectionExistingByNameForUser(DIVERSION_SOURCE, getUsername());
-        prepareConnectionsForDiversion(sourceConnection, targetConnectionId, targetConnection, true);
-        updateConnectionSpecificConfig(sourceConnection, Map.of("preserve-original-response", "true"));
-        // Given
-        final String sendingConnectionName = cf.connectionName1;
-        final String divertedConnectionName = cf.connectionName2;
-        final CreateThing createThing = newCreateThing(sendingConnectionName, false);
-        sendSignal(sendingConnectionName, createThing);
-
-        final String correlationId = UUID.randomUUID().toString();
-        // When: Send command with divert-response-to-connection header
-        final RetrieveThing retrieveThing = RetrieveThing.of(createThing.getEntityId(),
-                DittoHeaders.newBuilder()
-                        .correlationId(correlationId)
-                        .schemaVersion(JsonSchemaVersion.V_2)
-                        .build());
-
-        final C responseConsumer = initResponseConsumer(sendingConnectionName, correlationId);
-        final String divertAddress = getTargetAddress(targetConnection);
-        final C targetResponseConsumer = initTargetsConsumer(divertedConnectionName, divertAddress);
-        sendSignal(sendingConnectionName, retrieveThing);
-
-        // Then: Response should be received at diverted address
-        final M divertedResponse = consumeFromTarget(divertedConnectionName, targetResponseConsumer);
-        assertThat(divertedResponse).isNotNull();
-        // Then: Response should be received at source address as well
-        final M response = consumeResponse(correlationId, responseConsumer);
-        assertThat(response).isNotNull();
-
-        final Signal<?> signal = PROTOCOL_ADAPTER.fromAdaptable(jsonifiableAdaptableFrom(divertedResponse));
-        assertThat(signal).isInstanceOf(RetrieveThingResponse.class);
-        assertThat(getCorrelationId(divertedResponse)).isEqualTo(correlationId);
-
-        final Signal<?> originalSignal = PROTOCOL_ADAPTER.fromAdaptable(jsonifiableAdaptableFrom(response));
-        assertThat(originalSignal).isInstanceOf(RetrieveThingResponse.class);
-        assertThat(getCorrelationId(response)).isEqualTo(correlationId);
-    }
-
     private String getUsername() {
         return testingContextWithRandomNs.getSolution().getUsername();
     }
 
-    private void prepareConnectionsForDiversion(final Connection sourceConnection, final String targetConnectionId,
-            final Connection targetConnection, final boolean addDiversionHeaderMapping) {
+    private void prepareConnectionsForDiversion(final Connection sourceConnection,
+            final boolean addDiversionHeaderMapping, final boolean preserveResponseInSource,
+            final Connection targetConnection, final boolean authorizeSources)
+            throws ExecutionException, InterruptedException, TimeoutException {
+        ConnectionBuilder sourceConnectionBuilder = sourceConnection.toBuilder();
         if (addDiversionHeaderMapping) {
-            addDiversionHeaderMappingToConnectionSource(sourceConnection, targetConnectionId);
+            sourceConnectionBuilder =
+                    addDiversionHeaderMappingToConnectionSource(sourceConnection, targetConnection.getId().toString());
         }
-        addAuthorizedSourcesToTargetConnection(targetConnection, sourceConnection);
+        if (preserveResponseInSource) {
+            final HashMap<String, String> sourceSpecificConfig = new HashMap<>(sourceConnection.getSpecificConfig());
+            sourceSpecificConfig.put("preserve-normal-response-via-source", "true");
+            sourceConnectionBuilder.specificConfig(sourceSpecificConfig);
+        }
+        final Response response = cf.asyncModifyConnection(sourceConnectionBuilder.build().toJson())
+                .get(30, TimeUnit.SECONDS);
+        LOGGER.info("Modified {} <{}>. Response: {}", sourceConnection.getName().get(), sourceConnection.getId(),
+                response.statusLine());
+        assertThat(response.getStatusCode()).satisfies(StatusCodeSuccessfulMatcher.getConsumer());
+
+        if (authorizeSources) {
+            final Map<String, String> targetSpecificConfig = new HashMap<>(targetConnection.getSpecificConfig());
+            targetSpecificConfig.put("authorized-connections-as-sources", sourceConnection.getId().toString());
+            final Response targetConResponse = cf.asyncModifyConnection(
+                            targetConnection.toBuilder().specificConfig(targetSpecificConfig).build().toJson())
+                    .get(30, TimeUnit.SECONDS);
+            LOGGER.info("Modified {} <{}>. Response: {}", targetConnection.getName().get(), targetConnection.getId(),
+                    targetConResponse.statusLine());
+            assertThat(targetConResponse.getStatusCode()).satisfies(StatusCodeSuccessfulMatcher.getConsumer());
+        }
+
     }
 
     private static Target removeTopicsFrom(final Target target) {
@@ -325,7 +356,7 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
                 .build();
     }
 
-    private void addDiversionHeaderMappingToConnectionSource(final Connection sourceConnection,
+    private ConnectionBuilder addDiversionHeaderMappingToConnectionSource(final Connection sourceConnection,
             final String targetConnectionId) {
         final List<Source> newSources = sourceConnection.getSources().stream().map(source -> {
             final Map<String, String> mapping = new HashMap<>(source.getHeaderMapping().getMapping());
@@ -336,29 +367,9 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
                     .build();
         }).toList();
 
-        final Connection connection = sourceConnection.toBuilder()
-                .setSources(newSources).build();
-        final Response response = modifyConnection(connection);
-        LOGGER.info("connection modified. Response: {}", response.statusCode());
-    }
+        return sourceConnection.toBuilder()
+                .setSources(newSources);
 
-    private void addAuthorizedSourcesToTargetConnection(final Connection targetConnection,
-            final Connection sourceConnection) {
-        final Map<String, String> specificConfig = new HashMap<>(targetConnection.getSpecificConfig());
-        specificConfig.put("authorized-connections-as-sources", sourceConnection.getId().toString());
-        updateConnectionSpecificConfig(targetConnection, specificConfig);
-    }
-
-    private void updateConnectionSpecificConfig(final Connection connection, final Map<String, String> newSpecificConfig) {
-        final Map<String, String> specificConfig = new HashMap<>(connection.getSpecificConfig());
-        specificConfig.putAll(newSpecificConfig);
-        final Connection modifiedConnection = connection.toBuilder()
-                .specificConfig(specificConfig)
-                .build();
-        final Response response = modifyConnection(modifiedConnection);
-        LOGGER.info("Connection modified. Response: {}", response.statusCode());
-        assertThat(response.statusCode()).isGreaterThanOrEqualTo(200);
-        assertThat(response.statusCode()).isLessThan(300);
     }
 
     // Helper methods

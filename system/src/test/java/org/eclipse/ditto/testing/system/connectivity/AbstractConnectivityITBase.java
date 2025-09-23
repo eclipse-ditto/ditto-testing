@@ -150,14 +150,6 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
                 .fire();
     }
 
-    protected static Response modifyConnection(final Connection connection) {
-        final JsonObject connectionJsonStrWithoutId = removeIdFromJson(connection.toJson());
-        return connectionsClient().putConnection(connection.getId().toString(), connectionJsonStrWithoutId)
-                .withDevopsAuth()
-                .expectingHttpStatus(HttpStatus.NO_CONTENT)
-                .fire();
-    }
-
     protected static List<ConnectionId> getAllConnectionIds(final String connectionNamePrefixToMatch) {
         final Response response = connectionsClient().getConnectionIds()
                 .withDevopsAuth()

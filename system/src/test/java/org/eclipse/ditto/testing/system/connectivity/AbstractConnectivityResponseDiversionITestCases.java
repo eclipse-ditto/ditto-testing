@@ -14,6 +14,7 @@
 package org.eclipse.ditto.testing.system.connectivity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.eclipse.ditto.testing.system.connectivity.ConnectionModelFactory.SOURCE1_SUFFIX;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,6 +28,7 @@ import java.util.concurrent.TimeoutException;
 
 import org.eclipse.ditto.base.model.auth.AuthorizationModelFactory;
 import org.eclipse.ditto.base.model.auth.DittoAuthorizationContextType;
+import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.base.model.headers.DittoHeaderDefinition;
 import org.eclipse.ditto.base.model.headers.DittoHeaders;
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
@@ -37,8 +39,18 @@ import org.eclipse.ditto.connectivity.model.ConnectivityModelFactory;
 import org.eclipse.ditto.connectivity.model.HeaderMapping;
 import org.eclipse.ditto.connectivity.model.Source;
 import org.eclipse.ditto.connectivity.model.Target;
+import org.eclipse.ditto.json.JsonFactory;
+import org.eclipse.ditto.json.JsonObject;
+import org.eclipse.ditto.json.JsonObjectBuilder;
+import org.eclipse.ditto.policies.model.PoliciesModelFactory;
+import org.eclipse.ditto.policies.model.Policy;
+import org.eclipse.ditto.testing.common.PiggyBackCommander;
 import org.eclipse.ditto.testing.common.categories.RequireSource;
+import org.eclipse.ditto.testing.common.matcher.PostMatcher;
 import org.eclipse.ditto.testing.common.matcher.StatusCodeSuccessfulMatcher;
+import org.eclipse.ditto.testing.common.piggyback.PiggybackRequest;
+import org.eclipse.ditto.things.model.ThingBuilder;
+import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.signals.commands.ThingErrorResponse;
 import org.eclipse.ditto.things.model.signals.commands.modify.CreateThing;
 import org.eclipse.ditto.things.model.signals.commands.modify.CreateThingResponse;
@@ -122,30 +134,31 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
     @UseConnection(category = ConnectionCategory.CONNECTION2, mod = DIVERSION_TARGET)
     public void divertResponseBasedOnConnectionHeaderMapping()
             throws ExecutionException, InterruptedException, TimeoutException {
-        final Connection targetConnection = getConnectionExistingByNameForUser(DIVERSION_TARGET, getUsername());
+        final String sourceConnectionName = cf.connectionName1;
         final Connection sourceConnection = getConnectionExistingByNameForUser(DIVERSION_SOURCE, getUsername());
+        final String targetConnectionName = cf.connectionName2;
+        final Connection targetConnection = getConnectionExistingByNameForUser(DIVERSION_TARGET, getUsername());
+
+        final ThingId thingId = sendCreateThingAndEnsureResponseIsSentBack(cf.connectionName1,
+                ThingBuilder.FromScratch::build);
+
         prepareConnectionsForDiversion(sourceConnection, true, false, targetConnection, true);
 
         // Given
-        final String sendingConnectionName = cf.connectionName1;
-        final String divertedConnectionName = cf.connectionName2;
-        final CreateThing createThing = newCreateThing(sendingConnectionName, false);
-        sendSignal(sendingConnectionName, createThing);
-
         final String correlationId = UUID.randomUUID().toString();
         // When: Send command with divert-response-to-connection header
-        final RetrieveThing retrieveThing = RetrieveThing.of(createThing.getEntityId(),
+        final RetrieveThing retrieveThing = RetrieveThing.of(thingId,
                 DittoHeaders.newBuilder()
                         .correlationId(correlationId)
                         .schemaVersion(JsonSchemaVersion.V_2)
                         .build());
 
         final String divertAddress = getTargetAddress(targetConnection);
-        final C responseConsumer = initTargetsConsumer(divertedConnectionName, divertAddress);
-        sendSignal(sendingConnectionName, retrieveThing);
+        final C responseConsumer = initTargetsConsumer(targetConnectionName, divertAddress);
+        sendSignal(sourceConnectionName, retrieveThing);
 
         // Then: Response should be received at diverted address
-        final M divertedMessage = consumeFromTarget(divertedConnectionName, responseConsumer);
+        final M divertedMessage = consumeFromTarget(targetConnectionName, responseConsumer);
         assertThat(divertedMessage).isNotNull();
 
         final Signal<?> signal = PROTOCOL_ADAPTER.fromAdaptable(jsonifiableAdaptableFrom(divertedMessage));
@@ -160,34 +173,35 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
     @UseConnection(category = ConnectionCategory.CONNECTION2, mod = DIVERSION_TARGET)
     public void divertAndPreserveOriginalResponseInSourceConnection()
             throws ExecutionException, InterruptedException, TimeoutException {
-        final Connection targetConnection = getConnectionExistingByNameForUser(DIVERSION_TARGET, getUsername());
+        final String sourceConnectionName = cf.connectionName1;
+        final String targetConnectionName = cf.connectionName2;
+        final ThingId thingId = sendCreateThingAndEnsureResponseIsSentBack(sourceConnectionName,
+                ThingBuilder.FromScratch::build);
+
         final Connection sourceConnection = getConnectionExistingByNameForUser(DIVERSION_SOURCE, getUsername());
+        final Connection targetConnection = getConnectionExistingByNameForUser(DIVERSION_TARGET, getUsername());
         prepareConnectionsForDiversion(sourceConnection, true, true, targetConnection, true);
 
         // Given
-        final String sendingConnectionName = cf.connectionName1;
-        final String divertedConnectionName = cf.connectionName2;
-        final CreateThing createThing = newCreateThing(sendingConnectionName, false);
-        sendSignal(sendingConnectionName, createThing);
 
         final String correlationId = UUID.randomUUID().toString();
         // When: Send command with divert-response-to-connection header
-        final RetrieveThing retrieveThing = RetrieveThing.of(createThing.getEntityId(),
+        final RetrieveThing retrieveThing = RetrieveThing.of(thingId,
                 DittoHeaders.newBuilder()
                         .correlationId(correlationId)
                         .schemaVersion(JsonSchemaVersion.V_2)
                         .build());
 
-        final C responseConsumer = initResponseConsumer(sendingConnectionName, correlationId);
+        final C responseConsumer = initResponseConsumer(sourceConnectionName, correlationId);
         final String divertAddress = getTargetAddress(targetConnection);
-        final C divertedResponseConsumer = initTargetsConsumer(divertedConnectionName, divertAddress);
-        sendSignal(sendingConnectionName, retrieveThing);
+        final C divertedResponseConsumer = initTargetsConsumer(targetConnectionName, divertAddress);
+        sendSignal(sourceConnectionName, retrieveThing);
 
         // Then: Response should be received at source address
         final M response = consumeResponse(correlationId, responseConsumer);
         assertThat(response).isNotNull();
         // Then: Response should be received at diverted address as well
-        final M divertedResponse = consumeFromTarget(divertedConnectionName, divertedResponseConsumer);
+        final M divertedResponse = consumeFromTarget(targetConnectionName, divertedResponseConsumer);
         assertThat(divertedResponse).isNotNull();
 
         final Signal<?> signal = PROTOCOL_ADAPTER.fromAdaptable(jsonifiableAdaptableFrom(divertedResponse));
@@ -204,6 +218,9 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
     @UseConnection(category = ConnectionCategory.CONNECTION2, mod = DIVERSION_TARGET)
     public void divertResponseBasedOnHeaderInTheMessageItself()
             throws ExecutionException, InterruptedException, TimeoutException {
+        final ThingId thingId = sendCreateThingAndEnsureResponseIsSentBack(cf.connectionName1,
+                ThingBuilder.FromScratch::build);
+
         final Connection targetConnection = getConnectionExistingByNameForUser(DIVERSION_TARGET,
                 getUsername());
         final Connection sourceConnection = getConnectionExistingByNameForUser(DIVERSION_SOURCE,
@@ -214,13 +231,11 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
         // Given
         final String sendingConnectionName = cf.connectionName1;
         final String divertedConnectionName = cf.connectionName2;
-        final CreateThing createThing = newCreateThing(sendingConnectionName, false);
-        sendSignal(sendingConnectionName, createThing);
 
         final String correlationId = UUID.randomUUID().toString();
         final String divertAddress = getTargetAddress(targetConnection);
         // When: Send command with divert-response-to-connection header
-        final RetrieveThing retrieveThing = RetrieveThing.of(createThing.getEntityId(),
+        final RetrieveThing retrieveThing = RetrieveThing.of(thingId,
                 DittoHeaders.newBuilder()
                         .correlationId(correlationId)
                         .schemaVersion(JsonSchemaVersion.V_2)
@@ -251,14 +266,14 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
         // Given
         final String sendingConnectionName = cf.connectionName1;
         final String divertedConnectionName = cf.connectionName2;
-        final CreateThing createThing = newCreateThing(sendingConnectionName, false);
-        sendSignal(sendingConnectionName, createThing);
+        final ThingId thingId = sendCreateThingAndEnsureResponseIsSentBack(cf.connectionName1,
+                ThingBuilder.FromScratch::build);
 
         prepareConnectionsForDiversion(sourceConnection, false, false, targetConnection, true);
 
         final String correlationId = UUID.randomUUID().toString();
         final String divertAddress = getTargetAddress(targetConnection);
-        final RetrieveThing retrieveThing = RetrieveThing.of(createThing.getEntityId(),
+        final RetrieveThing retrieveThing = RetrieveThing.of(thingId,
                 DittoHeaders.newBuilder()
                         .correlationId(correlationId)
                         .schemaVersion(JsonSchemaVersion.V_2)
@@ -280,22 +295,13 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
 
         final Connection targetConnection = getConnectionExistingByNameForUser(DIVERSION_TARGET, getUsername());
         final Connection sourceConnection = getConnectionExistingByNameForUser(DIVERSION_SOURCE, getUsername());
+        final String sourceConnectionName = cf.connectionWith2Sources;
+        final ThingId thingId = sendCreateThingAndEnsureResponseIsSentBack(cf.connectionName2,
+                ThingBuilder.FromScratch::build);
         prepareConnectionsForDiversion(sourceConnection, true, false, targetConnection, true);
 
-        final CreateThing createThing = newCreateThing(cf.connectionName2, true);
-
-        final String correlationId = createThing.getDittoHeaders().getCorrelationId().get();
-        final C responseConsumer = initResponseConsumer(cf.connectionName2, correlationId);
-        sendSignal(cf.connectionName2, createThing);
-        final M createResponse = consumeResponse(correlationId, responseConsumer);
-        assertThat(createResponse).isNotNull();
-
-        final Signal<?> signal = PROTOCOL_ADAPTER.fromAdaptable(jsonifiableAdaptableFrom(createResponse));
-        assertThat(signal).isInstanceOf(CreateThingResponse.class);
-
-
         // Send command that will fail
-        final RetrieveThing retrieveThing = RetrieveThing.of(createThing.getEntityId(),
+        final RetrieveThing retrieveThing = RetrieveThing.of(thingId,
                 DittoHeaders.newBuilder()
                         .correlationId(createNewCorrelationId())
                         .schemaVersion(JsonSchemaVersion.V_2)
@@ -303,7 +309,7 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
 
         final String divertAddress = getTargetAddress(targetConnection);
         final C targetsConsumer = initTargetsConsumer(cf.connectionName1, divertAddress);
-        sendSignal(cf.connectionWith2Sources + ConnectionModelFactory.SOURCE2_SUFFIX, retrieveThing);
+        sendSignal(sourceConnectionName + SOURCE1_SUFFIX, retrieveThing);
 
         // Then: Error response should be received at diverted address
         final M divertedMessage = consumeFromTarget(cf.connectionName1, targetsConsumer);
@@ -358,18 +364,26 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
 
     private ConnectionBuilder addDiversionHeaderMappingToConnectionSource(final Connection sourceConnection,
             final String targetConnectionId) {
-        final List<Source> newSources = sourceConnection.getSources().stream().map(source -> {
-            final Map<String, String> mapping = new HashMap<>(source.getHeaderMapping().getMapping());
-            mapping.put(DittoHeaderDefinition.DIVERT_RESPONSE_TO_CONNECTION.getKey(), targetConnectionId);
-            final HeaderMapping newHeaderMapping = ConnectivityModelFactory.newHeaderMapping(mapping);
-            return ConnectivityModelFactory.newSourceBuilder(source)
-                    .headerMapping(newHeaderMapping)
-                    .build();
-        }).toList();
+        final List<Source> newSources = sourceConnection.getSources().stream()
+                .map(source -> isFirstSource(source, sourceConnection)
+                        ? addDiversionHeader(source, targetConnectionId)
+                        : source)
+                .toList();
 
-        return sourceConnection.toBuilder()
-                .setSources(newSources);
+        return sourceConnection.toBuilder().setSources(newSources);
+    }
 
+    private boolean isFirstSource(final Source source, final Connection connection) {
+        return source.equals(connection.getSources().getFirst());
+    }
+
+    private Source addDiversionHeader(final Source source, final String targetConnectionId) {
+        final Map<String, String> mapping = new HashMap<>(source.getHeaderMapping().getMapping());
+        mapping.put(DittoHeaderDefinition.DIVERT_RESPONSE_TO_CONNECTION.getKey(), targetConnectionId);
+
+        return ConnectivityModelFactory.newSourceBuilder(source)
+                .headerMapping(ConnectivityModelFactory.newHeaderMapping(mapping))
+                .build();
     }
 
     // Helper methods

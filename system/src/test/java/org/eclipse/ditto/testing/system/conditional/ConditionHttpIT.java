@@ -18,6 +18,7 @@ import java.net.URI;
 import java.util.Optional;
 
 import org.apache.http.HttpStatus;
+import org.eclipse.ditto.base.model.headers.DittoHeaderDefinition;
 import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonValue;
@@ -26,6 +27,7 @@ import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.testing.common.CommonTestConfig;
 import org.eclipse.ditto.testing.common.HttpHeader;
+import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.TestSolutionResource;
 import org.eclipse.ditto.testing.common.ThingJsonProducer;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
@@ -683,6 +685,117 @@ public final class ConditionHttpIT {
 
                 .then()
                 .statusCode(HttpStatus.SC_OK);
+    }
+
+    @Test
+    public void patchThingWithMultipleConditionsSomePassSomeFail() {
+        final JsonObject patchConditions = JsonObject.newBuilder()
+                .set("attributes/manufacturer", "eq(attributes/manufacturer,\"ACME\")")  // Should pass
+                .set("attributes/make", "eq(attributes/make,\"Wrong Make\")")           // Should fail
+                .set("features/EnvironmentScanner/properties/temperature", "gt(features/EnvironmentScanner/properties/temperature,20.0)")  // Should pass
+                .set("features/EnvironmentScanner/properties/humidity", "lt(features/EnvironmentScanner/properties/humidity,50.0)")        // Should fail
+                .build();
+
+        final JsonObject mergePatch = JsonObject.newBuilder()
+                .set("attributes", JsonObject.newBuilder()
+                        .set("manufacturer", "Updated ACME")
+                        .set("make", "Updated Make")
+                        .build())
+                .set("features", JsonObject.newBuilder()
+                        .set("EnvironmentScanner", JsonObject.newBuilder()
+                                .set("properties", JsonObject.newBuilder()
+                                        .set("temperature", 25.5)
+                                        .set("humidity", 60.0)
+                                        .build())
+                                .build())
+                        .build())
+                .build();
+
+        RestAssured.given(getBasicThingsRequestSpec(testNameCorrelationId.getCorrelationId()))
+                .header(DittoHeaderDefinition.PATCH_CONDITIONS.getKey(), patchConditions.toString())
+                .contentType(TestConstants.CONTENT_TYPE_APPLICATION_MERGE_PATCH_JSON)
+                .body(mergePatch.toString())
+
+                .when()
+                .patch("/{thingId}", thingId.toString())
+
+                .then()
+                .statusCode(HttpStatus.SC_NO_CONTENT);
+
+        final var updatedThing = thingsHttpClient.getThing(thingId, testNameCorrelationId.getCorrelationId()).orElseThrow();
+        assertThat(updatedThing.getAttributes().orElseThrow().getValue("manufacturer")).contains(JsonValue.of("Updated ACME"));
+        assertThat(updatedThing.getAttributes().orElseThrow().getValue("make")).contains(JsonValue.of("Fancy Fab Car")); // Original value
+        assertThat(updatedThing.getFeatures().flatMap(f -> f.getFeature(FEATURE_ID)).orElseThrow().getProperties().orElseThrow().getValue("temperature")).contains(JsonValue.of(25.5));
+        assertThat(updatedThing.getFeatures().flatMap(f -> f.getFeature(FEATURE_ID)).orElseThrow().getProperties().orElseThrow().getValue("humidity")).contains(JsonValue.of(73)); // Original value
+    }
+
+    @Test
+    public void patchThingWithComplexRqlConditions() {
+        final JsonObject patchConditions = JsonObject.newBuilder()
+                .set("attributes/manufacturer", "and(eq(attributes/manufacturer,\"ACME\"),exists(attributes/make))")  // Should pass
+                .set("features/EnvironmentScanner/properties/temperature", "or(gt(features/EnvironmentScanner/properties/temperature,25.0),lt(features/EnvironmentScanner/properties/humidity,80.0))")  // Should pass (humidity < 80)
+                .set("features/Vehicle/properties/status/running", "not(eq(features/Vehicle/properties/status/running,false))")  // Should pass (running is true)
+                .build();
+
+        final JsonObject mergePatch = JsonObject.newBuilder()
+                .set("attributes", JsonObject.newBuilder()
+                        .set("manufacturer", "Complex ACME")
+                        .build())
+                .set("features", JsonObject.newBuilder()
+                        .set("EnvironmentScanner", JsonObject.newBuilder()
+                                .set("properties", JsonObject.newBuilder()
+                                        .set("temperature", 30.0)
+                                        .build())
+                                .build())
+                        .set("Vehicle", JsonObject.newBuilder()
+                                .set("properties", JsonObject.newBuilder()
+                                        .set("status", JsonObject.newBuilder()
+                                                .set("running", false)
+                                                .build())
+                                        .build())
+                                .build())
+                        .build())
+                .build();
+
+        RestAssured.given(getBasicThingsRequestSpec(testNameCorrelationId.getCorrelationId()))
+                .header(DittoHeaderDefinition.PATCH_CONDITIONS.getKey(), patchConditions.toString())
+                .contentType(TestConstants.CONTENT_TYPE_APPLICATION_MERGE_PATCH_JSON)
+                .body(mergePatch.toString())
+
+                .when()
+                .patch("/{thingId}", thingId.toString())
+
+                .then()
+                .statusCode(HttpStatus.SC_NO_CONTENT);
+
+        final var updatedThing = thingsHttpClient.getThing(thingId, testNameCorrelationId.getCorrelationId()).orElseThrow();
+        assertThat(updatedThing.getAttributes().orElseThrow().getValue("manufacturer")).contains(JsonValue.of("Complex ACME"));
+        assertThat(updatedThing.getFeatures().flatMap(f -> f.getFeature(FEATURE_ID)).orElseThrow().getProperties().orElseThrow().getValue("temperature")).contains(JsonValue.of(30.0));
+        assertThat(updatedThing.getFeatures().flatMap(f -> f.getFeature("Vehicle")).orElseThrow().getProperties().orElseThrow().getValue("status/running")).contains(JsonValue.of(false));
+    }
+
+    @Test
+    public void patchThingWithInvalidRqlCondition() {
+        final JsonObject patchConditions = JsonObject.newBuilder()
+                .set("attributes/manufacturer", "invalid-rql-syntax")
+                .build();
+
+        final JsonObject mergePatch = JsonObject.newBuilder()
+                .set("attributes", JsonObject.newBuilder()
+                        .set("manufacturer", "Should Not Update")
+                        .build())
+                .build();
+
+        RestAssured.given(getBasicThingsRequestSpec(testNameCorrelationId.getCorrelationId()))
+                .header(DittoHeaderDefinition.PATCH_CONDITIONS.getKey(), patchConditions.toString())
+                .contentType(TestConstants.CONTENT_TYPE_APPLICATION_MERGE_PATCH_JSON)
+                .body(mergePatch.toString())
+
+                .when()
+                .patch("/{thingId}", thingId.toString())
+
+                .then()
+                .statusCode(HttpStatus.SC_BAD_REQUEST);
     }
 
     private static RequestSpecification getBasicThingsRequestSpec(final CorrelationId correlationId) {

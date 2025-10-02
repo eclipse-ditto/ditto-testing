@@ -263,6 +263,7 @@ services:
       - OAUTH_PROTOCOL=http
       - CONFIG_FORCE_ditto_gateway_authentication_oauth_openid__connect__issuers_ditto_issuer=oauth:9900/ditto
       - CONFIG_FORCE_ditto_gateway_authentication_oauth_openid__connect__issuers_dummy_issuer=oauth:9900/dummy
+      - CONFIG_FORCE_ditto_gateway_authentication_oauth_protocol=http
       - GATEWAY_WEBSOCKET_THROTTLING_ENABLED=true
       - GATEWAY_WEBSOCKET_THROTTLING_INTERVAL=1s
       - GATEWAY_WEBSOCKET_THROTTLING_LIMIT=100

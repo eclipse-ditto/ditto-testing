@@ -712,7 +712,7 @@ public final class ConditionHttpIT {
                 .build();
 
         RestAssured.given(getBasicThingsRequestSpec(testNameCorrelationId.getCorrelationId()))
-                .header(DittoHeaderDefinition.PATCH_CONDITIONS.getKey(), patchConditions.toString())
+                .header(DittoHeaderDefinition.MERGE_THING_PATCH_CONDITIONS.getKey(), patchConditions.toString())
                 .contentType(TestConstants.CONTENT_TYPE_APPLICATION_MERGE_PATCH_JSON)
                 .body(mergePatch.toString())
 
@@ -758,7 +758,7 @@ public final class ConditionHttpIT {
                 .build();
 
         RestAssured.given(getBasicThingsRequestSpec(testNameCorrelationId.getCorrelationId()))
-                .header(DittoHeaderDefinition.PATCH_CONDITIONS.getKey(), patchConditions.toString())
+                .header(DittoHeaderDefinition.MERGE_THING_PATCH_CONDITIONS.getKey(), patchConditions.toString())
                 .contentType(TestConstants.CONTENT_TYPE_APPLICATION_MERGE_PATCH_JSON)
                 .body(mergePatch.toString())
 
@@ -787,7 +787,7 @@ public final class ConditionHttpIT {
                 .build();
 
         RestAssured.given(getBasicThingsRequestSpec(testNameCorrelationId.getCorrelationId()))
-                .header(DittoHeaderDefinition.PATCH_CONDITIONS.getKey(), patchConditions.toString())
+                .header(DittoHeaderDefinition.MERGE_THING_PATCH_CONDITIONS.getKey(), patchConditions.toString())
                 .contentType(TestConstants.CONTENT_TYPE_APPLICATION_MERGE_PATCH_JSON)
                 .body(mergePatch.toString())
 

@@ -609,7 +609,7 @@ public final class ConditionAmqpIT {
         final DittoHeaders dittoHeaders = DittoHeaders.newBuilder()
                 .correlationId(testNameCorrelationId.getCorrelationId())
                 .responseRequired(true)
-                .putHeader(DittoHeaderDefinition.PATCH_CONDITIONS.getKey(), patchConditions.toString())
+                .putHeader(DittoHeaderDefinition.MERGE_THING_PATCH_CONDITIONS.getKey(), patchConditions.toString())
                 .build();
 
         final MergeThing mergeThing = MergeThing.of(thingId, JsonPointer.empty(), mergePatch, dittoHeaders);
@@ -648,7 +648,7 @@ public final class ConditionAmqpIT {
         final DittoHeaders dittoHeaders = DittoHeaders.newBuilder()
                 .correlationId(testNameCorrelationId.getCorrelationId())
                 .responseRequired(true)
-                .putHeader(DittoHeaderDefinition.PATCH_CONDITIONS.getKey(), patchConditions.toString())
+                .putHeader(DittoHeaderDefinition.MERGE_THING_PATCH_CONDITIONS.getKey(), patchConditions.toString())
                 .build();
 
         final MergeThing mergeThing = MergeThing.of(thingId, JsonPointer.empty(), mergePatch, dittoHeaders);

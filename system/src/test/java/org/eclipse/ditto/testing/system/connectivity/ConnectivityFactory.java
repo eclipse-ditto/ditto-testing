@@ -37,6 +37,7 @@ import javax.annotation.Nullable;
 
 import org.awaitility.Awaitility;
 import org.eclipse.ditto.base.model.common.HttpStatus;
+import org.eclipse.ditto.base.model.common.HttpStatusCodeOutOfRangeException;
 import org.eclipse.ditto.base.model.common.ResponseType;
 import org.eclipse.ditto.base.model.headers.DittoHeaders;
 import org.eclipse.ditto.connectivity.model.Connection;
@@ -760,6 +761,54 @@ public final class ConnectivityFactory {
                         }
                     }
                     LOGGER.error("Couldn't setup connection after 3 attempts", error);
+                    return null;
+                });
+    }
+
+    public CompletableFuture<Response> asyncModifyConnection(final JsonObject connectionJson) {
+        final String connectionName = getConnectionName(connectionJson);
+        final ConnectivityStatus desiredStatus = getDesiredConnectionStatus(connectionJson);
+        final String connectionId = JsonFactory.readFrom(connectionJson.toString())
+                .asObject()
+                .getValue(Connection.JsonFields.ID)
+                .orElseThrow();
+        return CompletableFuture.supplyAsync(() ->
+                {
+                    try {
+                        return ConnectionsClient.getInstance()
+                                .putConnection(connectionJson.getValue(Connection.JsonFields.ID).orElse(connectionName),
+                                        connectionJson)
+                                .withDevopsAuth()
+                                .withHeader(HttpHeader.TIMEOUT, 60)
+                                .expectingHttpStatus(HttpStatus.getInstance(204))
+                                .fire();
+                    } catch (HttpStatusCodeOutOfRangeException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .thenApply(response -> {
+                    if (LOGGER.isDebugEnabled()) {
+                        LOGGER.debug("modify connection <{}> resulted in response: {} headers: {}", connectionName,
+                                response.statusCode(), response.headers());
+                        response.prettyPrint();
+                    } else {
+                        LOGGER.info("modify connection <{}> resulted in: {}", connectionName, response.statusLine());
+                    }
+                    return response;
+                })
+                .thenCompose(response -> awaitLiveStatusOrTimeout(solutionSupplier.getSolution(), connectionId, desiredStatus)
+                        .thenApply(v -> response))
+                .exceptionally(error -> {
+                    LOGGER.error("modify connection <{}> failed", connectionName, error);
+                    if (CONNECTION_RETRY_COUNTER.incrementAndGet() <= 3) {
+                        try {
+                            TimeUnit.SECONDS.sleep(5L);
+                            asyncModifyConnection(connectionJson);
+                        } catch (InterruptedException e) {
+                            LOGGER.error("Error during sleep", e);
+                        }
+                    }
+                    LOGGER.error("Couldn't modify connection after 3 attempts", error);
                     return null;
                 });
     }

@@ -37,7 +37,7 @@ import org.eclipse.ditto.connectivity.model.Enforcement;
 import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityITBase;
-import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityITestCases;
+import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityResponseDiversionITestCases;
 import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityWorker;
 import org.eclipse.ditto.testing.system.connectivity.Connections;
 import org.eclipse.ditto.testing.system.connectivity.ConnectivityFactory;
@@ -58,7 +58,7 @@ import org.slf4j.LoggerFactory;
  * Failsafe won't run this directly because it does not end in *IT.java.
  */
 public final class KafkaConnectivitySuite extends
-        AbstractConnectivityITestCases<BlockingQueue<ConsumerRecord<String, byte[]>>, ConsumerRecord<String, byte[]>> {
+        AbstractConnectivityResponseDiversionITestCases<BlockingQueue<ConsumerRecord<String, byte[]>>, ConsumerRecord<String, byte[]>> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaConnectivitySuite.class);
 

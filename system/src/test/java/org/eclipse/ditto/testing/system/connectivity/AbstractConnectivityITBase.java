@@ -163,6 +163,22 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
                 .collect(Collectors.toList());
     }
 
+    protected static List<Connection> getAllConnectionsById(final String connectionIdPrefixToMatch) {
+        final Response response = connectionsClient().getConnections()
+                .withDevopsAuth()
+                .fire();
+
+        return JsonFactory.newArray(response.body().asString()).stream()
+                .filter(JsonValue::isObject)
+                .map(JsonValue::asObject)
+                .filter(connectionJson -> connectionJson.getValue(Connection.JsonFields.ID)
+                        .filter(id -> id.startsWith(connectionIdPrefixToMatch))
+                        .isPresent()
+                )
+                .map(ConnectivityModelFactory::connectionFromJson)
+                .collect(Collectors.toList());
+    }
+
     protected static List<Connection> getAllConnections(final String connectionNamePrefixToMatch) {
         final Response response = connectionsClient().getConnections()
                 .withDevopsAuth()
@@ -179,9 +195,27 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Getting an existing connection by its name for a specific user.
+     * Prefer this over {@link #getConnectionExistingByName(String)} as getting a connection just by name
+     * in a testing context can lead to unexpected results, as the connection name is not unique,
+     * and stale connections might be left over from previous tests especially when running locally and debugging.
+     * @param connectionName
+     * @param username
+     * @return the connection with the given name for the given user
+     */
+    protected static Connection getConnectionExistingByNameForUser(final String connectionName, final String username) {
+        final List<Connection> allConnections = getAllConnectionsById(username);
+        return getConnectionByNameFrom(connectionName, allConnections);
+    }
+
     protected static Connection getConnectionExistingByName(final String connectionName) {
         final List<Connection> allConnections = getAllConnections(connectionName);
+        return getConnectionByNameFrom(connectionName, allConnections);
+    }
 
+    private static Connection getConnectionByNameFrom(final String connectionName,
+            final List<Connection> allConnections) {
         return allConnections.stream()
                 .filter(conn -> connectionName.equals(conn.getName().orElse(null)))
                 .findAny()

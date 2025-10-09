@@ -163,7 +163,7 @@ public final class Mqtt3ConnectivityWorker
         final JsonObject objectWithHeaders = packHeaders(JsonFactory.newObject(stringMessage), extraHeaders);
         final ByteString bytePayload = ByteString.fromString(objectWithHeaders.toString());
         rethrow(() -> {
-            logger.info("mqttClient: publishing on topic <{}>: {}", mqttTopic, bytePayload);
+            logger.info("[{}] mqttClient: publishing on topic <{}>: {}", correlationId, mqttTopic, bytePayload);
             mqttClientSupplier.get()
                     .publishWith()
                     .topic(mqttTopic)

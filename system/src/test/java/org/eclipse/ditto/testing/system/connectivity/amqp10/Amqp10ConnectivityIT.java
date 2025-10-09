@@ -44,7 +44,7 @@ import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.testing.common.conditions.DockerEnvironment;
 import org.eclipse.ditto.testing.common.conditions.RunIf;
-import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityITestCases;
+import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityResponseDiversionITestCases;
 import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityWorker;
 import org.eclipse.ditto.testing.system.connectivity.ConnectionCategory;
 import org.eclipse.ditto.testing.system.connectivity.Connections;
@@ -64,7 +64,8 @@ import org.slf4j.LoggerFactory;
  */
 @RunIf(DockerEnvironment.class)
 @NotThreadSafe
-public class Amqp10ConnectivityIT extends AbstractConnectivityITestCases<BlockingQueue<Message>, Message> {
+public class Amqp10ConnectivityIT extends
+        AbstractConnectivityResponseDiversionITestCases<BlockingQueue<Message>, Message> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Amqp10ConnectivityIT.class);
     private static final long WAIT_TIMEOUT_MS = 10_000L;

@@ -36,8 +36,8 @@
         <amqp-client.version>3.5.4</amqp-client.version>
         <kafka-client.version>3.9.0</kafka-client.version>
         <typesafe-config.version>1.4.3</typesafe-config.version>
-        <slf4j.version>2.0.16</slf4j.version>
-        <logback.version>1.5.16</logback.version>
+        <slf4j.version>2.0.17</slf4j.version>
+        <logback.version>1.5.19</logback.version>
         <restassured.version>4.3.3</restassured.version>
 
         <junit.version>4.13.2</junit.version>

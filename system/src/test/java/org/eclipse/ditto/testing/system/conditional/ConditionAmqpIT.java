@@ -28,6 +28,7 @@ import org.eclipse.ditto.base.model.auth.AuthorizationSubject;
 import org.eclipse.ditto.base.model.auth.DittoAuthorizationContextType;
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.base.model.common.ResponseType;
+import org.eclipse.ditto.base.model.headers.DittoHeaderDefinition;
 import org.eclipse.ditto.base.model.headers.DittoHeaders;
 import org.eclipse.ditto.base.model.headers.entitytag.EntityTagMatchers;
 import org.eclipse.ditto.base.model.headers.metadata.MetadataHeaderKey;
@@ -39,6 +40,7 @@ import org.eclipse.ditto.connectivity.model.ConnectivityModelFactory;
 import org.eclipse.ditto.connectivity.model.ConnectivityStatus;
 import org.eclipse.ditto.connectivity.model.ReplyTarget;
 import org.eclipse.ditto.json.JsonFactory;
+import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.messages.model.Message;
@@ -66,6 +68,7 @@ import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.ThingsModelFactory;
 import org.eclipse.ditto.things.model.signals.commands.modify.DeleteFeatureProperty;
+import org.eclipse.ditto.things.model.signals.commands.modify.MergeThing;
 import org.eclipse.ditto.things.model.signals.commands.modify.ModifyAttribute;
 import org.eclipse.ditto.things.model.signals.commands.modify.ModifyFeature;
 import org.eclipse.ditto.things.model.signals.commands.modify.ModifyThing;
@@ -577,6 +580,86 @@ public final class ConditionAmqpIT {
         final var response = dittoProtocolClient.send(retrieveFeature).join();
 
         assertThat(response.getHttpStatus()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    public void mergeThingWithMultipleConditionsSomePassSomeFail() {
+        final JsonObject patchConditions = JsonObject.newBuilder()
+                .set("attributes/manufacturer", "eq(attributes/manufacturer,\"ACME\")")  // Should pass
+                .set("attributes/make", "eq(attributes/make,\"Wrong Make\")")           // Should fail
+                .set("features/EnvironmentScanner/properties/temperature", "gt(features/EnvironmentScanner/properties/temperature,20.0)")  // Should pass
+                .set("features/EnvironmentScanner/properties/humidity", "lt(features/EnvironmentScanner/properties/humidity,50.0)")        // Should fail
+                .build();
+
+        final JsonObject mergePatch = JsonObject.newBuilder()
+                .set("attributes", JsonObject.newBuilder()
+                        .set("manufacturer", "Updated ACME")
+                        .set("make", "Updated Make")
+                        .build())
+                .set("features", JsonObject.newBuilder()
+                        .set("EnvironmentScanner", JsonObject.newBuilder()
+                                .set("properties", JsonObject.newBuilder()
+                                        .set("temperature", 25.5)
+                                        .set("humidity", 60.0)
+                                        .build())
+                                .build())
+                        .build())
+                .build();
+
+        final DittoHeaders dittoHeaders = DittoHeaders.newBuilder()
+                .correlationId(testNameCorrelationId.getCorrelationId())
+                .responseRequired(true)
+                .putHeader(DittoHeaderDefinition.MERGE_THING_PATCH_CONDITIONS.getKey(), patchConditions.toString())
+                .build();
+
+        final MergeThing mergeThing = MergeThing.of(thingId, JsonPointer.empty(), mergePatch, dittoHeaders);
+
+        final var response = dittoProtocolClient.send(mergeThing).join();
+
+        assertThat(response.getHttpStatus()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        final var updatedThing = thingsHttpClient.getThing(thingId, testNameCorrelationId.getCorrelationId()).orElseThrow();
+        assertThat(updatedThing.getAttributes().orElseThrow().getValue("manufacturer")).contains(JsonValue.of("Updated ACME"));
+        assertThat(updatedThing.getAttributes().orElseThrow().getValue("make")).contains(JsonValue.of("Fancy Fab Car")); // Original value
+        assertThat(updatedThing.getFeatures().flatMap(f -> f.getFeature("EnvironmentScanner")).orElseThrow().getProperties().orElseThrow().getValue("temperature")).contains(JsonValue.of(25.5));
+        assertThat(updatedThing.getFeatures().flatMap(f -> f.getFeature("EnvironmentScanner")).orElseThrow().getProperties().orElseThrow().getValue("humidity")).contains(JsonValue.of(73)); // Original value
+    }
+
+    @Test
+    public void mergeThingWithNestedConditions() {
+        final JsonObject patchConditions = JsonObject.newBuilder()
+                .set("features/Vehicle/properties/status/speed", "gt(features/Vehicle/properties/status/speed,80.0)")  // Should pass (90 > 80)
+                .set("features/Vehicle/properties/status/gear", "lt(features/Vehicle/properties/status/gear,3)")       // Should fail (5 >= 3)
+                .build();
+
+        final JsonObject mergePatch = JsonObject.newBuilder()
+                .set("features", JsonObject.newBuilder()
+                        .set("Vehicle", JsonObject.newBuilder()
+                                .set("properties", JsonObject.newBuilder()
+                                        .set("status", JsonObject.newBuilder()
+                                                .set("speed", 100)
+                                                .set("gear", 6)
+                                                .build())
+                                        .build())
+                                .build())
+                        .build())
+                .build();
+
+        final DittoHeaders dittoHeaders = DittoHeaders.newBuilder()
+                .correlationId(testNameCorrelationId.getCorrelationId())
+                .responseRequired(true)
+                .putHeader(DittoHeaderDefinition.MERGE_THING_PATCH_CONDITIONS.getKey(), patchConditions.toString())
+                .build();
+
+        final MergeThing mergeThing = MergeThing.of(thingId, JsonPointer.empty(), mergePatch, dittoHeaders);
+
+        final var response = dittoProtocolClient.send(mergeThing).join();
+
+        assertThat(response.getHttpStatus()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        final var updatedThing = thingsHttpClient.getThing(thingId, testNameCorrelationId.getCorrelationId()).orElseThrow();
+        assertThat(updatedThing.getFeatures().flatMap(f -> f.getFeature("Vehicle")).orElseThrow().getProperties().orElseThrow().getValue("status/speed")).contains(JsonValue.of(100));
+        assertThat(updatedThing.getFeatures().flatMap(f -> f.getFeature("Vehicle")).orElseThrow().getProperties().orElseThrow().getValue("status/gear")).contains(JsonValue.of(5)); // Original value
     }
 
     private CommandResponse<?> sendModifyFeatureWithCondition(final String condition) {

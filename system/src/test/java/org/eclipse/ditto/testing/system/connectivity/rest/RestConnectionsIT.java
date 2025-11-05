@@ -75,7 +75,7 @@ public final class RestConnectionsIT extends IntegrationTest {
     private static final int TIMEOUT = 30;
     private static final ConnectivityTestConfig CONFIG = ConnectivityTestConfig.getInstance();
 
-    private static final String CONNECTION_NAME = RestConnectionsIT.class.getSimpleName() + "-" + UUID.randomUUID();
+    private static final String CONNECTION_NAME_PREFIX = RestConnectionsIT.class.getSimpleName();
     private static final SshTunnel DISABLED_SSH_TUNNEL = ConnectivityModelFactory.newSshTunnel(false,
             UserPasswordCredentials.newInstance("dummy", "dummy"), "ssh://localhost:22");
 
@@ -123,12 +123,12 @@ public final class RestConnectionsIT extends IntegrationTest {
         LOGGER.info("Preparing Kafka at {}:{}", KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT);
         KafkaConnectivityWorker.setupKafka(KAFKA_TEST_CLIENTID, KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT,
                 KAFKA_TEST_USERNAME, KAFKA_TEST_PASSWORD,
-                Collections.singleton(defaultTargetAddress(CONNECTION_NAME)), LOGGER);
+                Collections.singleton(defaultTargetAddress(CONNECTION_NAME_PREFIX)), LOGGER);
     }
 
     @Before
     public void createDefaultConnection() throws InterruptedException, ExecutionException, TimeoutException {
-        final Response response = connectivityFactory.setupSingleConnection(CONNECTION_NAME)
+        final Response response = connectivityFactory.setupSingleConnection(CONNECTION_NAME_PREFIX + "-" + UUID.randomUUID())
                 .get(TIMEOUT, TimeUnit.SECONDS);
         final Connection connection = ConnectivityModelFactory.connectionFromJson(
                 JsonFactory.newObject(response.getBody().asString()));

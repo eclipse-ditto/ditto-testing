@@ -123,6 +123,9 @@ public final class ConnectivityTestWebsocketClient implements WebSocketListener 
      * Disconnects to client.
      */
     public void disconnect() {
+        if (webSocket != null && webSocket.isOpen()) {
+            webSocket.sendCloseFrame().awaitUninterruptibly(5L, TimeUnit.SECONDS);
+        }
         webSocket = null;
         try {
             LOGGER.debug("Closing WebSocket client of endpoint '{}'", endpoint);
@@ -131,6 +134,7 @@ public final class ConnectivityTestWebsocketClient implements WebSocketListener 
         } catch (final Exception e) {
             LOGGER.info("Exception occurred while trying to shutdown http client.", e);
         }
+
     }
 
     /**

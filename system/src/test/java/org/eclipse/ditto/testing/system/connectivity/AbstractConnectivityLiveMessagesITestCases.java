@@ -20,6 +20,9 @@ import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.C
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -75,9 +78,11 @@ import org.eclipse.ditto.things.model.signals.commands.query.RetrieveThing;
 import org.eclipse.ditto.things.model.signals.commands.query.RetrieveThingResponse;
 import org.hamcrest.Matchers;
 import org.junit.After;
-import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -140,20 +145,38 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
         );
     }
 
+    @Rule
+    public ConditionalSetupRule conditionalSetupRule = new ConditionalSetupRule();
     private ConnectivityTestWebsocketClient webSocketClient;
 
     protected AbstractConnectivityLiveMessagesITestCases(final ConnectivityFactory cf) {
         super(cf);
     }
 
-    @Before
-    public void setupWsClient() {
-        webSocketClient = initiateWebSocketClient(serviceEnv.getDefaultTestingContext().getOAuthClient());
+//    @Before
+//    public void setupWsClient() {
+//        webSocketClient = initiateWebSocketClient(serviceEnv.getDefaultTestingContext().getOAuthClient());
+//    }
+
+    public class ConditionalSetupRule extends TestWatcher {
+
+        @Override
+        protected void starting(Description description) {
+            if (description.getAnnotation(SkipWSClient.class) == null) {
+                setupWsClient();
+            }
+        }
+
+        private void setupWsClient() {
+            webSocketClient = initiateWebSocketClient(serviceEnv.getDefaultTestingContext().getOAuthClient());
+        }
     }
 
     @After
     public void cleanUpWsClient() {
+    if (webSocketClient != null) {
         webSocketClient.disconnect();
+    }
     }
 
     @Test
@@ -346,6 +369,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
         // WebSocket client consumes live commands:
         webSocketClient.connect("canReceiveResponseWithoutRequestingAcknowledgement-" + UUID.randomUUID());
         webSocketClient.startConsumingMessages(liveMessage -> {
+        if (thingId.equals(liveMessage.getEntityId())) {
             LOGGER.info("webSocketClient got liveMessage <{}>", liveMessage);
 
             assertThat(liveMessage).isInstanceOf(SendThingMessage.class);
@@ -369,6 +393,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
 
             LOGGER.info("webSocketClient sent liveResponse <{}>", liveResponse);
             websocketLatch.countDown();
+        }
         }).get(15, TimeUnit.SECONDS);
 
         // When
@@ -439,6 +464,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
                 initiateWebSocketClient(testingContextWithRandomNs.getOAuthClient());
         webSocketClient.connect("responseRequiredHeaderInResponseHasNoEffect-" + UUID.randomUUID());
         webSocketClient.startConsumingMessages(liveMessage -> {
+        if (thingId.equals(liveMessage.getEntityId())) {
             LOGGER.info("webSocketClient got liveMessage <{}>", liveMessage);
 
             assertThat(liveMessage).isInstanceOf(SendThingMessage.class);
@@ -466,6 +492,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
 
             LOGGER.info("webSocketClient sent liveResponse <{}>", liveResponse);
             websocketLatch.countDown();
+        }
         }).get(15, TimeUnit.SECONDS);
 
         // When
@@ -512,6 +539,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
     }
 
     @Test
+    @SkipWSClient
     @Category(RequireSource.class)
     @Connections({CONNECTION1, CONNECTION_WITH_RAW_MESSAGE_MAPPER_1, CONNECTION_WITH_RAW_MESSAGE_MAPPER_2})
     public void canSendRawPayloadViaConnectionWithEnabledRawMessageMapper() {
@@ -568,6 +596,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
     }
 
     @Test
+    @SkipWSClient
     @Category(RequireSource.class)
     @Connections({CONNECTION1, CONNECTION_WITH_RAW_MESSAGE_MAPPER_1, CONNECTION_WITH_RAW_MESSAGE_MAPPER_2})
     public void canSendRawBytePayloadViaConnectionWithEnabledRawMessageMapper() throws IOException {
@@ -617,6 +646,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
     }
 
     @Test
+    @SkipWSClient
     @Category(RequireSource.class)
     @Connections(ConnectionCategory.CONNECTION1)
     public void sendConnectivityMessageOverHttpWithContentTypeOctetStream() {
@@ -666,10 +696,10 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
     }
 
     @Test
+    @SkipWSClient
     @Category(RequireSource.class)
     @UseConnection(category = ConnectionCategory.CONNECTION1, mod = FILTER_MESSAGES_BY_RQL)
     public void filterConnectivityMessageViaEnrichedRqlFilter() {
-
         final String respondingConnectionName = cf.connectionName1;
         final C messageConsumer = initTargetsConsumer(respondingConnectionName);
 
@@ -816,4 +846,7 @@ public abstract class AbstractConnectivityLiveMessagesITestCases<C, M>
         return ConnectivityTestWebsocketClient.newInstance(dittoWsUrl(TestConstants.API_V_2), client.getAccessToken());
     }
 
+    @Retention(RetentionPolicy.RUNTIME)
+    @java.lang.annotation.Target({ElementType.METHOD})
+    private @interface SkipWSClient {}
 }

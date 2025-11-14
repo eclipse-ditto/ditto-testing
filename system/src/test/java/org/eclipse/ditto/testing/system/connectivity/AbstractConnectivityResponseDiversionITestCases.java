@@ -28,7 +28,6 @@ import java.util.concurrent.TimeoutException;
 
 import org.eclipse.ditto.base.model.auth.AuthorizationModelFactory;
 import org.eclipse.ditto.base.model.auth.DittoAuthorizationContextType;
-import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.base.model.headers.DittoHeaderDefinition;
 import org.eclipse.ditto.base.model.headers.DittoHeaders;
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
@@ -36,24 +35,13 @@ import org.eclipse.ditto.base.model.signals.Signal;
 import org.eclipse.ditto.connectivity.model.Connection;
 import org.eclipse.ditto.connectivity.model.ConnectionBuilder;
 import org.eclipse.ditto.connectivity.model.ConnectivityModelFactory;
-import org.eclipse.ditto.connectivity.model.HeaderMapping;
 import org.eclipse.ditto.connectivity.model.Source;
 import org.eclipse.ditto.connectivity.model.Target;
-import org.eclipse.ditto.json.JsonFactory;
-import org.eclipse.ditto.json.JsonObject;
-import org.eclipse.ditto.json.JsonObjectBuilder;
-import org.eclipse.ditto.policies.model.PoliciesModelFactory;
-import org.eclipse.ditto.policies.model.Policy;
-import org.eclipse.ditto.testing.common.PiggyBackCommander;
 import org.eclipse.ditto.testing.common.categories.RequireSource;
-import org.eclipse.ditto.testing.common.matcher.PostMatcher;
 import org.eclipse.ditto.testing.common.matcher.StatusCodeSuccessfulMatcher;
-import org.eclipse.ditto.testing.common.piggyback.PiggybackRequest;
 import org.eclipse.ditto.things.model.ThingBuilder;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.signals.commands.ThingErrorResponse;
-import org.eclipse.ditto.things.model.signals.commands.modify.CreateThing;
-import org.eclipse.ditto.things.model.signals.commands.modify.CreateThingResponse;
 import org.eclipse.ditto.things.model.signals.commands.query.RetrieveThing;
 import org.eclipse.ditto.things.model.signals.commands.query.RetrieveThingResponse;
 import org.junit.Test;
@@ -281,7 +269,7 @@ public abstract class AbstractConnectivityResponseDiversionITestCases<C, M>
         final C responseConsumer = initTargetsConsumer(divertedConnectionName, divertAddress);
         sendSignal(sendingConnectionName, retrieveThing);
 
-        // Then: No response should be diverted address
+        // Then: No response should be diverted
         final M divertedMessage = consumeFromTarget(correlationId, responseConsumer);
         assertThat(divertedMessage).isNull();
     }

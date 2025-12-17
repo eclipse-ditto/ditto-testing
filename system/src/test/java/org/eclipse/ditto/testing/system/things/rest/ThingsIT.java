@@ -22,15 +22,22 @@ import org.assertj.core.api.Assertions;
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.base.model.json.FieldType;
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
+import org.assertj.core.api.Assertions;
 import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonFieldDefinition;
 import org.eclipse.ditto.json.JsonObject;
+import org.eclipse.ditto.json.JsonPointer;
+import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.policies.api.Permission;
+import org.eclipse.ditto.policies.model.PoliciesModelFactory;
 import org.eclipse.ditto.policies.model.PoliciesResourceType;
 import org.eclipse.ditto.policies.model.Policy;
+import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.policies.model.Subject;
 import org.eclipse.ditto.policies.model.SubjectIssuer;
 import org.eclipse.ditto.policies.model.Subjects;
+import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
+import org.eclipse.ditto.things.model.FeatureProperties;
 import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.HttpParameter;
 import org.eclipse.ditto.testing.common.HttpResource;
@@ -770,6 +777,68 @@ public final class ThingsIT extends IntegrationTest {
                 .expectingHeader("correlation-id", correlationId)
                 .expectingHeader("etag", "\"rev:1\"")
                 .fire();
+
+        deleteThing(TestConstants.API_V_2, thingId)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+    }
+
+    @Test
+    @Category(Acceptance.class)
+    public void getThingWithPartialAccessReturnsOnlyAccessiblePaths() {
+        final ThingId thingId = ThingId.of(idGenerator().withRandomName());
+        final PolicyId policyId = PolicyId.of(thingId);
+        final String clientId1 = serviceEnv.getDefaultTestingContext().getOAuthClient().getClientId();
+        final String clientId2 = serviceEnv.getTestingContext2().getOAuthClient().getClientId();
+
+        final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
+                .forLabel("owner")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), Permission.WRITE, Permission.READ)
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), Permission.WRITE, Permission.READ)
+                .forLabel("partial")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setGrantedPermissions("thing", "/attributes/public", "READ")
+                .setGrantedPermissions("thing", "/attributes/shared", "READ")
+                .setGrantedPermissions("thing", "/features/temperature/properties/value", "READ")
+                .build();
+
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setPolicyId(policyId)
+                .setAttribute(JsonPointer.of("public"), JsonValue.of("public-value"))
+                .setAttribute(JsonPointer.of("private"), JsonValue.of("private-value"))
+                .setAttribute(JsonPointer.of("shared"), JsonValue.of("shared-value"))
+                .setFeature("temperature", FeatureProperties.newBuilder()
+                        .set("value", JsonValue.of(25.5))
+                        .set("unit", JsonValue.of("celsius"))
+                        .build())
+                .setFeature("humidity", FeatureProperties.newBuilder()
+                        .set("value", JsonValue.of(60.0))
+                        .build())
+                .build();
+
+        putPolicy(policyId, policy)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        final String responseBody = getThing(TestConstants.API_V_2, thingId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(HttpStatus.OK)
+                .fire()
+                .body()
+                .asString();
+        final JsonObject retrievedThing = JsonFactory.readFrom(responseBody).asObject();
+
+        Assertions.assertThat(retrievedThing.getValue(JsonPointer.of("/attributes/public"))).isPresent();
+        Assertions.assertThat(retrievedThing.getValue(JsonPointer.of("/attributes/shared"))).isPresent();
+        Assertions.assertThat(retrievedThing.getValue(JsonPointer.of("/attributes/private"))).isEmpty();
+        Assertions.assertThat(retrievedThing.getValue(JsonPointer.of("/features/temperature/properties/value"))).isPresent();
+        Assertions.assertThat(retrievedThing.getValue(JsonPointer.of("/features/humidity"))).isEmpty();
 
         deleteThing(TestConstants.API_V_2, thingId)
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)

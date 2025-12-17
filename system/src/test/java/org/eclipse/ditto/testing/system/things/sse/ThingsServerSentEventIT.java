@@ -29,6 +29,7 @@ import org.assertj.core.api.Assertions;
 import org.asynchttpclient.AsyncHttpClient;
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
+import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.messages.model.MessageDirection;
@@ -41,6 +42,12 @@ import org.eclipse.ditto.testing.common.client.http.AsyncHttpClientFactory;
 import org.eclipse.ditto.things.model.Attributes;
 import org.eclipse.ditto.things.model.Feature;
 import org.eclipse.ditto.things.model.FeatureProperties;
+import org.eclipse.ditto.policies.api.Permission;
+import org.eclipse.ditto.policies.model.PoliciesModelFactory;
+import org.eclipse.ditto.policies.model.PoliciesResourceType;
+import org.eclipse.ditto.policies.model.Policy;
+import org.eclipse.ditto.policies.model.PolicyId;
+import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.ThingsModelFactory;
@@ -659,6 +666,96 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
     private String getDefaultPath(@Nullable final String queryParams) {
         return (queryParams != null && !queryParams.isEmpty()) ? "/things?" + queryParams : "/things";
+    }
+
+    @Test
+    @Category(Acceptance.class)
+    public void partialAccessEventsAreFilteredViaSse() {
+        final ThingId thingId = ThingId.of(idGenerator(interestingNamespace).withRandomName());
+        final PolicyId policyId = PolicyId.of(thingId);
+        final String clientId1 = serviceEnv.getDefaultTestingContext().getOAuthClient().getClientId();
+        final String clientId2 = serviceEnv.getTestingContext2().getOAuthClient().getClientId();
+
+        final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
+                .forLabel("owner")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), Permission.WRITE, Permission.READ)
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), Permission.WRITE, Permission.READ)
+                .forLabel("partial")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setGrantedPermissions("thing", "/attributes/public", "READ")
+                .setGrantedPermissions("thing", "/attributes/shared", "READ")
+                .setGrantedPermissions("thing", "/features/temperature/properties/value", "READ")
+                .build();
+
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setPolicyId(policyId)
+                .setAttribute(JsonPointer.of("public"), JsonValue.of("public-value"))
+                .setAttribute(JsonPointer.of("private"), JsonValue.of("private-value"))
+                .setAttribute(JsonPointer.of("shared"), JsonValue.of("shared-value"))
+                .setFeature("temperature", FeatureProperties.newBuilder()
+                        .set("value", JsonValue.of(25.5))
+                        .set("unit", JsonValue.of("celsius"))
+                        .build())
+                .setFeature("humidity", FeatureProperties.newBuilder()
+                        .set("value", JsonValue.of(60.0))
+                        .build())
+                .build();
+
+        putPolicy(policyId, policy)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        final int expectedMessagesCount = 1;
+        final String path = "/things/" + thingId;
+        final SseTestDriver driver = createTestDriverForPartialAccess(expectedMessagesCount, path);
+        driver.connect();
+
+        putProperty(TestConstants.API_V_2, thingId, "temperature", "value", "26.0")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        putAttribute(TestConstants.API_V_2, thingId, "private", "\"updated-private\"")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        final List<SseTestHandler.Message> actualMessages = driver.getMessages();
+        assertThat(actualMessages).hasSize(expectedMessagesCount);
+
+        actualMessages.stream()
+                .map(SseTestHandler.Message::getData)
+                .map(JsonFactory::readFrom)
+                .map(org.eclipse.ditto.json.JsonValue::asObject)
+                .forEach(payload -> {
+                    assertThat(payload.getValue(JsonPointer.of("/features/temperature/properties/value"))).isPresent();
+                    assertThat(payload.getValue(JsonPointer.of("/attributes/private"))).isEmpty();
+                    assertThat(payload.getValue(JsonPointer.of("/features/humidity"))).isEmpty();
+                });
+
+        deleteThing(TestConstants.API_V_2, thingId)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+    }
+
+    private SseTestDriver createTestDriverForPartialAccess(final int expectedMessagesCount, final String path) {
+        final String url = dittoUrl(TestConstants.API_V_2, path);
+        LOGGER.info("Opening SSE on url '{}'", url);
+
+        final String authorization;
+        final BasicAuth basicAuth = serviceEnv.getTestingContext2().getBasicAuth();
+        if (basicAuth.isEnabled()) {
+            final String credentials = basicAuth.getUsername() + ":" + basicAuth.getPassword();
+            authorization = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
+        } else {
+            authorization = "Bearer " + serviceEnv.getTestingContext2().getOAuthClient().getAccessToken();
+        }
+
+        return new SseTestDriver(client, url, authorization, expectedMessagesCount);
     }
 
 }

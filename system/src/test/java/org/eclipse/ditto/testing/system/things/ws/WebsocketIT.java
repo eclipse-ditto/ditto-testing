@@ -38,6 +38,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -126,6 +127,7 @@ import org.eclipse.ditto.things.model.signals.events.AttributeModified;
 import org.eclipse.ditto.things.model.signals.events.FeatureDesiredPropertyModified;
 import org.eclipse.ditto.things.model.signals.events.FeaturePropertyModified;
 import org.eclipse.ditto.things.model.signals.events.ThingCreated;
+import org.eclipse.ditto.things.model.signals.events.ThingEvent;
 import org.eclipse.ditto.things.model.signals.events.ThingMerged;
 import org.junit.After;
 import org.junit.Before;
@@ -1395,5 +1397,149 @@ public final class WebsocketIT extends IntegrationTest {
         return COMMAND_HEADERS_V2.toBuilder()
                 .correlationId(UUID.randomUUID().toString())
                 .build();
+    }
+
+    @Test
+    @Category(Acceptance.class)
+    public void partialAccessEventsAreFilteredForRestrictedSubjects() throws Exception {
+        final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+        final PolicyId policyId = PolicyId.of(thingId);
+        final String clientId1 = user1OAuthClient.getClientId();
+        final String clientId2 = user2OAuthClient.getClientId();
+
+        final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
+                .forLabel("owner")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, ARBITRARY_SUBJECT_TYPE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
+                .forLabel("partial")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, ARBITRARY_SUBJECT_TYPE)
+                .setGrantedPermissions("thing", "/attributes/public", "READ")
+                .setGrantedPermissions("thing", "/attributes/shared", "READ")
+                .setGrantedPermissions("thing", "/features/temperature/properties/value", "READ")
+                .build();
+
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setPolicyId(policyId)
+                .setAttribute(JsonPointer.of("public"), JsonValue.of("public-value"))
+                .setAttribute(JsonPointer.of("private"), JsonValue.of("private-value"))
+                .setAttribute(JsonPointer.of("shared"), JsonValue.of("shared-value"))
+                .setFeature("temperature", FeatureProperties.newBuilder()
+                        .set("value", JsonValue.of(25.5))
+                        .set("unit", JsonValue.of("celsius"))
+                        .build())
+                .setFeature("humidity", FeatureProperties.newBuilder()
+                        .set("value", JsonValue.of(60.0))
+                        .build())
+                .build();
+
+        final CreateThing createThing = CreateThing.of(thing, policy.toJson(), COMMAND_HEADERS_V2);
+        clientUser1.send(createThing).toCompletableFuture().get();
+
+        final BlockingQueue<ThingEvent<?>> receivedEvents = new LinkedBlockingQueue<>();
+        final CountDownLatch eventLatch = new CountDownLatch(1);
+        clientUser2.startConsumingEvents(event -> {
+            if (event instanceof ThingEvent) {
+                final ThingEvent<?> thingEvent = (ThingEvent<?>) event;
+                if (thingEvent.getEntityId().equals(thingId)) {
+                    receivedEvents.add(thingEvent);
+                    eventLatch.countDown();
+                }
+            }
+        }, "eq(thingId,\"" + thingId + "\")").join();
+
+        Thread.sleep(1000);
+
+        final ModifyAttribute modifyPublicAttr = ModifyAttribute.of(thingId,
+                JsonPointer.of("public"), JsonValue.of("updated-public"), COMMAND_HEADERS_V2);
+        clientUser1.send(modifyPublicAttr).toCompletableFuture().get();
+
+        final ModifyAttribute modifyPrivateAttr = ModifyAttribute.of(thingId,
+                JsonPointer.of("private"), JsonValue.of("updated-private"), COMMAND_HEADERS_V2);
+        clientUser1.send(modifyPrivateAttr).toCompletableFuture().get();
+
+        assertThat(eventLatch.await(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+        
+        assertThat(receivedEvents).hasSize(1);
+
+        final ThingEvent<?> firstEvent = receivedEvents.poll(5, TimeUnit.SECONDS);
+        assertThat(firstEvent).isNotNull();
+        assertThat(firstEvent).isInstanceOf(AttributeModified.class);
+        final AttributeModified attributeModified = (AttributeModified) firstEvent;
+        assertThat(attributeModified.getAttributePointer().toString()).isEqualTo("/public");
+        assertThat(attributeModified.getAttributeValue()).isEqualTo(JsonValue.of("updated-public"));
+
+        try {
+            clientUser1.send(DeleteThing.of(thingId, COMMAND_HEADERS_V2)).toCompletableFuture().get();
+            clientUser1.send(DeletePolicy.of(policyId, COMMAND_HEADERS_V2));
+        } catch (final ExecutionException ex) {
+            LOGGER.warn("Error during test cleanup: {}", ex.getMessage());
+        }
+    }
+
+    @Test
+    public void partialAccessHeaderPresentInEventsForPartialSubjects() throws Exception {
+        // GIVEN: A thing with partial access policy
+        final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+        final PolicyId policyId = PolicyId.of(thingId);
+        final String clientId1 = user1OAuthClient.getClientId();
+        final String clientId2 = user2OAuthClient.getClientId();
+
+        final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
+                .forLabel("owner")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, ARBITRARY_SUBJECT_TYPE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
+                .forLabel("partial")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, ARBITRARY_SUBJECT_TYPE)
+                .setGrantedPermissions("thing", "/attributes/public", "READ")
+                .build();
+
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setPolicyId(policyId)
+                .setAttribute(JsonPointer.of("public"), JsonValue.of("value"))
+                .build();
+
+        final CreateThing createThing = CreateThing.of(thing, policy.toJson(), COMMAND_HEADERS_V2);
+        clientUser1.send(createThing).toCompletableFuture().get();
+
+        final CountDownLatch eventLatch = new CountDownLatch(1);
+        final AtomicReference<ThingEvent<?>> receivedEventRef = new AtomicReference<>();
+        final AtomicReference<String> partialAccessHeaderRef = new AtomicReference<>();
+        clientUser2.startConsumingEvents(event -> {
+            if (event instanceof ThingEvent) {
+                final ThingEvent<?> thingEvent = (ThingEvent<?>) event;
+                if (thingEvent.getEntityId().equals(thingId)) {
+                    receivedEventRef.set(thingEvent);
+                    partialAccessHeaderRef.set(thingEvent.getDittoHeaders()
+                            .get(DittoHeaderDefinition.PARTIAL_ACCESS_PATHS.getKey()));
+                    eventLatch.countDown();
+                }
+            }
+        }, "eq(thingId,\"" + thingId + "\")").join();
+
+        Thread.sleep(1000);
+
+        final ModifyAttribute modifyAttr = ModifyAttribute.of(thingId,
+                JsonPointer.of("public"), JsonValue.of("updated"), COMMAND_HEADERS_V2);
+        clientUser1.send(modifyAttr).toCompletableFuture().get();
+
+        assertThat(eventLatch.await(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+        final ThingEvent<?> receivedEvent = receivedEventRef.get();
+        assertThat(receivedEvent).isNotNull();
+        assertThat(receivedEvent).isInstanceOf(AttributeModified.class);
+        final AttributeModified attributeModified = (AttributeModified) receivedEvent;
+        assertThat(attributeModified.getAttributePointer().toString()).isEqualTo("/public");
+        assertThat(attributeModified.getAttributeValue()).isEqualTo(JsonValue.of("updated"));
+        assertThat(partialAccessHeaderRef.get()).isNull();
+
+        try {
+            clientUser1.send(DeleteThing.of(thingId, COMMAND_HEADERS_V2)).toCompletableFuture().get();
+            clientUser1.send(DeletePolicy.of(policyId, COMMAND_HEADERS_V2));
+        } catch (final ExecutionException ex) {
+            LOGGER.warn("Error during test cleanup: {}", ex.getMessage());
+        }
     }
 }

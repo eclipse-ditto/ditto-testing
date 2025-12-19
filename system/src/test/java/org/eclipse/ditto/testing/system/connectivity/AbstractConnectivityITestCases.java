@@ -2415,7 +2415,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
     @Test
     @Connections({ConnectionCategory.CONNECTION1})
-    public void eventsAreNotDeliveredForSubjectsWithRevokeInHierarchy() {
+    public void eventsAreDeliveredWithFilteredContentForSubjectsWithRevokeInHierarchy() {
         final var connection = cf.connectionName1;
 
         // Given
@@ -2459,8 +2459,29 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
+        // Then: Event should be delivered with filtered content (revoked feature removed)
         final var message = consumeFromTarget(connection, consumer);
-        assertThat(message).isNull();
+        assertThat(message).isNotNull();
+        
+        final JsonifiableAdaptable jsonifiableAdaptable = jsonifiableAdaptableFrom(message);
+        final Adaptable responseAdaptable =
+                ProtocolFactory.newAdaptableBuilder(jsonifiableAdaptable).build();
+        final Signal<?> signal = PROTOCOL_ADAPTER.fromAdaptable(responseAdaptable);
+        
+        assertThat(signal).isInstanceOf(ThingCreated.class);
+        final ThingCreated thingCreated = (ThingCreated) signal;
+        assertThat((Object) thingCreated.getEntityId()).isEqualTo(thingId);
+        assertThat(thingCreated.getThing().getPolicyId()).contains(policyId);
+        
+        // Verify revoked feature is not present in the event
+        final JsonObject thingJson = thingCreated.getThing().toJson();
+        final Optional<JsonValue> featuresOpt = thingJson.getValue("features");
+        if (featuresOpt.isPresent() && featuresOpt.get().isObject()) {
+            final JsonObject features = featuresOpt.get().asObject();
+            assertThat(features.contains(featureId))
+                    .describedAs("Revoked feature '%s' should not be present in the filtered event", featureId)
+                    .isFalse();
+        }
     }
 
     @Test

@@ -30,12 +30,14 @@ import org.asynchttpclient.AsyncHttpClient;
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
 import org.eclipse.ditto.json.JsonFactory;
+import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.messages.model.MessageDirection;
 import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.TestConstants;
+import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
 import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.client.http.AsyncHttpClientFactory;
@@ -730,7 +732,7 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
         actualMessages.stream()
                 .map(SseTestHandler.Message::getData)
                 .map(JsonFactory::readFrom)
-                .map(org.eclipse.ditto.json.JsonValue::asObject)
+                .map(JsonValue::asObject)
                 .forEach(payload -> {
                     assertThat(payload.getValue(JsonPointer.of("/features/temperature/properties/value"))).isPresent();
                     assertThat(payload.getValue(JsonPointer.of("/attributes/private"))).isEmpty();
@@ -756,6 +758,548 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
         }
 
         return new SseTestDriver(client, url, authorization, expectedMessagesCount);
+    }
+
+    private SseTestDriver createTestDriverForUser(final int expectedMessagesCount, final String path, 
+            final TestingContext testingContext) {
+        final String url = dittoUrl(TestConstants.API_V_2, path);
+
+        final String authorization;
+        final BasicAuth basicAuth = testingContext.getBasicAuth();
+        if (basicAuth.isEnabled()) {
+            final String credentials = basicAuth.getUsername() + ":" + basicAuth.getPassword();
+            authorization = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
+        } else {
+            authorization = "Bearer " + testingContext.getOAuthClient().getAccessToken();
+        }
+
+        return new SseTestDriver(client, url, authorization, expectedMessagesCount);
+    }
+
+    @Test
+    @Category(Acceptance.class)
+    public void partialAccessEventsFilteredForRevokedPathsStrictMatchingViaSse() {
+        final String ATTR_TYPE = "type";
+        final String ATTR_HIDDEN = "hidden";
+        final String ATTR_COMPLEX = "complex";
+        final String ATTR_COMPLEX_SOME = "complex/some";
+        final String ATTR_COMPLEX_SECRET = "complex/secret";
+        final String COMPLEX_FIELD_SOME = "some";
+        final String COMPLEX_FIELD_SECRET = "secret";
+
+        final String FEATURE_SOME = "some";
+        final String FEATURE_OTHER = "other";
+
+        final String PROP_PROPERTIES = "properties";
+        final String PROP_CONFIGURATION = "configuration";
+        final String PROP_FOO = "foo";
+        final String PROP_BAR = "bar";
+        final String PROP_PUBLIC = "public";
+
+        final JsonPointer ATTR_PTR_TYPE = JsonPointer.of(ATTR_TYPE);
+        final JsonPointer ATTR_PTR_HIDDEN = JsonPointer.of(ATTR_HIDDEN);
+        final JsonPointer ATTR_PTR_COMPLEX = JsonPointer.of(ATTR_COMPLEX);
+
+        final ThingId thingId = ThingId.of(idGenerator(interestingNamespace).withRandomName());
+        final PolicyId policyId = PolicyId.of(thingId);
+        final String clientId1 = serviceEnv.getDefaultTestingContext().getOAuthClient().getClientId();
+        final String clientId2 = serviceEnv.getTestingContext2().getOAuthClient().getClientId();
+
+        final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
+                .forLabel("owner")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), Permission.WRITE, Permission.READ)
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), Permission.WRITE, Permission.READ)
+                .forLabel("partial1")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setGrantedPermissions("thing", "/attributes/" + ATTR_TYPE, "READ")
+                .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SOME, "READ")
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_HIDDEN), Permission.READ)
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_COMPLEX_SECRET), Permission.READ)
+                .forLabel("partial2")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX, "READ")
+                .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER + "/properties/properties/" + PROP_PUBLIC, "READ")
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_COMPLEX_SECRET), Permission.READ)
+                .build();
+
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setPolicyId(policyId)
+                .setAttribute(ATTR_PTR_TYPE, JsonValue.of("LORAWAN_GATEWAY"))
+                .setAttribute(ATTR_PTR_HIDDEN, JsonValue.of(false))
+                .setAttribute(ATTR_PTR_COMPLEX, JsonFactory.newObjectBuilder()
+                        .set(COMPLEX_FIELD_SOME, JsonValue.of(100))
+                        .set(COMPLEX_FIELD_SECRET, JsonValue.of("secret-value"))
+                        .build())
+                .setFeature(FEATURE_SOME, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_CONFIGURATION, JsonFactory.newObjectBuilder()
+                                        .set(PROP_FOO, JsonValue.of(123))
+                                        .build())
+                                .build())
+                        .build())
+                .setFeature(FEATURE_OTHER, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_PUBLIC, JsonValue.of("public-value"))
+                                .set(PROP_BAR, JsonValue.of(true))
+                                .build())
+                        .build())
+                .build();
+
+        putPolicy(policyId, policy)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        final String path = "/things/" + thingId;
+        final int user1ExpectedCount = 4;
+        final SseTestDriver user1Driver = createTestDriverForUser(user1ExpectedCount, path, 
+                serviceEnv.getDefaultTestingContext());
+        user1Driver.connect();
+
+        final int user2ExpectedCount = 3;
+        final SseTestDriver user2Driver = createTestDriverForUser(user2ExpectedCount, path, 
+                serviceEnv.getTestingContext2());
+        user2Driver.connect();
+
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        putAttribute(TestConstants.API_V_2, thingId, ATTR_TYPE, "\"LORAWAN_GATEWAY_V2\"")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putAttribute(TestConstants.API_V_2, thingId, ATTR_COMPLEX_SOME, "42")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putAttribute(TestConstants.API_V_2, thingId, ATTR_COMPLEX_SECRET, "\"super-secret\"")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putAttribute(TestConstants.API_V_2, thingId, ATTR_HIDDEN, "false")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, FEATURE_SOME, PROP_PROPERTIES + "/" + PROP_CONFIGURATION + "/" + PROP_FOO, "456")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, FEATURE_OTHER, PROP_PROPERTIES + "/" + PROP_PUBLIC, "\"updated public value\"")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, FEATURE_OTHER, PROP_PROPERTIES + "/" + PROP_BAR, "false")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        final Thing updatedThing = Thing.newBuilder()
+                .setId(thingId)
+                .setPolicyId(policyId)
+                .setAttribute(ATTR_PTR_TYPE, JsonValue.of("LORAWAN_GATEWAY_V3"))
+                .setAttribute(ATTR_PTR_HIDDEN, JsonValue.of(true))
+                .setAttribute(ATTR_PTR_COMPLEX, JsonFactory.newObjectBuilder()
+                        .set(COMPLEX_FIELD_SOME, JsonValue.of(100))
+                        .set(COMPLEX_FIELD_SECRET, JsonValue.of("new-secret"))
+                        .build())
+                .setFeature(FEATURE_SOME, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_CONFIGURATION, JsonFactory.newObjectBuilder()
+                                        .set(PROP_FOO, JsonValue.of(999))
+                                        .build())
+                                .build())
+                        .build())
+                .setFeature(FEATURE_OTHER, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_PUBLIC, JsonValue.of("full update public"))
+                                .set(PROP_BAR, JsonValue.of(false))
+                                .build())
+                        .build())
+                .build();
+        putThing(TestConstants.API_V_2, updatedThing, JsonSchemaVersion.V_2)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        final List<SseTestHandler.Message> user1Messages = user1Driver.getMessages();
+        final List<SseTestHandler.Message> user2Messages = user2Driver.getMessages();
+
+        user1Messages.stream()
+                .map(SseTestHandler.Message::getData)
+                .filter(data -> data != null && !data.isEmpty())
+                .map(data -> {
+                    try {
+                        return JsonFactory.readFrom(data);
+                    } catch (Exception e) {
+                        LOGGER.warn("Failed to parse JSON message, skipping: {}", data);
+                        return null;
+                    }
+                })
+                .filter(jsonValue -> jsonValue != null)
+                .map(JsonValue::asObject)
+                .forEach(payload -> {
+                    assertThat(payload.getValue(JsonPointer.of("/attributes/" + ATTR_HIDDEN))).isEmpty();
+                    if (payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).isPresent()) {
+                        final JsonValue complexValue = payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).get();
+                        if (complexValue.isObject()) {
+                            assertThat(complexValue.asObject().getValue(JsonPointer.of(COMPLEX_FIELD_SECRET))).isEmpty();
+                        }
+                    }
+                    assertThat(payload.getValue(JsonPointer.of("/features/" + FEATURE_OTHER))).isEmpty();
+                });
+
+        user2Messages.stream()
+                .map(SseTestHandler.Message::getData)
+                .filter(data -> data != null && !data.isEmpty())
+                .map(data -> {
+                    try {
+                        return JsonFactory.readFrom(data);
+                    } catch (Exception e) {
+                        LOGGER.warn("Failed to parse JSON message, skipping: {}", data);
+                        return null;
+                    }
+                })
+                .filter(jsonValue -> jsonValue != null)
+                .map(JsonValue::asObject)
+                .forEach(payload -> {
+                    assertThat(payload.getValue(JsonPointer.of("/attributes/" + ATTR_TYPE))).isEmpty();
+                    assertThat(payload.getValue(JsonPointer.of("/attributes/" + ATTR_HIDDEN))).isEmpty();
+                    if (payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).isPresent()) {
+                        final JsonValue complexValue = payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).get();
+                        if (complexValue.isObject()) {
+                            assertThat(complexValue.asObject().getValue(JsonPointer.of(COMPLEX_FIELD_SECRET))).isEmpty();
+                        }
+                    }
+                    assertThat(payload.getValue(JsonPointer.of("/features/" + FEATURE_SOME))).isEmpty();
+                    if (payload.getValue(JsonPointer.of("/features/" + FEATURE_OTHER + "/" + PROP_PROPERTIES)).isPresent()) {
+                        final JsonValue propsValue = payload.getValue(JsonPointer.of("/features/" + FEATURE_OTHER + "/" + PROP_PROPERTIES)).get();
+                        if (propsValue.isObject()) {
+                            assertThat(propsValue.asObject().getValue(JsonPointer.of(PROP_BAR))).isEmpty();
+                        }
+                    }
+                });
+
+        deleteThing(TestConstants.API_V_2, thingId)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+    }
+
+    @Test
+    @Category(Acceptance.class)
+    public void partialAccessComprehensiveTestAllScenariosViaSse() {
+        final String ATTR_TYPE = "type";
+        final String ATTR_HIDDEN = "hidden";
+        final String ATTR_COMPLEX = "complex";
+        final String ATTR_COMPLEX_SOME = "complex/some";
+        final String ATTR_COMPLEX_SECRET = "complex/secret";
+        final String COMPLEX_FIELD_SOME = "some";
+        final String COMPLEX_FIELD_SECRET = "secret";
+        final String COMPLEX_FIELD_NEW = "newField";
+        final String ATTR_NEW = "newAttr";
+
+        final String FEATURE_SOME = "some";
+        final String FEATURE_OTHER = "other";
+        final String FEATURE_SHARED = "shared";
+
+        final String PROP_PROPERTIES = "properties";
+        final String PROP_CONFIGURATION = "configuration";
+        final String PROP_FOO = "foo";
+        final String PROP_BAR = "bar";
+        final String PROP_PUBLIC = "public";
+        final String PROP_VALUE = "value";
+        final String PROP_SECRET = "secret";
+
+        final JsonPointer ATTR_PTR_TYPE = JsonPointer.of(ATTR_TYPE);
+        final JsonPointer ATTR_PTR_HIDDEN = JsonPointer.of(ATTR_HIDDEN);
+        final JsonPointer ATTR_PTR_COMPLEX = JsonPointer.of(ATTR_COMPLEX);
+        final JsonPointer ATTR_PTR_COMPLEX_SOME = JsonPointer.of(ATTR_COMPLEX_SOME);
+        final JsonPointer ATTR_PTR_COMPLEX_SECRET = JsonPointer.of(ATTR_COMPLEX_SECRET);
+
+        final ThingId thingId = ThingId.of(idGenerator(interestingNamespace).withRandomName());
+        final PolicyId policyId = PolicyId.of(thingId);
+        final String clientId1 = serviceEnv.getDefaultTestingContext().getOAuthClient().getClientId();
+        final String clientId2 = serviceEnv.getTestingContext2().getOAuthClient().getClientId();
+
+        final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
+                .forLabel("owner")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), Permission.WRITE, Permission.READ)
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), Permission.WRITE, Permission.READ)
+                .forLabel("partial1")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setGrantedPermissions("thing", "/attributes/" + ATTR_TYPE, "READ")
+                .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SOME, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SOME + "/properties/properties/" + PROP_CONFIGURATION + "/" + PROP_FOO, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SHARED, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SHARED + "/properties/" + PROP_VALUE, "READ")
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_HIDDEN), Permission.READ)
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_COMPLEX_SECRET), Permission.READ)
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/features/" + FEATURE_OTHER), Permission.READ)
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/features/" + FEATURE_SHARED + "/properties/" + PROP_SECRET), Permission.READ)
+                .forLabel("partial2")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX, "READ")
+                .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER + "/properties/properties/" + PROP_PUBLIC, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER + "/properties/" + PROP_PUBLIC, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SHARED, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SHARED + "/properties/" + PROP_VALUE, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SHARED + "/properties/" + PROP_SECRET, "READ")
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/features/" + FEATURE_SOME), Permission.READ)
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_COMPLEX_SECRET), Permission.READ)
+                .build();
+
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setPolicyId(policyId)
+                .setAttribute(ATTR_PTR_TYPE, JsonValue.of("LORAWAN_GATEWAY"))
+                .setAttribute(ATTR_PTR_HIDDEN, JsonValue.of(false))
+                .setAttribute(ATTR_PTR_COMPLEX, JsonFactory.newObjectBuilder()
+                        .set(COMPLEX_FIELD_SOME, JsonValue.of(41))
+                        .set(COMPLEX_FIELD_SECRET, JsonValue.of("pssst"))
+                        .build())
+                .setFeature(FEATURE_SOME, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_CONFIGURATION, JsonFactory.newObjectBuilder()
+                                        .set(PROP_FOO, JsonValue.of(123))
+                                        .build())
+                                .build())
+                        .build())
+                .setFeature(FEATURE_OTHER, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_BAR, JsonValue.of(false))
+                                .set(PROP_PUBLIC, JsonValue.of("here you go, buddy"))
+                                .build())
+                        .build())
+                .setFeature(FEATURE_SHARED, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_VALUE, JsonValue.of("shared-value"))
+                                .set(PROP_SECRET, JsonValue.of("shared-secret-value"))
+                                .build())
+                        .build())
+                .build();
+
+        putPolicy(policyId, policy)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        putThing(TestConstants.API_V_2, thing, JsonSchemaVersion.V_2)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        final String path = "/things/" + thingId;
+        final int user1ExpectedCount = 10;
+        final SseTestDriver user1Driver = createTestDriverForUser(user1ExpectedCount, path,
+                serviceEnv.getDefaultTestingContext());
+        user1Driver.connect();
+
+        final int user2ExpectedCount = 8;
+        final SseTestDriver user2Driver = createTestDriverForUser(user2ExpectedCount, path,
+                serviceEnv.getTestingContext2());
+        user2Driver.connect();
+
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        putAttribute(TestConstants.API_V_2, thingId, ATTR_TYPE, "\"LORAWAN_GATEWAY_V2\"")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putAttribute(TestConstants.API_V_2, thingId, ATTR_COMPLEX_SOME, "42")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putAttribute(TestConstants.API_V_2, thingId, ATTR_COMPLEX_SECRET, "\"super-secret\"")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putAttribute(TestConstants.API_V_2, thingId, ATTR_HIDDEN, "false")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, FEATURE_SOME, PROP_PROPERTIES + "/" + PROP_CONFIGURATION + "/" + PROP_FOO, "456")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, FEATURE_OTHER, PROP_PROPERTIES + "/" + PROP_PUBLIC, "\"updated public value\"")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, FEATURE_OTHER, PROP_PROPERTIES + "/" + PROP_BAR, "false")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        final JsonObject complexAttributes = JsonFactory.newObjectBuilder()
+                .set(COMPLEX_FIELD_SOME, JsonValue.of(100))
+                .set(COMPLEX_FIELD_SECRET, JsonValue.of("new-secret"))
+                .set(COMPLEX_FIELD_NEW, JsonValue.of("new-value"))
+                .build();
+        patchThing(TestConstants.API_V_2, thingId, JsonPointer.of("attributes/" + ATTR_COMPLEX), complexAttributes)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        final JsonObject allAttributesJson = JsonFactory.newObjectBuilder()
+                .set(ATTR_TYPE, JsonValue.of("LORAWAN_GATEWAY_V3"))
+                .set(ATTR_HIDDEN, JsonValue.of(true))
+                .set(ATTR_COMPLEX, JsonFactory.newObjectBuilder()
+                        .set(COMPLEX_FIELD_SOME, JsonValue.of(200))
+                        .set(COMPLEX_FIELD_SECRET, JsonValue.of("modify-secret"))
+                        .build())
+                .set(ATTR_NEW, JsonValue.of("new-attribute-value"))
+                .build();
+        putAttributes(TestConstants.API_V_2, thingId, allAttributesJson.toString())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        final Thing updatedThing = Thing.newBuilder()
+                .setId(thingId)
+                .setPolicyId(policyId)
+                .setAttribute(ATTR_PTR_TYPE, JsonValue.of("LORAWAN_GATEWAY_V3"))
+                .setAttribute(ATTR_PTR_HIDDEN, JsonValue.of(true))
+                .setAttribute(ATTR_PTR_COMPLEX, JsonFactory.newObjectBuilder()
+                        .set(COMPLEX_FIELD_SOME, JsonValue.of(100))
+                        .set(COMPLEX_FIELD_SECRET, JsonValue.of("new-secret"))
+                        .build())
+                .setFeature(FEATURE_SOME, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_CONFIGURATION, JsonFactory.newObjectBuilder()
+                                        .set(PROP_FOO, JsonValue.of(999))
+                                        .build())
+                                .build())
+                        .build())
+                .setFeature(FEATURE_OTHER, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_PUBLIC, JsonValue.of("full update public"))
+                                .set(PROP_BAR, JsonValue.of(false))
+                                .build())
+                        .build())
+                .setFeature(FEATURE_SHARED, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_VALUE, JsonValue.of("preserved-shared-value"))
+                                .set(PROP_SECRET, JsonValue.of("preserved-shared-secret"))
+                                .build())
+                        .build())
+                .build();
+        putThing(TestConstants.API_V_2, updatedThing, JsonSchemaVersion.V_2)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        final JsonObject mergedThingJson = JsonFactory.newObjectBuilder()
+                .set("attributes", JsonFactory.newObjectBuilder()
+                        .set(ATTR_TYPE, JsonValue.of("LORAWAN_GATEWAY_V4"))
+                        .set(ATTR_COMPLEX, JsonFactory.newObjectBuilder()
+                                .set(COMPLEX_FIELD_SOME, JsonValue.of(150))
+                                .build())
+                        .build())
+                .set("features", JsonFactory.newObjectBuilder()
+                        .set(FEATURE_SOME, JsonFactory.newObjectBuilder()
+                                .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                        .set(PROP_CONFIGURATION, JsonFactory.newObjectBuilder()
+                                                .set(PROP_FOO, JsonValue.of(8888))
+                                                .build())
+                                        .build())
+                                .build())
+                        .set(FEATURE_OTHER, JsonFactory.newObjectBuilder()
+                                .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                        .set(PROP_PUBLIC, JsonValue.of("nested-public-value"))
+                                        .build())
+                                .build())
+                        .set(FEATURE_SHARED, JsonFactory.newObjectBuilder()
+                                .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                        .set(PROP_VALUE, JsonValue.of("merged-shared-value"))
+                                        .set(PROP_SECRET, JsonValue.of("merged-shared-secret"))
+                                        .build())
+                                .build())
+                        .build())
+                .build();
+        patchThing(TestConstants.API_V_2, thingId, JsonPointer.empty(), mergedThingJson)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, FEATURE_OTHER, PROP_PROPERTIES + "/" + PROP_PUBLIC, "\"nested-public-value\"")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, FEATURE_OTHER, PROP_PROPERTIES + "/" + PROP_BAR, "true")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, FEATURE_SOME, PROP_PROPERTIES + "/" + PROP_CONFIGURATION + "/" + PROP_FOO, "8888")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, FEATURE_SHARED, PROP_PROPERTIES + "/" + PROP_VALUE, "\"updated-shared-value\"")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, FEATURE_SHARED, PROP_PROPERTIES + "/" + PROP_SECRET, "\"updated-shared-secret\"")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        final List<SseTestHandler.Message> user1Messages = user1Driver.getMessages();
+        final List<SseTestHandler.Message> user2Messages = user2Driver.getMessages();
+
+        user1Messages.stream()
+                .map(SseTestHandler.Message::getData)
+                .filter(data -> data != null && !data.isEmpty())
+                .map(data -> {
+                    try {
+                        return JsonFactory.readFrom(data);
+                    } catch (Exception e) {
+                        LOGGER.warn("Failed to parse JSON message, skipping: {}", data);
+                        return null;
+                    }
+                })
+                .filter(jsonValue -> jsonValue != null)
+                .map(JsonValue::asObject)
+                .forEach(payload -> {
+                    assertThat(payload.getValue(JsonPointer.of("/attributes/" + ATTR_HIDDEN))).isEmpty();
+                    if (payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).isPresent()) {
+                        final JsonValue complexValue = payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).get();
+                        if (complexValue.isObject()) {
+                            assertThat(complexValue.asObject().getValue(JsonPointer.of(COMPLEX_FIELD_SECRET))).isEmpty();
+                        }
+                    }
+                    assertThat(payload.getValue(JsonPointer.of("/features/" + FEATURE_OTHER))).isEmpty();
+                    if (payload.getValue(JsonPointer.of("/features/" + FEATURE_SHARED + "/" + PROP_PROPERTIES)).isPresent()) {
+                        final JsonValue propsValue = payload.getValue(JsonPointer.of("/features/" + FEATURE_SHARED + "/" + PROP_PROPERTIES)).get();
+                        if (propsValue.isObject()) {
+                            assertThat(propsValue.asObject().getValue(JsonPointer.of(PROP_SECRET))).isEmpty();
+                        }
+                    }
+                });
+
+        user2Messages.stream()
+                .map(SseTestHandler.Message::getData)
+                .filter(data -> data != null && !data.isEmpty())
+                .map(data -> {
+                    try {
+                        return JsonFactory.readFrom(data);
+                    } catch (Exception e) {
+                        LOGGER.warn("Failed to parse JSON message, skipping: {}", data);
+                        return null;
+                    }
+                })
+                .filter(jsonValue -> jsonValue != null)
+                .map(JsonValue::asObject)
+                .forEach(payload -> {
+                    assertThat(payload.getValue(JsonPointer.of("/attributes/" + ATTR_TYPE))).isEmpty();
+                    assertThat(payload.getValue(JsonPointer.of("/attributes/" + ATTR_HIDDEN))).isEmpty();
+                    if (payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).isPresent()) {
+                        final JsonValue complexValue = payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).get();
+                        if (complexValue.isObject()) {
+                            assertThat(complexValue.asObject().getValue(JsonPointer.of(COMPLEX_FIELD_SECRET))).isEmpty();
+                        }
+                    }
+                    assertThat(payload.getValue(JsonPointer.of("/features/" + FEATURE_SOME))).isEmpty();
+                    if (payload.getValue(JsonPointer.of("/features/" + FEATURE_OTHER + "/" + PROP_PROPERTIES)).isPresent()) {
+                        final JsonValue propsValue = payload.getValue(JsonPointer.of("/features/" + FEATURE_OTHER + "/" + PROP_PROPERTIES)).get();
+                        if (propsValue.isObject()) {
+                            assertThat(propsValue.asObject().getValue(JsonPointer.of(PROP_BAR))).isEmpty();
+                        }
+                    }
+                });
+
+        deleteThing(TestConstants.API_V_2, thingId)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
     }
 
 }

@@ -69,7 +69,16 @@ public final class HttpPushConnectivityWorker
     }
 
     @Override
-    protected String initTargetsConsumer(final String connectionName, final String t) {
+    protected String initTargetsConsumer(final String connectionName, final String targetAddress) {
+        if (targetAddress != null && targetAddress.contains(":")) {
+            final String[] parts = targetAddress.split(":", 2);
+            if (parts.length == 2) {
+                final String path = parts[1];
+                final int start = path.startsWith("/") ? 1 : 0;
+                final int end = Math.max(start, path.endsWith("/") ? path.length() - 1 : path.length());
+                return path.substring(start, end);
+            }
+        }
         return connectionName;
     }
 
@@ -85,13 +94,13 @@ public final class HttpPushConnectivityWorker
 
     @Override
     protected HttpRequest consumeFromTarget(final String connectionName, final String targetsConsumer) {
-        return server.awaitNextRequest(connectionName);
+        return server.awaitNextRequest(targetsConsumer);
     }
 
     @Override
     protected CompletableFuture<HttpRequest> consumeFromTargetInFuture(final String connectionName,
-            final String unused) {
-        return CompletableFuture.supplyAsync(() -> server.awaitNextRequest(connectionName));
+            final String targetsConsumer) {
+        return CompletableFuture.supplyAsync(() -> server.awaitNextRequest(targetsConsumer));
     }
 
     @Override

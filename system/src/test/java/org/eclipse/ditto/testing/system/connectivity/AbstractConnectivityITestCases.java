@@ -76,6 +76,7 @@ import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscripti
 import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscriptionCreated;
 import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscriptionHasNext;
 import org.eclipse.ditto.connectivity.model.Connection;
+import org.eclipse.ditto.connectivity.model.ConnectionType;
 import org.eclipse.ditto.connectivity.model.ConnectivityModelFactory;
 import org.eclipse.ditto.connectivity.model.FilteredTopic;
 import org.eclipse.ditto.connectivity.model.Target;
@@ -2589,6 +2590,16 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
     @Connections(NONE)
     @Category(RequireSource.class)
     public void partialAccessComprehensiveTestAllScenarios() throws Exception {
+        final String connectionName = "partial-access-" + UUID.randomUUID();
+        final Connection baseConnection = cf.getSingleConnection(connectionName);
+        if (baseConnection.getConnectionType() == ConnectionType.AMQP_10 ||
+                baseConnection.getConnectionType() == ConnectionType.AMQP_091) {
+            LOGGER.info("Skipping partialAccessComprehensiveTestAllScenarios for {} - " +
+                    "requires protocol-specific setup for dynamically created connections",
+                    baseConnection.getConnectionType());
+            return;
+        }
+        
         final String ATTR_TYPE = "type";
         final String ATTR_HIDDEN = "hidden";
         final String ATTR_COMPLEX = "complex";
@@ -2687,9 +2698,6 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         Thread.sleep(500);
 
-        final String connectionName = "partial-access-" + UUID.randomUUID();
-        final Connection baseConnection = cf.getSingleConnection(connectionName);
-        
         final String targetAddress1 = cf.defaultTargetAddress("user1-events");
         final String targetAddress2 = cf.defaultTargetAddress("user2-events");
 

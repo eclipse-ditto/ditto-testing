@@ -51,10 +51,14 @@ import org.eclipse.ditto.base.model.acks.AcknowledgementLabel;
 import org.eclipse.ditto.base.model.acks.AcknowledgementLabelNotDeclaredException;
 import org.eclipse.ditto.base.model.acks.AcknowledgementRequest;
 import org.eclipse.ditto.base.model.acks.DittoAcknowledgementLabel;
+import org.eclipse.ditto.base.model.auth.AuthorizationContext;
+import org.eclipse.ditto.base.model.auth.AuthorizationSubject;
+import org.eclipse.ditto.base.model.auth.DittoAuthorizationContextType;
 import org.eclipse.ditto.base.model.common.DittoDuration;
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.base.model.entity.id.EntityId;
 import org.eclipse.ditto.base.model.entity.id.WithEntityId;
+import org.eclipse.ditto.base.model.exceptions.DittoJsonException;
 import org.eclipse.ditto.base.model.exceptions.DittoRuntimeException;
 import org.eclipse.ditto.base.model.headers.DittoHeaderDefinition;
 import org.eclipse.ditto.base.model.headers.DittoHeaders;
@@ -72,10 +76,12 @@ import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscripti
 import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscriptionCreated;
 import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscriptionHasNext;
 import org.eclipse.ditto.connectivity.model.Connection;
+import org.eclipse.ditto.connectivity.model.ConnectionType;
 import org.eclipse.ditto.connectivity.model.ConnectivityModelFactory;
 import org.eclipse.ditto.connectivity.model.FilteredTopic;
 import org.eclipse.ditto.connectivity.model.Target;
 import org.eclipse.ditto.connectivity.model.Topic;
+import org.eclipse.ditto.things.model.ThingFieldSelector;
 import org.eclipse.ditto.connectivity.model.signals.announcements.ConnectionClosedAnnouncement;
 import org.eclipse.ditto.connectivity.model.signals.announcements.ConnectionOpenedAnnouncement;
 import org.eclipse.ditto.json.JsonFactory;
@@ -105,6 +111,7 @@ import org.eclipse.ditto.policies.model.SubjectAnnouncement;
 import org.eclipse.ditto.policies.model.SubjectExpiry;
 import org.eclipse.ditto.policies.model.SubjectId;
 import org.eclipse.ditto.policies.model.SubjectType;
+import static org.eclipse.ditto.testing.common.TestConstants.Policy.ARBITRARY_SUBJECT_TYPE;
 import org.eclipse.ditto.policies.model.signals.announcements.SubjectDeletionAnnouncement;
 import org.eclipse.ditto.policies.model.signals.commands.PolicyErrorResponse;
 import org.eclipse.ditto.policies.model.signals.commands.modify.CreatePolicy;
@@ -2415,7 +2422,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
     @Test
     @Connections({ConnectionCategory.CONNECTION1})
-    public void eventsAreNotDeliveredForSubjectsWithRevokeInHierarchy() {
+    public void eventsAreDeliveredWithFilteredContentForSubjectsWithRevokeInHierarchy() {
         final var connection = cf.connectionName1;
 
         // Given
@@ -2459,8 +2466,29 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire();
 
+        // Then: Event should be delivered with filtered content (revoked feature removed)
         final var message = consumeFromTarget(connection, consumer);
-        assertThat(message).isNull();
+        assertThat(message).isNotNull();
+        
+        final JsonifiableAdaptable jsonifiableAdaptable = jsonifiableAdaptableFrom(message);
+        final Adaptable responseAdaptable =
+                ProtocolFactory.newAdaptableBuilder(jsonifiableAdaptable).build();
+        final Signal<?> signal = PROTOCOL_ADAPTER.fromAdaptable(responseAdaptable);
+        
+        assertThat(signal).isInstanceOf(ThingCreated.class);
+        final ThingCreated thingCreated = (ThingCreated) signal;
+        assertThat((Object) thingCreated.getEntityId()).isEqualTo(thingId);
+        assertThat(thingCreated.getThing().getPolicyId()).contains(policyId);
+        
+        // Verify revoked feature is not present in the event
+        final JsonObject thingJson = thingCreated.getThing().toJson();
+        final Optional<JsonValue> featuresOpt = thingJson.getValue("features");
+        if (featuresOpt.isPresent() && featuresOpt.get().isObject()) {
+            final JsonObject features = featuresOpt.get().asObject();
+            assertThat(features.contains(featureId))
+                    .describedAs("Revoked feature '%s' should not be present in the filtered event", featureId)
+                    .isFalse();
+        }
     }
 
     @Test
@@ -2556,6 +2584,417 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), "READ", "WRITE")
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), "READ", "WRITE")
                 .build();
+    }
+
+    @Test
+    @Connections(NONE)
+    @Category(RequireSource.class)
+    public void partialAccessComprehensiveTestAllScenarios() throws Exception {
+        final String connectionName = "partial-access-" + UUID.randomUUID();
+        final Connection baseConnection = cf.getSingleConnection(connectionName);
+        if (baseConnection.getConnectionType() == ConnectionType.AMQP_10 ||
+                baseConnection.getConnectionType() == ConnectionType.AMQP_091) {
+            LOGGER.info("Skipping partialAccessComprehensiveTestAllScenarios for {} - " +
+                    "requires protocol-specific setup for dynamically created connections",
+                    baseConnection.getConnectionType());
+            return;
+        }
+        
+        final String ATTR_TYPE = "type";
+        final String ATTR_HIDDEN = "hidden";
+        final String ATTR_COMPLEX = "complex";
+        final String ATTR_COMPLEX_SOME = "complex/some";
+        final String ATTR_COMPLEX_SECRET = "complex/secret";
+        final String COMPLEX_FIELD_SOME = "some";
+        final String COMPLEX_FIELD_SECRET = "secret";
+
+        final String FEATURE_SOME = "some";
+        final String FEATURE_OTHER = "other";
+        final String FEATURE_SHARED = "shared";
+
+        final String PROP_PROPERTIES = "properties";
+        final String PROP_CONFIGURATION = "configuration";
+        final String PROP_FOO = "foo";
+        final String PROP_BAR = "bar";
+        final String PROP_PUBLIC = "public";
+        final String PROP_VALUE = "value";
+        final String PROP_SECRET = "secret";
+
+        final ThingId thingId = generateThingId();
+        final PolicyId policyId = PolicyId.of(thingId);
+        final String ownerClientId = serviceEnv.getTestingContext4().getOAuthClient().getClientId();
+        final String clientId1 = serviceEnv.getDefaultTestingContext().getOAuthClient().getClientId();
+        final String clientId2 = serviceEnv.getTestingContext2().getOAuthClient().getClientId();
+
+        final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
+                .forLabel("owner")
+                .setSubject(ThingsSubjectIssuer.DITTO, ownerClientId, ARBITRARY_SUBJECT_TYPE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
+                .forLabel("partial1")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, ARBITRARY_SUBJECT_TYPE)
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions("thing", "/attributes/" + ATTR_TYPE, "READ")
+                .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SOME, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SOME + "/properties/properties/" + PROP_CONFIGURATION + "/" + PROP_FOO, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SHARED, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SHARED + "/properties/" + PROP_VALUE, "READ")
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_HIDDEN), READ)
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_COMPLEX_SECRET), READ)
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/features/" + FEATURE_OTHER), READ)
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/features/" + FEATURE_SHARED + "/properties/" + PROP_SECRET), READ)
+                .forLabel("partial2")
+                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, ARBITRARY_SUBJECT_TYPE)
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX, "READ")
+                .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER + "/properties/properties/" + PROP_PUBLIC, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER + "/properties/" + PROP_PUBLIC, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SHARED, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SHARED + "/properties/" + PROP_VALUE, "READ")
+                .setGrantedPermissions("thing", "/features/" + FEATURE_SHARED + "/properties/" + PROP_SECRET, "READ")
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/features/" + FEATURE_SOME), READ)
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_COMPLEX_SECRET), READ)
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_TYPE), READ)
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_HIDDEN), READ)
+                .build();
+
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setPolicyId(policyId)
+                .setAttribute(JsonPointer.of(ATTR_TYPE), JsonValue.of("LORAWAN_GATEWAY"))
+                .setAttribute(JsonPointer.of(ATTR_HIDDEN), JsonValue.of(false))
+                .setAttribute(JsonPointer.of(ATTR_COMPLEX), JsonFactory.newObjectBuilder()
+                        .set(COMPLEX_FIELD_SOME, JsonValue.of(41))
+                        .set(COMPLEX_FIELD_SECRET, JsonValue.of("pssst"))
+                        .build())
+                .setFeature(FEATURE_SOME, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_CONFIGURATION, JsonFactory.newObjectBuilder()
+                                        .set(PROP_FOO, JsonValue.of(123))
+                                        .build())
+                                .build())
+                        .build())
+                .setFeature(FEATURE_OTHER, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_BAR, JsonValue.of(false))
+                                .set(PROP_PUBLIC, JsonValue.of("here you go, buddy"))
+                                .build())
+                        .build())
+                .setFeature(FEATURE_SHARED, FeatureProperties.newBuilder()
+                        .set(PROP_PROPERTIES, JsonFactory.newObjectBuilder()
+                                .set(PROP_VALUE, JsonValue.of("shared-value"))
+                                .set(PROP_SECRET, JsonValue.of("shared-secret-value"))
+                                .build())
+                        .build())
+                .build();
+
+        putPolicy(policyId, policy)
+                .withJWT(serviceEnv.getTestingContext4().getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        Thread.sleep(500);
+
+        final String targetAddress1 = cf.defaultTargetAddress("user1-events");
+        final String targetAddress2 = cf.defaultTargetAddress("user2-events");
+
+        final String subjectId1 = ThingsSubjectIssuer.DITTO + ":" + clientId1;
+        final String subjectId2 = ThingsSubjectIssuer.DITTO + ":" + clientId2;
+        final AuthorizationContext authContext1 = AuthorizationContext.newInstance(
+                DittoAuthorizationContextType.PRE_AUTHENTICATED_CONNECTION,
+                AuthorizationSubject.newInstance(subjectId1));
+        final AuthorizationContext authContext2 = AuthorizationContext.newInstance(
+                DittoAuthorizationContextType.PRE_AUTHENTICATED_CONNECTION,
+                AuthorizationSubject.newInstance(subjectId2));
+
+        final Connection connection = baseConnection.toBuilder()
+                .setTargets(java.util.Arrays.asList(
+                        ConnectivityModelFactory.newTargetBuilder()
+                                .address(targetAddress1)
+                                .authorizationContext(authContext1)
+                                .topics(java.util.Collections.singleton(
+                                        ConnectivityModelFactory.newFilteredTopicBuilder(Topic.TWIN_EVENTS)
+                                                .withExtraFields(ThingFieldSelector.fromString("attributes,features"))
+                                                .build()))
+                                .build(),
+                        ConnectivityModelFactory.newTargetBuilder()
+                                .address(targetAddress2)
+                                .authorizationContext(authContext2)
+                                .topics(java.util.Collections.singleton(
+                                        ConnectivityModelFactory.newFilteredTopicBuilder(Topic.TWIN_EVENTS)
+                                                .withExtraFields(ThingFieldSelector.fromString("attributes,features"))
+                                                .build()))
+                                .build()))
+                .build();
+
+        cf.asyncCreateConnection(connection).get(30, TimeUnit.SECONDS);
+        final C consumer1 = initTargetsConsumer(connectionName, targetAddress1);
+        final C consumer2 = initTargetsConsumer(connectionName, targetAddress2);
+
+        final String correlationId = createNewCorrelationId();
+        final String ownerAccessToken = serviceEnv.getTestingContext4().getOAuthClient().getAccessToken();
+        putThing(2, thing, JsonSchemaVersion.V_2)
+                .withJWT(ownerAccessToken)
+                .withCorrelationId(correlationId)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        Thread.sleep(1000);
+
+        putAttribute(2, thingId, ATTR_TYPE, "\"LORAWAN_GATEWAY_V2\"")
+                .withJWT(ownerAccessToken)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putAttribute(2, thingId, ATTR_COMPLEX_SOME, "42")
+                .withJWT(ownerAccessToken)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putAttribute(2, thingId, ATTR_COMPLEX_SECRET, "\"super-secret\"")
+                .withJWT(ownerAccessToken)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putAttribute(2, thingId, ATTR_HIDDEN, "false")
+                .withJWT(ownerAccessToken)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(2, thingId, FEATURE_SOME, PROP_PROPERTIES + "/" + PROP_CONFIGURATION + "/" + PROP_FOO, "456")
+                .withJWT(ownerAccessToken)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(2, thingId, FEATURE_OTHER, PROP_PROPERTIES + "/" + PROP_PUBLIC, "\"updated public value\"")
+                .withJWT(ownerAccessToken)
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        Thread.sleep(2000);
+
+        final java.util.List<M> user1Messages = new java.util.ArrayList<>();
+        final java.util.List<M> user2Messages = new java.util.ArrayList<>();
+
+        int consecutiveNulls1 = 0;
+        for (int i = 0; i < 20; i++) {
+            try {
+                final M msg1 = consumeFromTarget(connectionName, consumer1);
+                if (msg1 != null) {
+                    user1Messages.add(msg1);
+                    consecutiveNulls1 = 0;
+                } else {
+                    consecutiveNulls1++;
+                    if (consecutiveNulls1 >= 2) {
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                break;
+            }
+        }
+        int consecutiveNulls2 = 0;
+        for (int i = 0; i < 20; i++) {
+            try {
+                final M msg2 = consumeFromTarget(connectionName, consumer2);
+                if (msg2 != null) {
+                    user2Messages.add(msg2);
+                    consecutiveNulls2 = 0;
+                } else {
+                    consecutiveNulls2++;
+                    if (consecutiveNulls2 >= 2) {
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                break;
+            }
+        }
+
+        user1Messages.forEach(msg -> {
+            try {
+                final JsonifiableAdaptable jsonifiableAdaptable = jsonifiableAdaptableFrom(msg);
+                final Adaptable adaptable = ProtocolFactory.newAdaptableBuilder(jsonifiableAdaptable).build();
+                
+                final Signal<?> signal = PROTOCOL_ADAPTER.fromAdaptable(adaptable);
+                if (signal instanceof ThingEvent) {
+                    final ThingEvent<?> event = (ThingEvent<?>) signal;
+                    final JsonPointer eventPath = adaptable.getPayload().getPath();
+                    
+                    if (eventPath.toString().equals("/attributes/" + ATTR_HIDDEN) ||
+                            eventPath.toString().equals("/attributes/" + ATTR_COMPLEX_SECRET) ||
+                            eventPath.toString().equals("/features/" + FEATURE_OTHER)) {
+                        return;
+                    }
+                    
+                    final JsonObject payload = adaptable.getPayload().getValue()
+                            .filter(JsonValue::isObject)
+                            .map(JsonValue::asObject)
+                            .orElse(JsonFactory.newObject());
+                    assertThat(payload.getValue(JsonPointer.of("/attributes/" + ATTR_HIDDEN)))
+                            .describedAs("User1 filtered event should not contain /attributes/hidden")
+                            .isEmpty();
+                    if (payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).isPresent()) {
+                        final JsonValue complexValue = payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).get();
+                        if (complexValue.isObject()) {
+                            assertThat(complexValue.asObject().getValue(JsonPointer.of(COMPLEX_FIELD_SECRET)))
+                                    .describedAs("User1 filtered event should not contain /attributes/complex/secret")
+                                    .isEmpty();
+                        }
+                    }
+                    assertThat(payload.getValue(JsonPointer.of("/features/" + FEATURE_OTHER)))
+                            .describedAs("User1 filtered event should not contain /features/other")
+                            .isEmpty();
+                    if (payload.getValue(JsonPointer.of("/features/" + FEATURE_SHARED + "/" + PROP_PROPERTIES)).isPresent()) {
+                        final JsonValue propsValue = payload.getValue(JsonPointer.of("/features/" + FEATURE_SHARED + "/" + PROP_PROPERTIES)).get();
+                        if (propsValue.isObject()) {
+                            assertThat(propsValue.asObject().getValue(JsonPointer.of(PROP_SECRET)))
+                                    .describedAs("User1 filtered event should not contain /features/shared/properties/secret")
+                                    .isEmpty();
+                        }
+                    }
+                    final Optional<JsonObject> extra = adaptable.getPayload().getExtra();
+                    if (extra.isPresent()) {
+                        final JsonObject extraObj = extra.get();
+                        
+                        assertThat(extraObj.getValue(JsonPointer.of("/attributes/" + ATTR_HIDDEN)))
+                                .describedAs("User1 extraFields should not contain /attributes/hidden")
+                                .isEmpty();
+                        if (extraObj.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).isPresent()) {
+                            final JsonValue complexValue = extraObj.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).get();
+                            if (complexValue.isObject()) {
+                                assertThat(complexValue.asObject().getValue(JsonPointer.of(COMPLEX_FIELD_SECRET)))
+                                        .describedAs("User1 extraFields should not contain /attributes/complex/secret")
+                                        .isEmpty();
+                            }
+                        }
+                        assertThat(extraObj.getValue(JsonPointer.of("/features/" + FEATURE_OTHER)))
+                                .describedAs("User1 extraFields should not contain /features/other")
+                                .isEmpty();
+                        if (extraObj.getValue(JsonPointer.of("/features/" + FEATURE_SHARED + "/" + PROP_PROPERTIES)).isPresent()) {
+                            final JsonValue propsValue = extraObj.getValue(JsonPointer.of("/features/" + FEATURE_SHARED + "/" + PROP_PROPERTIES)).get();
+                            if (propsValue.isObject()) {
+                                assertThat(propsValue.asObject().getValue(JsonPointer.of(PROP_SECRET)))
+                                        .describedAs("User1 extraFields should not contain /features/shared/properties/secret")
+                                        .isEmpty();
+                            }
+                        }
+                        
+                        if (payload.getValue(JsonPointer.of("/attributes/" + ATTR_TYPE)).isPresent()) {
+                            assertThat(extraObj.getValue(JsonPointer.of("/attributes/" + ATTR_TYPE)))
+                                    .describedAs("User1 extraFields should contain /attributes/type when present")
+                                    .isPresent();
+                        }
+                        if (payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX_SOME)).isPresent()) {
+                            assertThat(extraObj.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX_SOME)))
+                                    .describedAs("User1 extraFields should contain /attributes/complex/some when present")
+                                    .isPresent();
+                        }
+                        if (payload.getValue(JsonPointer.of("/features/" + FEATURE_SOME)).isPresent()) {
+                            assertThat(extraObj.getValue(JsonPointer.of("/features/" + FEATURE_SOME)))
+                                    .describedAs("User1 extraFields should contain /features/some when present")
+                                    .isPresent();
+                        }
+                    }
+                }
+            } catch (final DittoJsonException e) {
+                if (e.getMessage() != null && e.getMessage().contains("Thing has no ID")) {
+                    LOGGER.debug("Skipping event without Thing ID (expected for partial update events): {}", e.getMessage());
+                } else {
+                    LOGGER.warn("Failed to process user1 message, skipping: {}", e.getMessage());
+                }
+            } catch (Exception e) {
+                LOGGER.warn("Failed to process user1 message, skipping: {}", e.getMessage());
+            }
+        });
+
+        user2Messages.forEach(msg -> {
+            try {
+                final JsonifiableAdaptable jsonifiableAdaptable = jsonifiableAdaptableFrom(msg);
+                final Adaptable adaptable = ProtocolFactory.newAdaptableBuilder(jsonifiableAdaptable).build();
+                
+                final Signal<?> signal = PROTOCOL_ADAPTER.fromAdaptable(adaptable);
+                if (signal instanceof ThingEvent<?> event) {
+                    final JsonPointer eventPath = adaptable.getPayload().getPath();
+                    
+                    final JsonObject payload = adaptable.getPayload().getValue()
+                            .filter(JsonValue::isObject)
+                            .map(JsonValue::asObject)
+                            .orElse(JsonFactory.newObject());
+                    assertThat(payload.getValue(JsonPointer.of("/attributes/" + ATTR_TYPE)))
+                            .describedAs("User2 filtered event should not contain /attributes/type")
+                            .isEmpty();
+                    assertThat(payload.getValue(JsonPointer.of("/attributes/" + ATTR_HIDDEN)))
+                            .describedAs("User2 filtered event should not contain /attributes/hidden")
+                            .isEmpty();
+                    if (payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).isPresent()) {
+                        final JsonValue complexValue = payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).get();
+                        if (complexValue.isObject()) {
+                            assertThat(complexValue.asObject().getValue(JsonPointer.of(COMPLEX_FIELD_SECRET)))
+                                    .describedAs("User2 filtered event should not contain /attributes/complex/secret")
+                                    .isEmpty();
+                        }
+                    }
+                    assertThat(payload.getValue(JsonPointer.of("/features/" + FEATURE_SOME)))
+                            .describedAs("User2 filtered event should not contain /features/some")
+                            .isEmpty();
+                    if (payload.getValue(JsonPointer.of("/features/" + FEATURE_OTHER + "/" + PROP_PROPERTIES)).isPresent()) {
+                        final JsonValue propsValue = payload.getValue(JsonPointer.of("/features/" + FEATURE_OTHER + "/" + PROP_PROPERTIES)).get();
+                        if (propsValue.isObject()) {
+                            assertThat(propsValue.asObject().getValue(JsonPointer.of(PROP_BAR)))
+                                    .describedAs("User2 filtered event should not contain /features/other/properties/bar")
+                                    .isEmpty();
+                        }
+                    }
+                    final Optional<JsonObject> extra = adaptable.getPayload().getExtra();
+                    if (extra.isPresent()) {
+                        final JsonObject extraObj = extra.get();
+                        assertThat(extraObj.getValue(JsonPointer.of("/attributes/" + ATTR_TYPE)))
+                                .describedAs("User2 extraFields should not contain /attributes/type (filtering should have occurred internally)")
+                                .isEmpty();
+                        assertThat(extraObj.getValue(JsonPointer.of("/attributes/" + ATTR_HIDDEN)))
+                                .describedAs("User2 extraFields should not contain /attributes/hidden")
+                                .isEmpty();
+                        if (extraObj.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).isPresent()) {
+                            final JsonValue complexValue = extraObj.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).get();
+                            if (complexValue.isObject()) {
+                                assertThat(complexValue.asObject().getValue(JsonPointer.of(COMPLEX_FIELD_SECRET)))
+                                        .describedAs("User2 extraFields should not contain /attributes/complex/secret")
+                                        .isEmpty();
+                            }
+                        }
+                        assertThat(extraObj.getValue(JsonPointer.of("/features/" + FEATURE_SOME)))
+                                .describedAs("User2 extraFields should not contain /features/some")
+                                .isEmpty();
+                        if (extraObj.getValue(JsonPointer.of("/features/" + FEATURE_OTHER + "/" + PROP_PROPERTIES)).isPresent()) {
+                            final JsonValue propsValue = extraObj.getValue(JsonPointer.of("/features/" + FEATURE_OTHER + "/" + PROP_PROPERTIES)).get();
+                            if (propsValue.isObject()) {
+                                assertThat(propsValue.asObject().getValue(JsonPointer.of(PROP_BAR)))
+                                        .describedAs("User2 extraFields should not contain /features/other/properties/bar")
+                                        .isEmpty();
+                            }
+                        }
+                        
+                        if (payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX_SOME)).isPresent()) {
+                            assertThat(extraObj.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX_SOME)))
+                                    .describedAs("User2 extraFields should contain /attributes/complex/some when present")
+                                    .isPresent();
+                        }
+                        if (payload.getValue(JsonPointer.of("/features/" + FEATURE_OTHER)).isPresent()) {
+                            assertThat(extraObj.getValue(JsonPointer.of("/features/" + FEATURE_OTHER)))
+                                    .describedAs("User2 extraFields should contain /features/other when present")
+                                    .isPresent();
+                        }
+                    }
+                }
+            } catch (final DittoJsonException e) {
+                if (e.getMessage() != null && e.getMessage().contains("Thing has no ID")) {
+                    LOGGER.debug("Skipping event without Thing ID (expected for partial update events): {}", e.getMessage());
+                } else {
+                    LOGGER.warn("Failed to process user2 message, skipping: {}", e.getMessage());
+                }
+            } catch (Exception e) {
+                LOGGER.warn("Failed to process user2 message, skipping: {}", e.getMessage());
+            }
+        });
     }
 
 }

@@ -79,7 +79,10 @@ import org.eclipse.ditto.things.model.Features;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.ThingsModelFactory;
 import org.eclipse.ditto.things.model.signals.commands.modify.CreateThing;
+import org.eclipse.ditto.things.model.signals.commands.modify.ModifyAttribute;
 import org.eclipse.ditto.things.model.signals.commands.modify.MergeThing;
+import org.eclipse.ditto.things.model.signals.commands.modify.DeleteAttribute;
+import org.eclipse.ditto.things.model.signals.commands.modify.DeleteFeature;
 import org.eclipse.ditto.things.model.signals.commands.modify.ModifyFeatureProperty;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -481,6 +484,169 @@ public final class HttpPushConnectivitySuite extends AbstractTargetOnlyTestCases
                         "  \"_revision\": 2\n" +
                         "}")
                 );
+    }
+
+    @Test
+    @Connections(ConnectionCategory.CONNECTION1)
+    public void testNormalizedPayloadMappingWithDeletedFields() {
+        final Solution solution = testingContextWithRandomNs.getSolution();
+        final String connectionName = cf.disambiguateConnectionName(
+                testingContextWithRandomNs.getSolution().getUsername(),"HttpPushNormalizedPayloadMappingWithDeletedFields");
+        final CreateThing createThing =
+                attachFeatures(newTargetOnlyCreateThing(connectionName, cf.connectionName1),
+                        ThingsModelFactory.newFeatures(FEATURES_JSON));
+        sendSignal(null, createThing);
+        consumeResponse(null, cf.connectionName1);
+        final Connection singleConnection = cf.getSingleConnection(solution.getUsername(), connectionName);
+        final Map<String, String> mappingOptions = Map.of(
+                "fields", "features,attributes,_revision,_deletedFields",
+                "includeDeletedFields", "true"
+        );
+        final MappingContext mappingContext = ConnectivityModelFactory.newMappingContext("Normalized", mappingOptions);
+        final Connection connectionWithNormalizedPayload =
+                singleConnection.toBuilder()
+                        .setTargets(singleConnection.getTargets().stream()
+                                .map(ConnectivityModelFactory::newTargetBuilder)
+                                .map(sb -> sb.payloadMapping(ConnectivityModelFactory.newPayloadMapping("normalized")))
+                                .map(TargetBuilder::build)
+                                .collect(Collectors.toList()))
+                        .payloadMappingDefinition(
+                                ConnectivityModelFactory.newPayloadMappingDefinition("normalized", mappingContext))
+                        .build();
+
+        cf.asyncCreateConnection(solution, connectionWithNormalizedPayload).join();
+
+        final ThingId thingId = createThing.getThing().getEntityId().orElseThrow(NoSuchElementException::new);
+        final MergeThing mergeThing = MergeThing.withFeatures(thingId,
+                ThingsModelFactory.newFeatures(JsonFactory.newObject("{\n" +
+                        "  \"lorem\": { \"properties\": { \"ipsum\" : null }},\n" +
+                        "  \"sit\": { \"properties\": { \"amet\": { \"consetetur\":[\"sadipscing\",\"elitr\"]}}}\n" +
+                        "}")),
+                createThing.getDittoHeaders());
+
+        sendSignal(null, mergeThing);
+        final HttpRequest request = consumeResponse(null, connectionName);
+        final JsonObject normalizedJson =
+                JsonFactory.newObject(request.entity()
+                        .toStrict(5000L, server.getMat())
+                        .toCompletableFuture()
+                        .join()
+                        .getData()
+                        .utf8String()
+                );
+
+        assertThat(normalizedJson.getValue(JsonPointer.of("/_deletedFields/features/lorem/properties/ipsum")))
+                .isPresent()
+                .get()
+                .satisfies(value -> assertThat(value.isString()).isTrue());
+    }
+
+    @Test
+    @Connections(ConnectionCategory.CONNECTION1)
+    public void testNormalizedPayloadMappingWithDeleteAttribute() {
+        final Solution solution = testingContextWithRandomNs.getSolution();
+        final String connectionName = cf.disambiguateConnectionName(
+                testingContextWithRandomNs.getSolution().getUsername(),"HttpPushNormalizedPayloadMappingWithDeleteAttribute");
+        final CreateThing createThing =
+                attachFeatures(newTargetOnlyCreateThing(connectionName, cf.connectionName1),
+                        ThingsModelFactory.newFeatures(FEATURES_JSON));
+        sendSignal(null, createThing);
+        consumeResponse(null, cf.connectionName1);
+        final Connection singleConnection = cf.getSingleConnection(solution.getUsername(), connectionName);
+        final Map<String, String> mappingOptions = Map.of(
+                "fields", "features,attributes,_revision,_deletedFields",
+                "includeDeletedFields", "true"
+        );
+        final MappingContext mappingContext = ConnectivityModelFactory.newMappingContext("Normalized", mappingOptions);
+        final Connection connectionWithNormalizedPayload =
+                singleConnection.toBuilder()
+                        .setTargets(singleConnection.getTargets().stream()
+                                .map(ConnectivityModelFactory::newTargetBuilder)
+                                .map(sb -> sb.payloadMapping(ConnectivityModelFactory.newPayloadMapping("normalized")))
+                                .map(TargetBuilder::build)
+                                .collect(Collectors.toList()))
+                        .payloadMappingDefinition(
+                                ConnectivityModelFactory.newPayloadMappingDefinition("normalized", mappingContext))
+                        .build();
+
+        cf.asyncCreateConnection(solution, connectionWithNormalizedPayload).join();
+
+        final ThingId thingId = createThing.getThing().getEntityId().orElseThrow(NoSuchElementException::new);
+        final ModifyAttribute modifyAttribute = ModifyAttribute.of(
+                thingId,
+                JsonPointer.of("/type"),
+                JsonFactory.newValue("foo"),
+                createThing.getDittoHeaders()
+        );
+        sendSignal(null, modifyAttribute);
+        consumeResponse(null, connectionName);
+
+        final DeleteAttribute deleteAttribute = DeleteAttribute.of(thingId, JsonPointer.of("/type"),
+                createThing.getDittoHeaders());
+        sendSignal(null, deleteAttribute);
+        final HttpRequest request = consumeResponse(null, connectionName);
+        final JsonObject normalizedJson =
+                JsonFactory.newObject(request.entity()
+                        .toStrict(5000L, server.getMat())
+                        .toCompletableFuture()
+                        .join()
+                        .getData()
+                        .utf8String()
+                );
+
+        assertThat(normalizedJson.getValue(JsonPointer.of("/_deletedFields/attributes/type")))
+                .isPresent()
+                .get()
+                .satisfies(value -> assertThat(value.isString()).isTrue());
+    }
+
+    @Test
+    @Connections(ConnectionCategory.CONNECTION1)
+    public void testNormalizedPayloadMappingWithDeleteFeature() {
+        final Solution solution = testingContextWithRandomNs.getSolution();
+        final String connectionName = cf.disambiguateConnectionName(
+                testingContextWithRandomNs.getSolution().getUsername(),"HttpPushNormalizedPayloadMappingWithDeleteFeature");
+        final CreateThing createThing =
+                attachFeatures(newTargetOnlyCreateThing(connectionName, cf.connectionName1),
+                        ThingsModelFactory.newFeatures(FEATURES_JSON));
+        sendSignal(null, createThing);
+        consumeResponse(null, cf.connectionName1);
+        final Connection singleConnection = cf.getSingleConnection(solution.getUsername(), connectionName);
+        final Map<String, String> mappingOptions = Map.of(
+                "fields", "features,attributes,_revision,_deletedFields",
+                "includeDeletedFields", "true"
+        );
+        final MappingContext mappingContext = ConnectivityModelFactory.newMappingContext("Normalized", mappingOptions);
+        final Connection connectionWithNormalizedPayload =
+                singleConnection.toBuilder()
+                        .setTargets(singleConnection.getTargets().stream()
+                                .map(ConnectivityModelFactory::newTargetBuilder)
+                                .map(sb -> sb.payloadMapping(ConnectivityModelFactory.newPayloadMapping("normalized")))
+                                .map(TargetBuilder::build)
+                                .collect(Collectors.toList()))
+                        .payloadMappingDefinition(
+                                ConnectivityModelFactory.newPayloadMappingDefinition("normalized", mappingContext))
+                        .build();
+
+        cf.asyncCreateConnection(solution, connectionWithNormalizedPayload).join();
+
+        final ThingId thingId = createThing.getThing().getEntityId().orElseThrow(NoSuchElementException::new);
+        final DeleteFeature deleteFeature = DeleteFeature.of(thingId, "lorem", createThing.getDittoHeaders());
+        sendSignal(null, deleteFeature);
+        final HttpRequest request = consumeResponse(null, connectionName);
+        final JsonObject normalizedJson =
+                JsonFactory.newObject(request.entity()
+                        .toStrict(5000L, server.getMat())
+                        .toCompletableFuture()
+                        .join()
+                        .getData()
+                        .utf8String()
+                );
+
+        assertThat(normalizedJson.getValue(JsonPointer.of("/_deletedFields/features/lorem")))
+                .isPresent()
+                .get()
+                .satisfies(value -> assertThat(value.isString()).isTrue());
     }
 
     @Test

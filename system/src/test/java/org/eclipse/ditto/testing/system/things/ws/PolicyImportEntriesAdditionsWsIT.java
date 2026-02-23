@@ -143,8 +143,8 @@ public final class PolicyImportEntriesAdditionsWsIT extends IntegrationTest {
                 .build();
         putPolicy(importingPolicy).expectingHttpStatus(CREATED).fire();
 
-        // Create thing via WS with user1
-        final Thing thing = Thing.newBuilder().setId(thingId).build();
+        // Create thing via WS with user1, referencing the existing importing policy
+        final Thing thing = Thing.newBuilder().setId(thingId).setPolicyId(importingPolicyId).build();
         final CreateThing createThing = CreateThing.of(thing, null, dittoHeaders());
         final CommandResponse<?> createResponse = clientUser1.send(createThing)
                 .toCompletableFuture()
@@ -226,6 +226,7 @@ public final class PolicyImportEntriesAdditionsWsIT extends IntegrationTest {
                 .forLabel("ADMIN")
                 .setSubject(defaultSubject)
                 .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(thingResource("/"), READ, WRITE)
                 .build();
     }
 

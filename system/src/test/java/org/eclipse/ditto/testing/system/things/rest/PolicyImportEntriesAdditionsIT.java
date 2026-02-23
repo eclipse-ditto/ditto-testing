@@ -281,6 +281,83 @@ public final class PolicyImportEntriesAdditionsIT extends IntegrationTest {
                 .fire();
     }
 
+    @Test
+    public void putPolicyImportWithMultipleResourceAdditionsAllowed() {
+        // Template allows resource additions
+        final Policy importedPolicy = buildImportedPolicy(importedPolicyId,
+                Set.of(AllowedImportAddition.RESOURCES));
+        putPolicy(importedPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Importing policy with entriesAdditions adding multiple resources in a single addition
+        final Resource attrResource = PoliciesModelFactory.newResource(thingResource("/attributes"),
+                PoliciesModelFactory.newEffectedPermissions(List.of(READ, WRITE), List.of()));
+        final Resource featResource = PoliciesModelFactory.newResource(thingResource("/features"),
+                PoliciesModelFactory.newEffectedPermissions(List.of(READ), List.of()));
+        final EntryAddition entryAddition = PoliciesModelFactory.newEntryAddition(
+                Label.of("DEFAULT"), null,
+                PoliciesModelFactory.newResources(attrResource, featResource));
+        final EntriesAdditions additions = PoliciesModelFactory.newEntriesAdditions(List.of(entryAddition));
+        final EffectedImports effectedImports = PoliciesModelFactory.newEffectedImportedLabels(
+                List.of(Label.of("DEFAULT")), additions);
+        final PolicyImport policyImport = PoliciesModelFactory.newPolicyImport(importedPolicyId, effectedImports);
+
+        final Policy importingPolicy = buildImportingPolicy(importingPolicyId)
+                .toBuilder().setPolicyImport(policyImport).build();
+        putPolicy(importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        getPolicy(importingPolicyId)
+                .expectingHttpStatus(OK)
+                .fire();
+    }
+
+    @Test
+    public void putPolicyImportWithAdditionsForMultipleLabels() {
+        // Template with DEFAULT and EXTRA entries, both allow subject additions
+        final PolicyEntry adminEntry = PoliciesModelFactory.newPolicyEntry("ADMIN",
+                List.of(defaultSubject),
+                List.of(PoliciesModelFactory.newResource(policyResource("/"),
+                        PoliciesModelFactory.newEffectedPermissions(List.of(READ, WRITE), List.of()))),
+                ImportableType.NEVER, Set.of());
+        final PolicyEntry defaultEntry = PoliciesModelFactory.newPolicyEntry("DEFAULT",
+                List.of(defaultSubject),
+                List.of(PoliciesModelFactory.newResource(thingResource("/"),
+                        PoliciesModelFactory.newEffectedPermissions(List.of(READ), List.of()))),
+                ImportableType.IMPLICIT, Set.of(AllowedImportAddition.SUBJECTS));
+        final PolicyEntry extraEntry = PoliciesModelFactory.newPolicyEntry("EXTRA",
+                List.of(defaultSubject),
+                List.of(PoliciesModelFactory.newResource(thingResource("/attributes"),
+                        PoliciesModelFactory.newEffectedPermissions(List.of(READ, WRITE), List.of()))),
+                ImportableType.EXPLICIT, Set.of(AllowedImportAddition.SUBJECTS));
+
+        final Policy importedPolicy = PoliciesModelFactory.newPolicyBuilder(importedPolicyId)
+                .set(adminEntry)
+                .set(defaultEntry)
+                .set(extraEntry)
+                .build();
+        putPolicy(importedPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Importing policy with entriesAdditions targeting both labels
+        final EntryAddition defaultAddition = PoliciesModelFactory.newEntryAddition(
+                Label.of("DEFAULT"),
+                PoliciesModelFactory.newSubjects(subject2), null);
+        final EntryAddition extraAddition = PoliciesModelFactory.newEntryAddition(
+                Label.of("EXTRA"),
+                PoliciesModelFactory.newSubjects(subject2), null);
+        final EntriesAdditions additions = PoliciesModelFactory.newEntriesAdditions(
+                List.of(defaultAddition, extraAddition));
+        final EffectedImports effectedImports = PoliciesModelFactory.newEffectedImportedLabels(
+                List.of(Label.of("DEFAULT"), Label.of("EXTRA")), additions);
+        final PolicyImport policyImport = PoliciesModelFactory.newPolicyImport(importedPolicyId, effectedImports);
+
+        final Policy importingPolicy = buildImportingPolicy(importingPolicyId)
+                .toBuilder().setPolicyImport(policyImport).build();
+        putPolicy(importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        getPolicy(importingPolicyId)
+                .expectingHttpStatus(OK)
+                .fire();
+    }
+
     /**
      * Builds an imported (template) policy with a DEFAULT entry that grants thing:/ READ
      * and has the specified {@code allowedImportAdditions}.

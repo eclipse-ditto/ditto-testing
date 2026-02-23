@@ -10,3 +10,4 @@ logs/
 target/
 .env
 /docker/sshd/config/sshd.pid
+.claude/settings.local.json

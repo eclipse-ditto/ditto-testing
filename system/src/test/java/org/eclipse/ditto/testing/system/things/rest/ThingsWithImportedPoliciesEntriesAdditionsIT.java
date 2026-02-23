@@ -13,6 +13,7 @@
 package org.eclipse.ditto.testing.system.things.rest;
 
 import static org.eclipse.ditto.base.model.common.HttpStatus.CREATED;
+import static org.eclipse.ditto.base.model.common.HttpStatus.FORBIDDEN;
 import static org.eclipse.ditto.base.model.common.HttpStatus.NOT_FOUND;
 import static org.eclipse.ditto.base.model.common.HttpStatus.NO_CONTENT;
 import static org.eclipse.ditto.base.model.common.HttpStatus.OK;
@@ -154,7 +155,7 @@ public final class ThingsWithImportedPoliciesEntriesAdditionsIT extends Integrat
                 ImportableType.NEVER, Set.of());
 
         final PolicyEntry defaultEntry = PoliciesModelFactory.newPolicyEntry("DEFAULT",
-                List.of(defaultSubject),
+                List.of(),
                 List.of(PoliciesModelFactory.newResource(thingResource("/"),
                         PoliciesModelFactory.newEffectedPermissions(List.of(READ), List.of(WRITE)))),
                 ImportableType.IMPLICIT,
@@ -208,7 +209,143 @@ public final class ThingsWithImportedPoliciesEntriesAdditionsIT extends Integrat
                         .build(),
                 org.eclipse.ditto.base.model.json.JsonSchemaVersion.V_2)
                 .withConfiguredAuth(serviceEnv.getTestingContext2())
-                .expectingHttpStatus(NOT_FOUND)
+                .expectingHttpStatus(FORBIDDEN)
+                .fire();
+
+        // Cleanup
+        deleteThing(TestConstants.API_V_2, thingId)
+                .expectingHttpStatus(NO_CONTENT)
+                .fire();
+    }
+
+    @Test
+    public void resourceAdditionGrantsWriteAccess() {
+        // Template grants thing:/ READ only, allows both subject and resource additions
+        final Policy importedPolicy = buildImportedPolicy(importedPolicyId,
+                Set.of(AllowedImportAddition.SUBJECTS, AllowedImportAddition.RESOURCES));
+        putPolicy(importedPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Importing policy adds subject2 AND grants WRITE on thing:/ via resource addition
+        final Resource writeResource = PoliciesModelFactory.newResource(thingResource("/"),
+                PoliciesModelFactory.newEffectedPermissions(List.of(WRITE), List.of()));
+        final EntryAddition entryAddition = PoliciesModelFactory.newEntryAddition(
+                Label.of("DEFAULT"),
+                PoliciesModelFactory.newSubjects(subject2),
+                PoliciesModelFactory.newResources(writeResource));
+        final EntriesAdditions additions = PoliciesModelFactory.newEntriesAdditions(List.of(entryAddition));
+        final EffectedImports effectedImports = PoliciesModelFactory.newEffectedImportedLabels(
+                List.of(Label.of("DEFAULT")), additions);
+        final PolicyImport policyImport = PoliciesModelFactory.newPolicyImport(importedPolicyId, effectedImports);
+
+        final Policy importingPolicy = buildImportingPolicy(importingPolicyId).toBuilder()
+                .setPolicyImport(policyImport)
+                .build();
+        putPolicy(importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Create a thing
+        final String thingId = importingPolicyId.toString();
+        putThing(TestConstants.API_V_2, JsonObject.newBuilder()
+                        .set("thingId", thingId)
+                        .set("policyId", importingPolicyId.toString())
+                        .build(),
+                org.eclipse.ditto.base.model.json.JsonSchemaVersion.V_2)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        // user2 can READ (from template grant)
+        getThing(TestConstants.API_V_2, thingId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(OK)
+                .fire();
+
+        // user2 can WRITE (from resource addition granting WRITE on thing:/)
+        putThing(TestConstants.API_V_2,
+                JsonObject.newBuilder()
+                        .set("thingId", thingId)
+                        .set("policyId", importingPolicyId.toString())
+                        .set("attributes", JsonObject.newBuilder().set("test", "value").build())
+                        .build(),
+                org.eclipse.ditto.base.model.json.JsonSchemaVersion.V_2)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(NO_CONTENT)
+                .fire();
+
+        // Cleanup
+        deleteThing(TestConstants.API_V_2, thingId)
+                .expectingHttpStatus(NO_CONTENT)
+                .fire();
+    }
+
+    @Test
+    public void additionsForMultipleImportedLabels() {
+        // Template has DEFAULT (thing:/ READ) and EXTRA (thing:/ WRITE), both allow subject additions
+        final PolicyEntry adminEntry = PoliciesModelFactory.newPolicyEntry("ADMIN",
+                List.of(defaultSubject),
+                List.of(PoliciesModelFactory.newResource(policyResource("/"),
+                        PoliciesModelFactory.newEffectedPermissions(List.of(READ, WRITE), List.of()))),
+                ImportableType.NEVER, Set.of());
+        final PolicyEntry defaultEntry = PoliciesModelFactory.newPolicyEntry("DEFAULT",
+                List.of(defaultSubject),
+                List.of(PoliciesModelFactory.newResource(thingResource("/"),
+                        PoliciesModelFactory.newEffectedPermissions(List.of(READ), List.of()))),
+                ImportableType.IMPLICIT, Set.of(AllowedImportAddition.SUBJECTS));
+        final PolicyEntry extraEntry = PoliciesModelFactory.newPolicyEntry("EXTRA",
+                List.of(defaultSubject),
+                List.of(PoliciesModelFactory.newResource(thingResource("/"),
+                        PoliciesModelFactory.newEffectedPermissions(List.of(WRITE), List.of()))),
+                ImportableType.EXPLICIT, Set.of(AllowedImportAddition.SUBJECTS));
+
+        final Policy importedPolicy = PoliciesModelFactory.newPolicyBuilder(importedPolicyId)
+                .set(adminEntry)
+                .set(defaultEntry)
+                .set(extraEntry)
+                .build();
+        putPolicy(importedPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Importing policy adds subject2 to both DEFAULT and EXTRA labels
+        final EntryAddition defaultAddition = PoliciesModelFactory.newEntryAddition(
+                Label.of("DEFAULT"),
+                PoliciesModelFactory.newSubjects(subject2), null);
+        final EntryAddition extraAddition = PoliciesModelFactory.newEntryAddition(
+                Label.of("EXTRA"),
+                PoliciesModelFactory.newSubjects(subject2), null);
+        final EntriesAdditions additions = PoliciesModelFactory.newEntriesAdditions(
+                List.of(defaultAddition, extraAddition));
+        final EffectedImports effectedImports = PoliciesModelFactory.newEffectedImportedLabels(
+                List.of(Label.of("DEFAULT"), Label.of("EXTRA")), additions);
+        final PolicyImport policyImport = PoliciesModelFactory.newPolicyImport(importedPolicyId, effectedImports);
+
+        final Policy importingPolicy = buildImportingPolicy(importingPolicyId).toBuilder()
+                .setPolicyImport(policyImport)
+                .build();
+        putPolicy(importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Create a thing
+        final String thingId = importingPolicyId.toString();
+        putThing(TestConstants.API_V_2, JsonObject.newBuilder()
+                        .set("thingId", thingId)
+                        .set("policyId", importingPolicyId.toString())
+                        .build(),
+                org.eclipse.ditto.base.model.json.JsonSchemaVersion.V_2)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        // user2 can READ (from DEFAULT import with subject addition)
+        getThing(TestConstants.API_V_2, thingId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(OK)
+                .fire();
+
+        // user2 can WRITE (from EXTRA import with subject addition)
+        putThing(TestConstants.API_V_2,
+                JsonObject.newBuilder()
+                        .set("thingId", thingId)
+                        .set("policyId", importingPolicyId.toString())
+                        .set("attributes", JsonObject.newBuilder().set("test", "value").build())
+                        .build(),
+                org.eclipse.ditto.base.model.json.JsonSchemaVersion.V_2)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(NO_CONTENT)
                 .fire();
 
         // Cleanup

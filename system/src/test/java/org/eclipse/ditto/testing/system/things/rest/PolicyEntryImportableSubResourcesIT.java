@@ -39,6 +39,7 @@ import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.PolicyEntry;
 import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.policies.model.PolicyImport;
+import org.eclipse.ditto.policies.model.Resource;
 import org.eclipse.ditto.policies.model.Subject;
 import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.ResourcePathBuilder;
@@ -273,6 +274,49 @@ public final class PolicyEntryImportableSubResourcesIT extends IntegrationTest {
         // Try to modify the import to add subject additions - should be rejected
         final PolicyImport importWithAdditions = buildImportWithSubjectAdditions(importedPolicyId, subject2);
         putPolicyImport(importingPolicyId, importWithAdditions)
+                .expectingHttpStatus(BAD_REQUEST)
+                .expectingErrorCode("policies:import.invalid")
+                .fire();
+    }
+
+    @Test
+    public void removingResourcesFromAllowedAdditionsRejectsNewResourceAdditions() {
+        // Create imported policy with allowedImportAdditions=["subjects","resources"]
+        final Policy importedPolicy = buildImportedPolicy(importedPolicyId,
+                Set.of(AllowedImportAddition.SUBJECTS, AllowedImportAddition.RESOURCES));
+        putPolicy(importedPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Create importing policy with a simple import (no additions)
+        final PolicyImport simpleImport = PoliciesModelFactory.newPolicyImport(importedPolicyId,
+                PoliciesModelFactory.newEffectedImportedLabels(List.of(Label.of("DEFAULT"))));
+        final Policy importingPolicy = buildImportingPolicy(importingPolicyId)
+                .toBuilder().setPolicyImport(simpleImport).build();
+        putPolicy(importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Verify that adding resource additions currently works
+        final Resource additionalResource = PoliciesModelFactory.newResource(thingResource("/attributes"),
+                PoliciesModelFactory.newEffectedPermissions(List.of(READ), List.of()));
+        final EntryAddition resourceAddition = PoliciesModelFactory.newEntryAddition(
+                Label.of("DEFAULT"), null,
+                PoliciesModelFactory.newResources(additionalResource));
+        final EntriesAdditions resourceAdditions = PoliciesModelFactory.newEntriesAdditions(
+                List.of(resourceAddition));
+        final EffectedImports effectedWithResources = PoliciesModelFactory.newEffectedImportedLabels(
+                List.of(Label.of("DEFAULT")), resourceAdditions);
+        final PolicyImport importWithResources = PoliciesModelFactory.newPolicyImport(
+                importedPolicyId, effectedWithResources);
+        putPolicyImport(importingPolicyId, importWithResources)
+                .expectingHttpStatus(NO_CONTENT)
+                .fire();
+
+        // Remove "resources" from allowedImportAdditions, keeping only "subjects"
+        putPolicyEntryAllowedImportAdditions(importedPolicyId, "DEFAULT",
+                JsonArray.newBuilder().add("subjects").build())
+                .expectingHttpStatus(NO_CONTENT)
+                .fire();
+
+        // Now attempting to update the import with resource additions should be rejected
+        putPolicyImport(importingPolicyId, importWithResources)
                 .expectingHttpStatus(BAD_REQUEST)
                 .expectingErrorCode("policies:import.invalid")
                 .fire();

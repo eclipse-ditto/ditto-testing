@@ -14,6 +14,7 @@ package org.eclipse.ditto.testing.system.things.ws;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
+import static org.hamcrest.Matchers.containsString;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -35,6 +36,7 @@ import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscripti
 import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscriptionCreated;
 import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscriptionFailed;
 import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscriptionHasNext;
+import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.protocol.ProtocolFactory;
@@ -50,7 +52,6 @@ import org.eclipse.ditto.things.model.signals.events.AttributeModified;
 import org.eclipse.ditto.things.model.signals.events.ThingCreated;
 import org.eclipse.ditto.things.model.signals.events.ThingEvent;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -63,51 +64,81 @@ public final class StreamPersistedEventsIT extends IntegrationTest {
 
     private static final int TOTAL_COUNTER_UPDATES = 100;
     private static final DittoProtocolAdapter DITTO_PROTOCOL_ADAPTER = DittoProtocolAdapter.newInstance();
+    private static final long LATCH_TIMEOUT_SECONDS = 10;
 
     private ThingsWebsocketClient client;
     private ThingsWebsocketClient client2;
     private ThingsWebsocketClient client3;
-    private static final long LATCH_TIMEOUT_SECONDS = 10;
 
-    final static Thing thing = Thing.newBuilder()
-            .setId(ThingId.of(idGenerator().withPrefixedRandomName("001")))
-            .setAttribute(JsonPointer.of("counter"), JsonValue.of(0))
-            .build();
-
-    final static Thing thing2 = Thing.newBuilder()
-            .setId(ThingId.of(idGenerator().withPrefixedRandomName("002")))
-            .setAttribute(JsonPointer.of("counter"), JsonValue.of(0))
-            .build();
-
-    final static Thing thing3 = Thing.newBuilder()
-            .setId(ThingId.of(serviceEnv.getTesting2NamespaceName(),
-                    "003_" + UUID.randomUUID()))
-            .setAttribute(JsonPointer.of("counter"), JsonValue.of(0))
-            .build();
+    private Thing thing;
+    private Thing thing2;
+    private Thing thing3;
 
     private static AuthClient clientForDefaultContext;
     private static AuthClient clientForContext2;
     private static AuthClient secondClientForDefaultContext;
 
-    @Before
-    public void createWebsocketClients() {
-        client = newClient(clientForDefaultContext.getAccessToken(), Collections.emptyMap());
-        client2 = newClient(secondClientForDefaultContext.getAccessToken(), Collections.emptyMap());
-        client3 = newClient(clientForContext2.getAccessToken(), Collections.emptyMap());
-        client.connect("ThingsWebsocketClient1-" + UUID.randomUUID());
-        client2.connect("ThingsWebsocketClient2-" + UUID.randomUUID());
-        client3.connect("ThingsWebsocketClient3-" + UUID.randomUUID());
-    }
-
     @BeforeClass
-    public static void createTestData() {
+    public static void setUpClass() {
         clientForDefaultContext = serviceEnv.getDefaultTestingContext().getOAuthClient();
         final TestingContext testingContext =
                 TestingContext.withGeneratedMockClient(serviceEnv.getDefaultTestingContext().getSolution(),
                         TEST_CONFIG);
         secondClientForDefaultContext = testingContext.getOAuthClient();
-
         clientForContext2 = serviceEnv.getTestingContext2().getOAuthClient();
+    }
+
+    @Before
+    public void setUp() {
+        disableCleanup();
+        createTestData();
+        createWebsocketClients();
+    }
+
+    @After
+    public void tearDown() {
+        if (client != null) {
+            client.disconnect();
+        }
+        if (client2 != null) {
+            client2.disconnect();
+        }
+        if (client3 != null) {
+            client3.disconnect();
+        }
+
+        if (thing != null) {
+            deleteThing(2, thing.getEntityId().orElseThrow()).fire();
+            deletePolicy(thing.getEntityId().orElseThrow()).fire();
+        }
+        if (thing2 != null) {
+            deleteThing(2, thing2.getEntityId().orElseThrow()).fire();
+            deletePolicy(thing2.getEntityId().orElseThrow()).fire();
+        }
+        if (thing3 != null) {
+            deleteThing(2, thing3.getEntityId().orElseThrow())
+                    .withJWT(clientForContext2.getAccessToken())
+                    .fire();
+            deletePolicy(thing3.getEntityId().orElseThrow())
+                    .withJWT(clientForContext2.getAccessToken())
+                    .fire();
+        }
+    }
+
+    private void createTestData() {
+        thing = Thing.newBuilder()
+                .setId(ThingId.of(idGenerator().withPrefixedRandomName("001")))
+                .setAttribute(JsonPointer.of("counter"), JsonValue.of(0))
+                .build();
+        thing2 = Thing.newBuilder()
+                .setId(ThingId.of(idGenerator().withPrefixedRandomName("002")))
+                .setAttribute(JsonPointer.of("counter"), JsonValue.of(0))
+                .build();
+        thing3 = Thing.newBuilder()
+                .setId(ThingId.of(serviceEnv.getTesting2NamespaceName(),
+                        "003_" + UUID.randomUUID()))
+                .setAttribute(JsonPointer.of("counter"), JsonValue.of(0))
+                .build();
 
         putThing(2, thing, JsonSchemaVersion.V_2)
                 .withHeader("If-None-Match", "*")
@@ -144,31 +175,40 @@ public final class StreamPersistedEventsIT extends IntegrationTest {
         }
     }
 
-    @AfterClass
-    public static void deleteThingsAndPolicies() {
-        deleteThing(2, thing.getEntityId().orElseThrow()).fire();
-        deleteThing(2, thing2.getEntityId().orElseThrow()).fire();
-        deleteThing(2, thing3.getEntityId().orElseThrow())
-                .withJWT(clientForContext2.getAccessToken())
-                .fire();
-
-        deletePolicy(thing.getEntityId().orElseThrow()).fire();
-        deletePolicy(thing2.getEntityId().orElseThrow()).fire();
-        deletePolicy(thing3.getEntityId().orElseThrow())
-                .withJWT(clientForContext2.getAccessToken())
-                .fire();
+    private void createWebsocketClients() {
+        client = newClient(clientForDefaultContext.getAccessToken(), Collections.emptyMap());
+        client2 = newClient(secondClientForDefaultContext.getAccessToken(), Collections.emptyMap());
+        client3 = newClient(clientForContext2.getAccessToken(), Collections.emptyMap());
+        client.connect("ThingsWebsocketClient1-" + UUID.randomUUID());
+        client2.connect("ThingsWebsocketClient2-" + UUID.randomUUID());
+        client3.connect("ThingsWebsocketClient3-" + UUID.randomUUID());
     }
 
-    @After
-    public void stopWebsocketClients() {
-        if (client != null) {
-            client.disconnect();
-        }
-        if (client2 != null) {
-            client2.disconnect();
-        }
-        if (client3 != null) {
-            client3.disconnect();
+    /**
+     * Disables the background persistence cleanup on the things service via a piggyback command.
+     * This prevents the {@code PersistenceCleanupActor} from deleting journal events that this test relies on.
+     * Necessary because {@code CleanupIT} may dynamically enable cleanup with aggressive settings (0d retention)
+     * during concurrent test execution.
+     * <p>
+     * Best-effort: in environments where the devops endpoint is not accessible (e.g., non-Docker deployments),
+     * the call is logged and skipped. The per-test data creation still provides resilience against stale data.
+     */
+    private static void disableCleanup() {
+        try {
+            final JsonObject modifyConfig = JsonObject.newBuilder()
+                    .set("type", "common.commands:modifyConfig")
+                    .set(JsonPointer.of("config/enabled"), false)
+                    .set(JsonPointer.of("config/quiet-period"), "86400s")
+                    .set(JsonPointer.of("config/interval"), "1s")
+                    .set(JsonPointer.of("config/last-pid"), "")
+                    .build();
+
+            serviceEnv.postPiggy("things", modifyConfig, "/user/thingsRoot/persistenceCleanup")
+                    .expectingBody(containsString("common.responses:modifyConfig"))
+                    .fire();
+        } catch (final Exception e) {
+            LOGGER.warn("Could not disable background cleanup via devops piggyback (endpoint may not be accessible): {}",
+                    e.getMessage());
         }
     }
 

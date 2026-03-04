@@ -87,8 +87,10 @@ public final class CheckPermissionsIT extends IntegrationTest {
     @Test
     public void checkPermissionsWithNonexistentPolicyOrThing() {
         final JsonObject nonexistentRequestBody = buildPermissionsRequest(
-                buildResourceEntry("nonexistent_policy", "policy:/", "nonexistent-policy-id", Set.of("READ")),
-                buildResourceEntry("nonexistent_thing", "thing:/features/lamp/properties/on", "nonexistent-thing-id", Set.of("READ"))
+                buildResourceEntry("nonexistent_policy", "policy:/", "namespace.default:nonexistent-policy-id",
+                        Set.of("READ")),
+                buildResourceEntry("nonexistent_thing", "thing:/features/lamp/properties/on",
+                        "namespace.default:nonexistent-thing-id", Set.of("READ"))
         );
 
         postCheckPermissions(nonexistentRequestBody.toString())
@@ -97,6 +99,50 @@ public final class CheckPermissionsIT extends IntegrationTest {
                         .set("nonexistent_policy", false)
                         .set("nonexistent_thing", false)
                         .build()))
+                .fire();
+    }
+
+    @Test
+    public void checkPermissionsWithInvalidPolicyIdReturnsBadRequest() {
+        final JsonObject invalidRequestBody = buildPermissionsRequest(
+                buildResourceEntry("invalid_policy", "policy:/", "nonexistent-policy-id", Set.of("READ"))
+        );
+
+        postCheckPermissions(invalidRequestBody.toString())
+                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
+                .fire();
+    }
+
+    @Test
+    public void checkPermissionsWithInvalidThingIdReturnsBadRequest() {
+        final JsonObject invalidRequestBody = buildPermissionsRequest(
+                buildResourceEntry("invalid_thing", "thing:/", "nonexistent-thing-id", Set.of("READ"))
+        );
+
+        postCheckPermissions(invalidRequestBody.toString())
+                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
+                .fire();
+    }
+
+    @Test
+    public void checkPermissionsWithUnsupportedResourceTypeReturnsBadRequest() {
+        final JsonObject invalidRequestBody = buildPermissionsRequest(
+                buildResourceEntry("invalid_resource", "foo:/bar", "namespace.default:thing", Set.of("READ"))
+        );
+
+        postCheckPermissions(invalidRequestBody.toString())
+                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
+                .fire();
+    }
+
+    @Test
+    public void checkPermissionsWithUnsupportedPermissionReturnsBadRequest() {
+        final JsonObject invalidRequestBody = buildPermissionsRequest(
+                buildResourceEntry("invalid_permission", "thing:/", "namespace.default:thing", Set.of("FOO"))
+        );
+
+        postCheckPermissions(invalidRequestBody.toString())
+                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .fire();
     }
 

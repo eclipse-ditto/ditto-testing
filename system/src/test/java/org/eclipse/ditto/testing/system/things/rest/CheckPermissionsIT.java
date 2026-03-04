@@ -92,7 +92,11 @@ public final class CheckPermissionsIT extends IntegrationTest {
         );
 
         postCheckPermissions(nonexistentRequestBody.toString())
-                .expectingHttpStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+                .expectingHttpStatus(HttpStatus.OK)
+                .expectingBody(contains(JsonObject.newBuilder()
+                        .set("nonexistent_policy", false)
+                        .set("nonexistent_thing", false)
+                        .build()))
                 .fire();
     }
 

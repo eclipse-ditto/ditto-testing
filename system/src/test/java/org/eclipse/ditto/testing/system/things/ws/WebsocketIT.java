@@ -45,9 +45,9 @@ import java.util.stream.Stream;
 
 import javax.annotation.Nullable;
 
-import org.eclipse.ditto.base.api.common.checkpermissions.CheckPermissions;
-import org.eclipse.ditto.base.api.common.checkpermissions.CheckPermissionsResponse;
-import org.eclipse.ditto.base.api.common.checkpermissions.ImmutablePermissionCheck;
+import org.eclipse.ditto.policies.model.signals.commands.checkpermissions.CheckPermissions;
+import org.eclipse.ditto.policies.model.signals.commands.checkpermissions.CheckPermissionsResponse;
+import org.eclipse.ditto.policies.model.signals.commands.checkpermissions.ImmutablePermissionCheck;
 import org.eclipse.ditto.base.model.acks.AcknowledgementLabel;
 import org.eclipse.ditto.base.model.acks.AcknowledgementRequest;
 import org.eclipse.ditto.base.model.acks.DittoAcknowledgementLabel;

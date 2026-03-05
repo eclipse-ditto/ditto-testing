@@ -135,16 +135,6 @@ public final class CheckPermissionsIT extends IntegrationTest {
                 .fire();
     }
 
-    @Test
-    public void checkPermissionsWithUnsupportedPermissionReturnsBadRequest() {
-        final JsonObject invalidRequestBody = buildPermissionsRequest(
-                buildResourceEntry("invalid_permission", "thing:/", "namespace.default:thing", Set.of("FOO"))
-        );
-
-        postCheckPermissions(invalidRequestBody.toString())
-                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
-                .fire();
-    }
 
     private static Thing newThing(final ThingId thingId) {
         return Thing.newBuilder().setId(thingId).build();

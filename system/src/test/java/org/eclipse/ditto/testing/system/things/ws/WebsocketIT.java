@@ -3595,15 +3595,15 @@ public final class WebsocketIT extends IntegrationTest {
 
         final CheckPermissions checkPermissions = CheckPermissions.of(
                 Map.of(
-                        "thing_writer", ImmutablePermissionCheck.of(
+                        "thing_writer", immutablePermissionCheck(
                                 "thing:/features/lamp/properties/on",
                                 thingId.toString(),
                                 List.of(WRITE)),
-                        "message_writer", ImmutablePermissionCheck.of(
+                        "message_writer", immutablePermissionCheck(
                                 "message:/features/lamp/inbox/messages/toggle",
                                 thingId.toString(),
                                 List.of(WRITE)),
-                        "policy_reader", ImmutablePermissionCheck.of(
+                        "policy_reader", immutablePermissionCheck(
                                 "policy:/",
                                 thingId.toString(),
                                 List.of(READ))
@@ -3646,15 +3646,15 @@ public final class WebsocketIT extends IntegrationTest {
 
         final CheckPermissions checkPermissions = CheckPermissions.of(
                 Map.of(
-                        "thing_reader", ImmutablePermissionCheck.of(
+                        "thing_reader", immutablePermissionCheck(
                                 "thing:/features/fan/properties/on",
                                 thingId.toString(),
                                 List.of(READ)),
-                        "message_reader", ImmutablePermissionCheck.of(
+                        "message_reader", immutablePermissionCheck(
                                 "message:/features/lamp/inbox/messages/toggle",
                                 thingId.toString(),
                                 List.of(READ)),
-                        "policy_writer", ImmutablePermissionCheck.of(
+                        "policy_writer", immutablePermissionCheck(
                                 "policy:/",
                                 thingId.toString(),
                                 List.of(WRITE))
@@ -3701,22 +3701,22 @@ public final class WebsocketIT extends IntegrationTest {
         final CheckPermissions checkPermissions = CheckPermissions.of(
                 Map.of(
                         // READ on an unrestricted path → true
-                        "unrestricted_read", ImmutablePermissionCheck.of(
+                        "unrestricted_read", immutablePermissionCheck(
                                 "thing:/features/unrestricted",
                                 thingId.toString(),
                                 List.of(READ)),
                         // READ on the revoked path → false
-                        "restricted_read", ImmutablePermissionCheck.of(
+                        "restricted_read", immutablePermissionCheck(
                                 "thing:/features/restricted",
                                 thingId.toString(),
                                 List.of(READ)),
                         // WRITE on the same revoked path → true (only READ was revoked)
-                        "restricted_write", ImmutablePermissionCheck.of(
+                        "restricted_write", immutablePermissionCheck(
                                 "thing:/features/restricted",
                                 thingId.toString(),
                                 List.of(WRITE)),
                         // READ on policy → true
-                        "policy_read", ImmutablePermissionCheck.of(
+                        "policy_read", immutablePermissionCheck(
                                 "policy:/",
                                 thingId.toString(),
                                 List.of(READ))
@@ -3741,6 +3741,18 @@ public final class WebsocketIT extends IntegrationTest {
                 .get(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
         clientUser1.send(DeleteThing.of(thingId, COMMAND_HEADERS_V2));
+    }
+
+    private static ImmutablePermissionCheck immutablePermissionCheck(final String resource,
+            final String entityId,
+            final List<String> hasPermissions) {
+        final var permissionsArrayBuilder = JsonFactory.newArrayBuilder();
+        hasPermissions.forEach(permission -> permissionsArrayBuilder.add(JsonFactory.newValue(permission)));
+        return ImmutablePermissionCheck.fromJson(JsonObject.newBuilder()
+                .set("resource", resource)
+                .set("entityId", entityId)
+                .set("hasPermissions", permissionsArrayBuilder.build())
+                .build());
     }
 
 }

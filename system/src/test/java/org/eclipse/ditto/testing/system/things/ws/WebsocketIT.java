@@ -45,6 +45,9 @@ import java.util.stream.Stream;
 
 import javax.annotation.Nullable;
 
+import org.eclipse.ditto.policies.model.signals.commands.checkpermissions.CheckPermissions;
+import org.eclipse.ditto.policies.model.signals.commands.checkpermissions.CheckPermissionsResponse;
+import org.eclipse.ditto.policies.model.signals.commands.checkpermissions.ImmutablePermissionCheck;
 import org.eclipse.ditto.base.model.acks.AcknowledgementLabel;
 import org.eclipse.ditto.base.model.acks.AcknowledgementRequest;
 import org.eclipse.ditto.base.model.acks.DittoAcknowledgementLabel;
@@ -77,6 +80,7 @@ import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.policies.model.Resource;
 import org.eclipse.ditto.policies.model.Subject;
 import org.eclipse.ditto.policies.model.SubjectAnnouncement;
+import org.eclipse.ditto.policies.model.Subjects;
 import org.eclipse.ditto.policies.model.SubjectExpiry;
 import org.eclipse.ditto.policies.model.SubjectId;
 import org.eclipse.ditto.policies.model.SubjectIssuer;
@@ -3573,4 +3577,182 @@ public final class WebsocketIT extends IntegrationTest {
 
         cleanupWithOwnerClient(clientOwner, thingId, policyId);
     }
+
+    @Test
+    public void checkPermissionsFullAccessViaWs()
+            throws InterruptedException, ExecutionException, TimeoutException {
+
+        final ThingId thingId =
+                ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubjects(Subjects.newInstance(user1OAuthClient.getSubject()))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .build();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+
+        final CheckPermissions checkPermissions = CheckPermissions.of(
+                Map.of(
+                        "thing_writer", immutablePermissionCheck(
+                                "thing:/features/lamp/properties/on",
+                                thingId.toString(),
+                                List.of(WRITE)),
+                        "message_writer", immutablePermissionCheck(
+                                "message:/features/lamp/inbox/messages/toggle",
+                                thingId.toString(),
+                                List.of(WRITE)),
+                        "policy_reader", immutablePermissionCheck(
+                                "policy:/",
+                                thingId.toString(),
+                                List.of(READ))
+                ),
+                COMMAND_HEADERS_V2);
+
+        clientUser1.send(CreateThing.of(thing, policy.toJson(), COMMAND_HEADERS_V2))
+                .thenCompose(createResponse -> {
+                    assertThat(createResponse).isInstanceOf(CreateThingResponse.class);
+                    return clientUser1.send(checkPermissions);
+                })
+                .whenComplete((response, throwable) -> {
+                    assertThat(throwable).isNull();
+                    assertThat(response).isInstanceOf(CheckPermissionsResponse.class);
+                    final var results =
+                            ((CheckPermissionsResponse) response).getEntity(JsonSchemaVersion.V_2).asObject();
+                    assertThat(results.getValue("thing_writer").orElseThrow().asBoolean()).isTrue();
+                    assertThat(results.getValue("message_writer").orElseThrow().asBoolean()).isTrue();
+                    assertThat(results.getValue("policy_reader").orElseThrow().asBoolean()).isTrue();
+                })
+                .get(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        clientUser1.send(DeleteThing.of(thingId, COMMAND_HEADERS_V2));
+    }
+
+    @Test
+    public void checkPermissionsRestrictedAccessViaWs()
+            throws InterruptedException, ExecutionException, TimeoutException {
+
+        final ThingId thingId =
+                ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubjects(Subjects.newInstance(user1OAuthClient.getSubject()))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), WRITE)
+                .build();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+
+        final CheckPermissions checkPermissions = CheckPermissions.of(
+                Map.of(
+                        "thing_reader", immutablePermissionCheck(
+                                "thing:/features/fan/properties/on",
+                                thingId.toString(),
+                                List.of(READ)),
+                        "message_reader", immutablePermissionCheck(
+                                "message:/features/lamp/inbox/messages/toggle",
+                                thingId.toString(),
+                                List.of(READ)),
+                        "policy_writer", immutablePermissionCheck(
+                                "policy:/",
+                                thingId.toString(),
+                                List.of(WRITE))
+                ),
+                COMMAND_HEADERS_V2);
+
+        clientUser1.send(CreateThing.of(thing, policy.toJson(), COMMAND_HEADERS_V2))
+                .thenCompose(createResponse -> {
+                    assertThat(createResponse).isInstanceOf(CreateThingResponse.class);
+                    return clientUser1.send(checkPermissions);
+                })
+                .whenComplete((response, throwable) -> {
+                    assertThat(throwable).isNull();
+                    assertThat(response).isInstanceOf(CheckPermissionsResponse.class);
+                    final var results =
+                            ((CheckPermissionsResponse) response).getEntity(JsonSchemaVersion.V_2).asObject();
+                    assertThat(results.getValue("thing_reader").orElseThrow().asBoolean()).isFalse();
+                    assertThat(results.getValue("message_reader").orElseThrow().asBoolean()).isFalse();
+                    assertThat(results.getValue("policy_writer").orElseThrow().asBoolean()).isTrue();
+                })
+                .get(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        clientUser1.send(DeleteThing.of(thingId, COMMAND_HEADERS_V2));
+    }
+
+    @Test
+    public void checkPermissionsMixedAccessViaWs()
+            throws InterruptedException, ExecutionException, TimeoutException {
+
+        final ThingId thingId =
+                ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+        // Grant READ+WRITE on everything, then revoke READ on a specific feature path
+        final Policy policy = PoliciesModelFactory.newPolicyBuilder(PolicyId.of(thingId))
+                .forLabel("granted")
+                .setSubjects(Subjects.newInstance(user1OAuthClient.getSubject()))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .forLabel("revoked")
+                .setSubjects(Subjects.newInstance(user1OAuthClient.getSubject()))
+                .setRevokedPermissions(PoliciesResourceType.thingResource("/features/restricted"), READ)
+                .build();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+
+        final CheckPermissions checkPermissions = CheckPermissions.of(
+                Map.of(
+                        // READ on an unrestricted path → true
+                        "unrestricted_read", immutablePermissionCheck(
+                                "thing:/features/unrestricted",
+                                thingId.toString(),
+                                List.of(READ)),
+                        // READ on the revoked path → false
+                        "restricted_read", immutablePermissionCheck(
+                                "thing:/features/restricted",
+                                thingId.toString(),
+                                List.of(READ)),
+                        // WRITE on the same revoked path → true (only READ was revoked)
+                        "restricted_write", immutablePermissionCheck(
+                                "thing:/features/restricted",
+                                thingId.toString(),
+                                List.of(WRITE)),
+                        // READ on policy → true
+                        "policy_read", immutablePermissionCheck(
+                                "policy:/",
+                                thingId.toString(),
+                                List.of(READ))
+                ),
+                COMMAND_HEADERS_V2);
+
+        clientUser1.send(CreateThing.of(thing, policy.toJson(), COMMAND_HEADERS_V2))
+                .thenCompose(createResponse -> {
+                    assertThat(createResponse).isInstanceOf(CreateThingResponse.class);
+                    return clientUser1.send(checkPermissions);
+                })
+                .whenComplete((response, throwable) -> {
+                    assertThat(throwable).isNull();
+                    assertThat(response).isInstanceOf(CheckPermissionsResponse.class);
+                    final var results =
+                            ((CheckPermissionsResponse) response).getEntity(JsonSchemaVersion.V_2).asObject();
+                    assertThat(results.getValue("unrestricted_read").orElseThrow().asBoolean()).isTrue();
+                    assertThat(results.getValue("restricted_read").orElseThrow().asBoolean()).isFalse();
+                    assertThat(results.getValue("restricted_write").orElseThrow().asBoolean()).isTrue();
+                    assertThat(results.getValue("policy_read").orElseThrow().asBoolean()).isTrue();
+                })
+                .get(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        clientUser1.send(DeleteThing.of(thingId, COMMAND_HEADERS_V2));
+    }
+
+    private static ImmutablePermissionCheck immutablePermissionCheck(final String resource,
+            final String entityId,
+            final List<String> hasPermissions) {
+        final var permissionsArrayBuilder = JsonFactory.newArrayBuilder();
+        hasPermissions.forEach(permission -> permissionsArrayBuilder.add(JsonFactory.newValue(permission)));
+        return ImmutablePermissionCheck.fromJson(JsonObject.newBuilder()
+                .set("resource", resource)
+                .set("entityId", entityId)
+                .set("hasPermissions", permissionsArrayBuilder.build())
+                .build());
+    }
+
 }

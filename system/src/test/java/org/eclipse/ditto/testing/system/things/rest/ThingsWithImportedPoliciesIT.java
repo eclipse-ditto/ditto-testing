@@ -66,9 +66,9 @@ public final class ThingsWithImportedPoliciesIT extends IntegrationTest {
                         Resource.newInstance(ResourceKey.newInstance("thing:"),
                                 EffectedPermissions.newInstance(PoliciesModelFactory.newPermissions(READ),
                                         Permissions.none()))),
-                Arrays.asList("com.acme", "com.acme.*"),
                 ImportableType.EXPLICIT,
-                java.util.Collections.emptySet());
+                java.util.Collections.emptySet(),
+                Arrays.asList("com.acme", "com.acme.*"));
         final Policy importedPolicy = PoliciesModelFactory.newPolicy(importedPolicyId, ownerEntry, scopedReaderEntry);
 
         putPolicy(importedPolicy)

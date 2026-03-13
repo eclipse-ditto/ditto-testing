@@ -987,9 +987,9 @@ public final class PolicyEnforcementIT extends IntegrationTest {
                         PoliciesModelFactory.newSubject(additionalUser, ARBITRARY_SUBJECT_TYPE)),
                 PoliciesModelFactory.newResources(
                         Resource.newInstance(ResourceKey.newInstance("thing:"), permissionsAdditional)),
-                Arrays.asList(namespace, namespace + ".*"),
                 org.eclipse.ditto.policies.model.ImportableType.IMPLICIT,
-                Collections.emptySet());
+                Collections.emptySet(),
+                Arrays.asList(namespace, namespace + ".*"));
 
         return PoliciesModelFactory.newPolicy(policyId, rootEntry, scopedEntry);
     }

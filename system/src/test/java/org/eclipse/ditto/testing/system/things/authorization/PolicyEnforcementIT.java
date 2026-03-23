@@ -24,6 +24,7 @@ import static org.eclipse.ditto.testing.common.TestConstants.Policy.ARBITRARY_SU
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.concurrent.TimeUnit;
 
@@ -153,6 +154,38 @@ public final class PolicyEnforcementIT extends IntegrationTest {
         // not found expected as user 3 has o rights on the thing
         getThing(API_V_2, thingId)
                 .withConfiguredAuth(serviceEnv.getTestingContext3())
+                .expectingHttpStatus(HttpStatus.NOT_FOUND)
+                .fire();
+    }
+
+    @Test
+    public void getThingWithNamespaceScopedPolicyEntry() {
+        final PolicyId policyId =
+                PolicyId.of(idGenerator().withPrefixedRandomName("getThingWithNamespaceScopedPolicyEntry"));
+        final Policy policy = createPolicyRootAndNamespaceScopedAccess(policyId, defaultClientSubjectId,
+                client2SubjectId, "com.acme", "READ");
+        final ThingId allowedThingId = ThingId.of("com.acme", idGenerator().withRandomName());
+        final ThingId deniedThingId = ThingId.of("other.ns", idGenerator().withRandomName());
+
+        putPolicy(policy)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        putThing(API_V_2, Thing.newBuilder().setId(allowedThingId).setPolicyId(policyId).build(), JsonSchemaVersion.V_2)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        putThing(API_V_2, Thing.newBuilder().setId(deniedThingId).setPolicyId(policyId).build(), JsonSchemaVersion.V_2)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        getThing(API_V_2, allowedThingId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(HttpStatus.OK)
+                .fire();
+
+        getThing(API_V_2, deniedThingId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
                 .fire();
     }
@@ -929,6 +962,36 @@ public final class PolicyEnforcementIT extends IntegrationTest {
                         Resource.newInstance(ResourceKey.newInstance("thing:"), permissionsAll)));
 
         return PoliciesModelFactory.newPolicy(policyId, entry1, entry2);
+    }
+
+    private static Policy createPolicyRootAndNamespaceScopedAccess(final PolicyId policyId,
+            final SubjectId rootUser,
+            final SubjectId additionalUser,
+            final String namespace,
+            final String additionalGrantedPermission) {
+
+        final EffectedPermissions permissionsAll =
+                EffectedPermissions.newInstance(collect("READ", "WRITE"), Permissions.none());
+        final EffectedPermissions permissionsAdditional = EffectedPermissions.newInstance(
+                Permissions.newInstance("READ", additionalGrantedPermission), Permissions.none());
+        final PolicyEntry rootEntry = PoliciesModelFactory.newPolicyEntry(
+                Label.of("rootUser"),
+                Subjects.newInstance(PoliciesModelFactory.newSubject(rootUser, SubjectType.GENERATED)),
+                PoliciesModelFactory.newResources(
+                        Resource.newInstance(ResourceKey.newInstance("policy:"), permissionsAll),
+                        Resource.newInstance(ResourceKey.newInstance("thing:"), permissionsAll)));
+
+        final PolicyEntry scopedEntry = PoliciesModelFactory.newPolicyEntry(
+                Label.of("namespaceScopedUser"),
+                Subjects.newInstance(
+                        PoliciesModelFactory.newSubject(additionalUser, ARBITRARY_SUBJECT_TYPE)),
+                PoliciesModelFactory.newResources(
+                        Resource.newInstance(ResourceKey.newInstance("thing:"), permissionsAdditional)),
+                Arrays.asList(namespace, namespace + ".*"),
+                org.eclipse.ditto.policies.model.ImportableType.IMPLICIT,
+                Collections.emptySet());
+
+        return PoliciesModelFactory.newPolicy(policyId, rootEntry, scopedEntry);
     }
 
     private static Policy createDefaultPolicy(final SubjectId user, final PolicyId policyId) {

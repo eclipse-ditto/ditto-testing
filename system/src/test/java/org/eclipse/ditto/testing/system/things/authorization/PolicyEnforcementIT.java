@@ -25,6 +25,7 @@ import static org.eclipse.ditto.testing.common.TestConstants.Policy.ARBITRARY_SU
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.HashSet;
 import java.util.concurrent.TimeUnit;
 
@@ -187,6 +188,127 @@ public final class PolicyEnforcementIT extends IntegrationTest {
         getThing(API_V_2, deniedThingId)
                 .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.NOT_FOUND)
+                .fire();
+    }
+
+    @Test
+    public void getThingWithExactNamespaceOnlyScopedPolicyEntry() {
+        final PolicyId policyId =
+                PolicyId.of(idGenerator().withPrefixedRandomName("exactNamespaceOnly"));
+        final Policy policy = createPolicyRootAndNamespaceScopedAccessWithPatterns(policyId,
+                defaultClientSubjectId, client2SubjectId, "READ",
+                Arrays.asList("com.acme"));
+        final ThingId exactMatchThingId = ThingId.of("com.acme", idGenerator().withRandomName());
+        final ThingId nestedThingId = ThingId.of("com.acme.vehicles", idGenerator().withRandomName());
+        final ThingId otherThingId = ThingId.of("other.ns", idGenerator().withRandomName());
+
+        putPolicy(policy)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        putThing(API_V_2, Thing.newBuilder().setId(exactMatchThingId).setPolicyId(policyId).build(),
+                JsonSchemaVersion.V_2)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        putThing(API_V_2, Thing.newBuilder().setId(nestedThingId).setPolicyId(policyId).build(),
+                JsonSchemaVersion.V_2)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        putThing(API_V_2, Thing.newBuilder().setId(otherThingId).setPolicyId(policyId).build(),
+                JsonSchemaVersion.V_2)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        // exact match: com.acme matches
+        getThing(API_V_2, exactMatchThingId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(HttpStatus.OK)
+                .fire();
+
+        // nested namespace: com.acme.vehicles does NOT match exact-only pattern "com.acme"
+        getThing(API_V_2, nestedThingId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(HttpStatus.NOT_FOUND)
+                .fire();
+
+        // other namespace: not matched
+        getThing(API_V_2, otherThingId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(HttpStatus.NOT_FOUND)
+                .fire();
+    }
+
+    @Test
+    public void getThingWithWildcardNamespaceOnlyScopedPolicyEntry() {
+        final PolicyId policyId =
+                PolicyId.of(idGenerator().withPrefixedRandomName("wildcardNamespaceOnly"));
+        final Policy policy = createPolicyRootAndNamespaceScopedAccessWithPatterns(policyId,
+                defaultClientSubjectId, client2SubjectId, "READ",
+                Arrays.asList("com.acme.*"));
+        final ThingId exactThingId = ThingId.of("com.acme", idGenerator().withRandomName());
+        final ThingId nestedThingId = ThingId.of("com.acme.vehicles", idGenerator().withRandomName());
+
+        putPolicy(policy)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        putThing(API_V_2, Thing.newBuilder().setId(exactThingId).setPolicyId(policyId).build(),
+                JsonSchemaVersion.V_2)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        putThing(API_V_2, Thing.newBuilder().setId(nestedThingId).setPolicyId(policyId).build(),
+                JsonSchemaVersion.V_2)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        // wildcard "com.acme.*" does NOT match exact namespace "com.acme"
+        getThing(API_V_2, exactThingId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(HttpStatus.NOT_FOUND)
+                .fire();
+
+        // wildcard "com.acme.*" matches nested "com.acme.vehicles"
+        getThing(API_V_2, nestedThingId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(HttpStatus.OK)
+                .fire();
+    }
+
+    @Test
+    public void getThingWithoutNamespaceScopePolicyEntryIsGlobal() {
+        final PolicyId policyId =
+                PolicyId.of(idGenerator().withPrefixedRandomName("noNamespaceScope"));
+        final Policy policy = createPolicyRootAndAdditionalAccess(policyId,
+                defaultClientSubjectId, client2SubjectId, "READ");
+        final ThingId thingId1 = ThingId.of("com.acme", idGenerator().withRandomName());
+        final ThingId thingId2 = ThingId.of("other.ns", idGenerator().withRandomName());
+
+        putPolicy(policy)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        putThing(API_V_2, Thing.newBuilder().setId(thingId1).setPolicyId(policyId).build(),
+                JsonSchemaVersion.V_2)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        putThing(API_V_2, Thing.newBuilder().setId(thingId2).setPolicyId(policyId).build(),
+                JsonSchemaVersion.V_2)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        // without namespace scope, entry applies to all namespaces
+        getThing(API_V_2, thingId1)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(HttpStatus.OK)
+                .fire();
+
+        getThing(API_V_2, thingId2)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(HttpStatus.OK)
                 .fire();
     }
 
@@ -987,11 +1109,67 @@ public final class PolicyEnforcementIT extends IntegrationTest {
                         PoliciesModelFactory.newSubject(additionalUser, ARBITRARY_SUBJECT_TYPE)),
                 PoliciesModelFactory.newResources(
                         Resource.newInstance(ResourceKey.newInstance("thing:"), permissionsAdditional)),
+                Arrays.asList(namespace, namespace + ".*"),
                 org.eclipse.ditto.policies.model.ImportableType.IMPLICIT,
-                Collections.emptySet(),
-                Arrays.asList(namespace, namespace + ".*"));
+                Collections.emptySet());
 
         return PoliciesModelFactory.newPolicy(policyId, rootEntry, scopedEntry);
+    }
+
+    private static Policy createPolicyRootAndNamespaceScopedAccessWithPatterns(final PolicyId policyId,
+            final SubjectId rootUser,
+            final SubjectId additionalUser,
+            final String additionalGrantedPermission,
+            final List<String> namespacePatterns) {
+
+        final EffectedPermissions permissionsAll =
+                EffectedPermissions.newInstance(collect("READ", "WRITE"), Permissions.none());
+        final EffectedPermissions permissionsAdditional = EffectedPermissions.newInstance(
+                Permissions.newInstance("READ", additionalGrantedPermission), Permissions.none());
+        final PolicyEntry rootEntry = PoliciesModelFactory.newPolicyEntry(
+                Label.of("rootUser"),
+                Subjects.newInstance(PoliciesModelFactory.newSubject(rootUser, SubjectType.GENERATED)),
+                PoliciesModelFactory.newResources(
+                        Resource.newInstance(ResourceKey.newInstance("policy:"), permissionsAll),
+                        Resource.newInstance(ResourceKey.newInstance("thing:"), permissionsAll)));
+
+        final PolicyEntry scopedEntry = PoliciesModelFactory.newPolicyEntry(
+                Label.of("namespaceScopedUser"),
+                Subjects.newInstance(
+                        PoliciesModelFactory.newSubject(additionalUser, ARBITRARY_SUBJECT_TYPE)),
+                PoliciesModelFactory.newResources(
+                        Resource.newInstance(ResourceKey.newInstance("thing:"), permissionsAdditional)),
+                namespacePatterns,
+                org.eclipse.ditto.policies.model.ImportableType.IMPLICIT,
+                Collections.emptySet());
+
+        return PoliciesModelFactory.newPolicy(policyId, rootEntry, scopedEntry);
+    }
+
+    private static Policy createPolicyRootAndAdditionalAccess(final PolicyId policyId,
+            final SubjectId rootUser,
+            final SubjectId additionalUser,
+            final String additionalGrantedPermission) {
+
+        final EffectedPermissions permissionsAll =
+                EffectedPermissions.newInstance(collect("READ", "WRITE"), Permissions.none());
+        final EffectedPermissions permissionsAdditional = EffectedPermissions.newInstance(
+                Permissions.newInstance("READ", additionalGrantedPermission), Permissions.none());
+        final PolicyEntry rootEntry = PoliciesModelFactory.newPolicyEntry(
+                Label.of("rootUser"),
+                Subjects.newInstance(PoliciesModelFactory.newSubject(rootUser, SubjectType.GENERATED)),
+                PoliciesModelFactory.newResources(
+                        Resource.newInstance(ResourceKey.newInstance("policy:"), permissionsAll),
+                        Resource.newInstance(ResourceKey.newInstance("thing:"), permissionsAll)));
+
+        final PolicyEntry additionalEntry = PoliciesModelFactory.newPolicyEntry(
+                Label.of("additionalUser"),
+                Subjects.newInstance(
+                        PoliciesModelFactory.newSubject(additionalUser, ARBITRARY_SUBJECT_TYPE)),
+                PoliciesModelFactory.newResources(
+                        Resource.newInstance(ResourceKey.newInstance("thing:"), permissionsAdditional)));
+
+        return PoliciesModelFactory.newPolicy(policyId, rootEntry, additionalEntry);
     }
 
     private static Policy createDefaultPolicy(final SubjectId user, final PolicyId policyId) {

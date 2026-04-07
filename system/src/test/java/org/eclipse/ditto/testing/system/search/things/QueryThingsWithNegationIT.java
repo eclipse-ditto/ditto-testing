@@ -32,6 +32,11 @@ public class QueryThingsWithNegationIT extends SearchIntegrationTest {
             not(SearchProperties.attribute("unexpectedAttribute").exists())
     );
 
+    private static final SearchFilter NEGATED_EMPTY_FILTER = and(
+            not(SearchProperties.attribute("unexpectedAttribute").empty()),
+            not(SearchProperties.thingId().empty())
+    );
+
     @Test
     public void negationIsAllowedForAPI_2() {
         final HttpStatus expectedStatusCode = HttpStatus.OK;
@@ -39,6 +44,22 @@ public class QueryThingsWithNegationIT extends SearchIntegrationTest {
         searchThings(JsonSchemaVersion.V_2)
                 .filter(NEGATED_FILTER)
                 .expectingHttpStatus(expectedStatusCode)
+                .fire();
+    }
+
+    @Test
+    public void negationOfEmptyIsAllowedForAPI_2() {
+        searchThings(JsonSchemaVersion.V_2)
+                .filter(NEGATED_EMPTY_FILTER)
+                .expectingHttpStatus(HttpStatus.OK)
+                .fire();
+    }
+
+    @Test
+    public void emptyIsAllowedForAPI_2() {
+        searchThings(JsonSchemaVersion.V_2)
+                .filter(SearchProperties.attribute("someAttribute").empty())
+                .expectingHttpStatus(HttpStatus.OK)
                 .fire();
     }
 }

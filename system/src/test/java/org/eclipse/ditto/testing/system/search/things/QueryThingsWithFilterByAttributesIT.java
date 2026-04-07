@@ -16,6 +16,7 @@ package org.eclipse.ditto.testing.system.search.things;
 import static org.eclipse.ditto.testing.common.matcher.search.SearchProperties.attribute;
 import static org.eclipse.ditto.testing.common.matcher.search.SearchResponseMatchers.isEmpty;
 import static org.eclipse.ditto.testing.common.matcher.search.SearchResponseMatchers.isEqualTo;
+import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.not;
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.newSortOption;
 
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
@@ -387,6 +388,41 @@ public class QueryThingsWithFilterByAttributesIT extends VersionedSearchIntegrat
     public void queryByLikeWithRepeatingWildcard() {
         search(attribute(REGEX_ATTR).like(THING4_REGEX_REPEATING_WILDCARD))
                 .expectingBody(isEqualTo(toThingResult(thing4Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByEmptyNullAttribute() {
+        search(attribute(NULL_ATTR).empty())
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByNotEmptyNullAttribute() {
+        search(not(attribute(NULL_ATTR).empty()))
+                .expectingBody(isEqualTo(toThingResult(thing2Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByEmptyStringAttributeNoMatch() {
+        search(attribute(STRING_ATTR).empty())
+                .expectingBody(isEmpty())
+                .fire();
+    }
+
+    @Test
+    public void queryByNotEmptyStringAttribute() {
+        search(not(attribute(STRING_ATTR).empty()))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByEmptyAbsentAttribute() {
+        search(attribute("missingAttr").empty())
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
                 .fire();
     }
 

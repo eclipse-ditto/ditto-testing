@@ -231,6 +231,17 @@ public final class ResourcePathBuilder {
             return this;
         }
 
+        public Policy policyImportsAliases() {
+            stringBuilder.append(SLASH).append("importsAliases");
+            return this;
+        }
+
+        public Policy policyImportsAlias(final CharSequence label) {
+            policyImportsAliases();
+            stringBuilder.append(SLASH).append(checkNotNull(label, "ImportsAlias label"));
+            return this;
+        }
+
         public Policy action(final String label, final String actionName) {
             policyEntries();
             stringBuilder.append(SLASH).append(label);

@@ -29,6 +29,7 @@ import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.testing.common.VersionedSearchIntegrationTest;
 import org.eclipse.ditto.testing.common.matcher.search.SearchMatcher;
+import org.eclipse.ditto.testing.common.matcher.search.SearchProperties;
 import org.eclipse.ditto.testing.common.matcher.search.SortProperties;
 import org.eclipse.ditto.things.model.Attributes;
 import org.eclipse.ditto.things.model.Feature;
@@ -318,7 +319,7 @@ public class QueryThingsWithFilterByEmptyIT extends VersionedSearchIntegrationTe
 
     private static SearchMatcher search(final SearchFilter searchFilter, final JsonSchemaVersion apiVersion) {
         return searchThings(apiVersion)
-                .filter(searchFilter)
+                .filter(and(searchFilter, SearchProperties.thingId().like("*QueryThingsWithFilterByEmptyIT*")))
                 .option(newSortOption(SortProperties.thingId(), SortOptionEntry.SortOrder.ASC));
     }
 

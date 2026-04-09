@@ -16,6 +16,7 @@ package org.eclipse.ditto.testing.system.search.things;
 import static org.eclipse.ditto.testing.common.matcher.search.SearchProperties.attribute;
 import static org.eclipse.ditto.testing.common.matcher.search.SearchResponseMatchers.isEmpty;
 import static org.eclipse.ditto.testing.common.matcher.search.SearchResponseMatchers.isEqualTo;
+import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.and;
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.not;
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.newSortOption;
 
@@ -23,6 +24,7 @@ import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
 import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.testing.common.VersionedSearchIntegrationTest;
 import org.eclipse.ditto.testing.common.matcher.search.SearchMatcher;
+import org.eclipse.ditto.testing.common.matcher.search.SearchProperties;
 import org.eclipse.ditto.testing.common.matcher.search.SortProperties;
 import org.eclipse.ditto.things.model.Attributes;
 import org.eclipse.ditto.things.model.Thing;
@@ -431,7 +433,8 @@ public class QueryThingsWithFilterByAttributesIT extends VersionedSearchIntegrat
     }
 
     private static SearchMatcher search(final SearchFilter searchFilter, final JsonSchemaVersion apiVersion) {
-        return searchThings(apiVersion).filter(searchFilter)
+        return searchThings(apiVersion)
+                .filter(and(searchFilter, SearchProperties.thingId().like("*QueryThingsWithFilterByAttributesIT*")))
                 .option(newSortOption(SortProperties.thingId(), SortOptionEntry.SortOrder.ASC));
     }
 

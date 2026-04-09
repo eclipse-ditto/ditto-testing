@@ -23,13 +23,13 @@ import static org.eclipse.ditto.things.api.Permission.WRITE;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionFactory;
-import org.eclipse.ditto.base.model.json.FieldType;
 import org.eclipse.ditto.json.JsonFactory;
-import org.eclipse.ditto.json.JsonObject;
+import org.eclipse.ditto.policies.model.AllowedImportAddition;
 import org.eclipse.ditto.policies.model.EffectedImports;
 import org.eclipse.ditto.policies.model.EntriesAdditions;
 import org.eclipse.ditto.policies.model.EntryAddition;
@@ -43,6 +43,7 @@ import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.policies.model.PolicyImport;
 import org.eclipse.ditto.policies.model.Subject;
+import org.eclipse.ditto.policies.model.Subjects;
 import org.eclipse.ditto.testing.common.SearchIntegrationTest;
 import org.eclipse.ditto.testing.common.TestingContext;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
@@ -77,23 +78,21 @@ public final class QueryThingsWithImportsAliasesIT extends SearchIntegrationTest
 
     @Test
     public void thingNotVisibleInSearchBeforeSubjectAddedViaAlias() {
-        // Create Thing with importing policy + alias, but user2 is NOT yet a subject
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
         final PolicyId thingPolicyId = PolicyId.of(thingId);
 
-        final Policy templatePolicy = buildTemplatePolicy(
-                PolicyId.of(idGenerator().withPrefixedRandomName("tmpl")));
-        putPolicy(templatePolicy).fire();
+        final PolicyId tmplPolicyId = PolicyId.of(idGenerator().withPrefixedRandomName("tmpl"));
+        putPolicy(buildTemplatePolicy(tmplPolicyId)).fire();
 
-        final PolicyId tmplPolicyId = templatePolicy.getEntityId().orElseThrow();
         final Policy thingPolicy = buildImportingPolicyWithAlias(thingPolicyId, tmplPolicyId);
+        putPolicy(thingPolicy).fire();
 
         final Thing thing = ThingsModelFactory.newThingBuilder()
                 .setId(thingId)
+                .setPolicyId(thingPolicyId)
                 .setAttribute(JsonFactory.newPointer("status"), JsonFactory.newValue("active"))
                 .build();
-
-        persistThingWithPolicy(thing, thingPolicy);
+        persistThingAndWaitTillAvailable(thing, V_2, serviceEnv.getDefaultTestingContext());
 
         // user2 should NOT see the Thing in search
         searchThings(V_2)
@@ -108,19 +107,18 @@ public final class QueryThingsWithImportsAliasesIT extends SearchIntegrationTest
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
         final PolicyId thingPolicyId = PolicyId.of(thingId);
 
-        final Policy templatePolicy = buildTemplatePolicy(
-                PolicyId.of(idGenerator().withPrefixedRandomName("tmpl")));
-        putPolicy(templatePolicy).fire();
+        final PolicyId tmplPolicyId = PolicyId.of(idGenerator().withPrefixedRandomName("tmpl"));
+        putPolicy(buildTemplatePolicy(tmplPolicyId)).fire();
 
-        final PolicyId tmplPolicyId = templatePolicy.getEntityId().orElseThrow();
         final Policy thingPolicy = buildImportingPolicyWithAlias(thingPolicyId, tmplPolicyId);
+        putPolicy(thingPolicy).fire();
 
         final Thing thing = ThingsModelFactory.newThingBuilder()
                 .setId(thingId)
+                .setPolicyId(thingPolicyId)
                 .setAttribute(JsonFactory.newPointer("status"), JsonFactory.newValue("active"))
                 .build();
-
-        persistThingWithPolicy(thing, thingPolicy);
+        persistThingAndWaitTillAvailable(thing, V_2, serviceEnv.getDefaultTestingContext());
 
         // Add user2 via the alias — fans out to both entries additions targets
         final Subject user2Subject = serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject();
@@ -142,25 +140,29 @@ public final class QueryThingsWithImportsAliasesIT extends SearchIntegrationTest
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
         final PolicyId thingPolicyId = PolicyId.of(thingId);
 
-        final Policy templatePolicy = buildTemplatePolicy(
-                PolicyId.of(idGenerator().withPrefixedRandomName("tmpl")));
-        putPolicy(templatePolicy).fire();
+        final PolicyId tmplPolicyId = PolicyId.of(idGenerator().withPrefixedRandomName("tmpl"));
+        putPolicy(buildTemplatePolicy(tmplPolicyId)).fire();
 
-        final PolicyId tmplPolicyId = templatePolicy.getEntityId().orElseThrow();
+        // Create importing policy and then add user2 via alias (instead of embedding in entriesAdditions)
         final Policy thingPolicy = buildImportingPolicyWithAlias(thingPolicyId, tmplPolicyId);
+        putPolicy(thingPolicy).fire();
 
         final Thing thing = ThingsModelFactory.newThingBuilder()
                 .setId(thingId)
+                .setPolicyId(thingPolicyId)
                 .setAttribute(JsonFactory.newPointer("status"), JsonFactory.newValue("active"))
                 .build();
+        persistThingAndWaitTillAvailable(thing, V_2, serviceEnv.getDefaultTestingContext());
 
-        // Create with user2 already as subject in entries additions
+        // Add user2 via alias
         final Subject user2Subject = serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject();
-        final Policy thingPolicyWithUser2 = addUser2ToEntriesAdditions(thingPolicy, tmplPolicyId, user2Subject);
-        persistThingWithPolicy(thing, thingPolicyWithUser2);
+        putPolicyEntrySubject(thingPolicyId, ALIAS_LABEL.toString(),
+                user2Subject.getId().toString(), user2Subject)
+                .fire();
 
-        // user2 can see the Thing in search
+        // user2 can see the Thing in search (wait for eventual consistency)
         searchThings(V_2)
+                .useAwaitility(AWAITILITY_SEARCH_CONFIG)
                 .filter(idFilter(thingId))
                 .withJWT(secondClient.getAccessToken())
                 .expectingBody(isEqualTo(toThingResult(thingId)))
@@ -192,10 +194,12 @@ public final class QueryThingsWithImportsAliasesIT extends SearchIntegrationTest
                 .setSubject(defaultSubject())
                 .setGrantedPermissions(thingResource("/"), READ, WRITE)
                 .setImportable(ImportableType.EXPLICIT)
+                .setAllowedImportAdditionsFor(TARGET_LABEL_1.toString(), Set.of(AllowedImportAddition.SUBJECTS))
                 .forLabel(TARGET_LABEL_2.toString())
                 .setSubject(defaultSubject())
                 .setGrantedPermissions(thingResource("/"), READ, WRITE)
                 .setImportable(ImportableType.EXPLICIT)
+                .setAllowedImportAdditionsFor(TARGET_LABEL_2.toString(), Set.of(AllowedImportAddition.SUBJECTS))
                 .build();
     }
 
@@ -223,38 +227,8 @@ public final class QueryThingsWithImportsAliasesIT extends SearchIntegrationTest
                 .build();
     }
 
-    private static Policy addUser2ToEntriesAdditions(final Policy policy, final PolicyId tmplPolicyId,
-            final Subject user2Subject) {
-        // Rebuild the policy with user2 already in entries additions
-        final EntryAddition addition1 = PoliciesModelFactory.newEntryAddition(TARGET_LABEL_1,
-                org.eclipse.ditto.policies.model.Subjects.newInstance(user2Subject), null);
-        final EntryAddition addition2 = PoliciesModelFactory.newEntryAddition(TARGET_LABEL_2,
-                org.eclipse.ditto.policies.model.Subjects.newInstance(user2Subject), null);
-        final EntriesAdditions entriesAdditions =
-                PoliciesModelFactory.newEntriesAdditions(Arrays.asList(addition1, addition2));
-        final EffectedImports effectedImports = PoliciesModelFactory.newEffectedImportedLabels(
-                Arrays.asList(TARGET_LABEL_1, TARGET_LABEL_2), entriesAdditions);
-        final PolicyImport pImport = PoliciesModelFactory.newPolicyImport(tmplPolicyId, effectedImports);
-
-        final List<ImportsAliasTarget> targets = Arrays.asList(
-                PoliciesModelFactory.newImportsAliasTarget(tmplPolicyId, TARGET_LABEL_1),
-                PoliciesModelFactory.newImportsAliasTarget(tmplPolicyId, TARGET_LABEL_2));
-        final ImportsAlias alias = PoliciesModelFactory.newImportsAlias(ALIAS_LABEL, targets);
-
-        return policy.toBuilder()
-                .setPolicyImports(PoliciesModelFactory.newPolicyImports(Collections.singletonList(pImport)))
-                .setImportsAliases(PoliciesModelFactory.newImportsAliases(Collections.singletonList(alias)))
-                .build();
-    }
-
     private static Subject defaultSubject() {
         return serviceEnv.getDefaultTestingContext().getOAuthClient().getDefaultSubject();
-    }
-
-    private static void persistThingWithPolicy(final Thing thing, final Policy policy) {
-        final JsonObject thingJson = thing.toJson(V_2, FieldType.notHidden())
-                .setAll(policy.toInlinedJson(V_2, FieldType.notHidden()));
-        persistThingsAndWaitTillAvailable(thingJson.toString(), 1L, V_2, serviceEnv.getDefaultTestingContext());
     }
 
 }

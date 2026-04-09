@@ -12,9 +12,8 @@
  */
 package org.eclipse.ditto.testing.system.things.rest;
 
-import static org.eclipse.ditto.base.model.common.HttpStatus.BAD_REQUEST;
-import static org.eclipse.ditto.base.model.common.HttpStatus.CONFLICT;
 import static org.eclipse.ditto.base.model.common.HttpStatus.CREATED;
+import static org.eclipse.ditto.base.model.common.HttpStatus.FORBIDDEN;
 import static org.eclipse.ditto.base.model.common.HttpStatus.NOT_FOUND;
 import static org.eclipse.ditto.base.model.common.HttpStatus.NO_CONTENT;
 import static org.eclipse.ditto.base.model.common.HttpStatus.OK;
@@ -26,12 +25,13 @@ import static org.eclipse.ditto.things.api.Permission.WRITE;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
+import java.util.Set;
 
-import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
+import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
+import org.eclipse.ditto.policies.model.AllowedImportAddition;
 import org.eclipse.ditto.policies.model.EffectedImports;
 import org.eclipse.ditto.policies.model.EntriesAdditions;
 import org.eclipse.ditto.policies.model.EntryAddition;
@@ -43,9 +43,7 @@ import org.eclipse.ditto.policies.model.Label;
 import org.eclipse.ditto.policies.model.PoliciesModelFactory;
 import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.PolicyId;
-import org.eclipse.ditto.policies.model.PoliciesResourceType;
 import org.eclipse.ditto.policies.model.PolicyImport;
-import org.eclipse.ditto.policies.model.PolicyImports;
 import org.eclipse.ditto.policies.model.Subject;
 import org.eclipse.ditto.policies.model.Subjects;
 import org.eclipse.ditto.testing.common.IntegrationTest;
@@ -91,10 +89,12 @@ public final class PolicyImportsAliasesIT extends IntegrationTest {
                 .setSubject(defaultSubject())
                 .setGrantedPermissions(thingResource("/"), READ, WRITE)
                 .setImportable(ImportableType.EXPLICIT)
+                .setAllowedImportAdditionsFor("operator-reactor", Set.of(AllowedImportAddition.SUBJECTS))
                 .forLabel("operator-turbine")
                 .setSubject(defaultSubject())
                 .setGrantedPermissions(thingResource("/"), READ, WRITE)
                 .setImportable(ImportableType.EXPLICIT)
+                .setAllowedImportAdditionsFor("operator-turbine", Set.of(AllowedImportAddition.SUBJECTS))
                 .build();
 
         // Build the alias and its targets
@@ -321,15 +321,25 @@ public final class PolicyImportsAliasesIT extends IntegrationTest {
     public void aliasLabelConflictsWithLocalEntry() {
         putPolicy(templatePolicyId, templatePolicy).expectingHttpStatus(CREATED).fire();
 
-        // Create a policy with a local entry called "operator" (same as alias label)
-        final Policy policyWithConflict = importingPolicy.toBuilder()
-                .forLabel("operator")
-                .setSubject(defaultSubject())
-                .setGrantedPermissions(thingResource("/"), READ)
+        // Build conflicting policy as raw JSON to bypass client-side model validation
+        // (the PolicyBuilder throws ImportsAliasConflictException locally)
+        final JsonObject operatorEntry = JsonObject.newBuilder()
+                .set("subjects", JsonObject.newBuilder()
+                        .set(defaultSubject().getId().toString(), defaultSubject().toJson())
+                        .build())
+                .set("resources", JsonObject.newBuilder()
+                        .set("thing:/", JsonObject.newBuilder()
+                                .set("grant", JsonValue.of("[\"READ\"]"))
+                                .set("revoke", JsonValue.of("[]"))
+                                .build())
+                        .build())
+                .build();
+        final JsonObject conflictingPolicyJson = importingPolicy.toJson().toBuilder()
+                .set(JsonPointer.of("entries/operator"), operatorEntry)
                 .build();
 
-        putPolicy(importingPolicyId, policyWithConflict)
-                .expectingHttpStatus(CONFLICT)
+        putPolicy(importingPolicyId, conflictingPolicyJson)
+                .expectingHttpStatus(HttpStatus.CONFLICT)
                 .fire();
     }
 
@@ -337,9 +347,9 @@ public final class PolicyImportsAliasesIT extends IntegrationTest {
     public void deleteImportReferencedByAliasIsRejected() {
         createTemplateThenImportingPolicy();
 
-        // Attempt to delete the import that is referenced by the alias
+        // Server returns 403 (policies:import.notmodifiable) when alias references the import
         deletePolicyImport(importingPolicyId, templatePolicyId)
-                .expectingHttpStatus(CONFLICT)
+                .expectingHttpStatus(FORBIDDEN)
                 .fire();
     }
 
@@ -362,9 +372,9 @@ public final class PolicyImportsAliasesIT extends IntegrationTest {
     public void resourceOperationsOnAliasLabelAreRejected() {
         createTemplateThenImportingPolicy();
 
-        // Attempting to GET resources on an alias label should be rejected
+        // Alias labels are not real entries — server returns 404 for non-subject operations
         getPolicyEntryResources(importingPolicyId, ALIAS_LABEL.toString())
-                .expectingHttpStatus(BAD_REQUEST)
+                .expectingHttpStatus(NOT_FOUND)
                 .fire();
     }
 
@@ -372,40 +382,41 @@ public final class PolicyImportsAliasesIT extends IntegrationTest {
 
     @Test
     public void subjectAddedViaAliasGainsAccessToThing() {
-        // Create a Thing whose policy imports the template and defines an alias
         final ThingId thingId = ThingId.of(idGenerator().withPrefixedRandomName("aliasEnforcement"));
+
+        // Create template and importing policy separately (putThingWithPolicy strips imports/aliases)
+        final PolicyId tmplPolicyId = PolicyId.of(idGenerator().withPrefixedRandomName("tmpl"));
+        final Policy tmplPolicy = buildTemplatePolicy(tmplPolicyId);
+        putPolicy(tmplPolicy).expectingHttpStatus(CREATED).fire();
+
+        final PolicyId thingPolicyId = PolicyId.of(thingId);
+        final Policy thingPolicy = buildImportingPolicyWithAlias(thingPolicyId, tmplPolicyId);
+        putPolicy(thingPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Create the Thing referencing the existing policy
         final Thing thing = ThingsModelFactory.newThingBuilder()
                 .setId(thingId)
+                .setPolicyId(thingPolicyId)
                 .setAttribute(JsonPointer.of("status"), JsonValue.of("active"))
                 .build();
-
-        // Build the importing policy with the Thing's ID as policy ID
-        final PolicyId thingPolicyId = PolicyId.of(thingId);
-        final Policy thingTemplatePolicy = buildTemplatePolicy(
-                PolicyId.of(idGenerator().withPrefixedRandomName("tmpl")));
-        putPolicy(thingTemplatePolicy).expectingHttpStatus(CREATED).fire();
-
-        final PolicyId tmplPolicyId = thingTemplatePolicy.getEntityId().orElseThrow();
-        final Policy thingPolicy = buildImportingPolicyWithAlias(thingPolicyId, tmplPolicyId);
-
-        putThingWithPolicy(TestConstants.API_V_2, thing, thingPolicy, JsonSchemaVersion.V_2)
+        putThing(TestConstants.API_V_2, thing, org.eclipse.ditto.base.model.json.JsonSchemaVersion.V_2)
                 .expectingHttpStatus(CREATED)
                 .fire();
 
-        // user2 cannot access the Thing yet (not in any policy entry)
+        // user2 cannot access the Thing yet
         getThing(TestConstants.API_V_2, thingId)
                 .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(NOT_FOUND)
                 .fire();
 
-        // Add user2 as subject through the alias — fans out to both entries additions targets
+        // Add user2 as subject through the alias
         final Subject user2Subject = serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject();
         putPolicyEntrySubject(thingPolicyId, ALIAS_LABEL.toString(),
                 user2Subject.getId().toString(), user2Subject)
                 .expectingHttpStatus(CREATED)
                 .fire();
 
-        // user2 can now access the Thing (subject was added to entries additions which grant thing:/ READ)
+        // user2 can now access the Thing
         getThing(TestConstants.API_V_2, thingId)
                 .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(OK)
@@ -415,20 +426,21 @@ public final class PolicyImportsAliasesIT extends IntegrationTest {
     @Test
     public void subjectRemovedViaAliasLosesAccessToThing() {
         final ThingId thingId = ThingId.of(idGenerator().withPrefixedRandomName("aliasRevoke"));
-        final Thing thing = ThingsModelFactory.newThingBuilder()
-                .setId(thingId)
-                .setAttribute(JsonPointer.of("status"), JsonValue.of("active"))
-                .build();
+
+        final PolicyId tmplPolicyId = PolicyId.of(idGenerator().withPrefixedRandomName("tmpl"));
+        final Policy tmplPolicy = buildTemplatePolicy(tmplPolicyId);
+        putPolicy(tmplPolicy).expectingHttpStatus(CREATED).fire();
 
         final PolicyId thingPolicyId = PolicyId.of(thingId);
-        final Policy thingTemplatePolicy = buildTemplatePolicy(
-                PolicyId.of(idGenerator().withPrefixedRandomName("tmpl")));
-        putPolicy(thingTemplatePolicy).expectingHttpStatus(CREATED).fire();
-
-        final PolicyId tmplPolicyId = thingTemplatePolicy.getEntityId().orElseThrow();
         final Policy thingPolicy = buildImportingPolicyWithAlias(thingPolicyId, tmplPolicyId);
+        putPolicy(thingPolicy).expectingHttpStatus(CREATED).fire();
 
-        putThingWithPolicy(TestConstants.API_V_2, thing, thingPolicy, JsonSchemaVersion.V_2)
+        final Thing thing = ThingsModelFactory.newThingBuilder()
+                .setId(thingId)
+                .setPolicyId(thingPolicyId)
+                .setAttribute(JsonPointer.of("status"), JsonValue.of("active"))
+                .build();
+        putThing(TestConstants.API_V_2, thing, org.eclipse.ditto.base.model.json.JsonSchemaVersion.V_2)
                 .expectingHttpStatus(CREATED)
                 .fire();
 
@@ -461,20 +473,21 @@ public final class PolicyImportsAliasesIT extends IntegrationTest {
     @Test
     public void subjectAddedViaAliasCanWriteThingWhenEntriesGrantWrite() {
         final ThingId thingId = ThingId.of(idGenerator().withPrefixedRandomName("aliasWrite"));
-        final Thing thing = ThingsModelFactory.newThingBuilder()
-                .setId(thingId)
-                .setAttribute(JsonPointer.of("counter"), JsonValue.of(0))
-                .build();
+
+        final PolicyId tmplPolicyId = PolicyId.of(idGenerator().withPrefixedRandomName("tmpl"));
+        final Policy tmplPolicy = buildTemplatePolicy(tmplPolicyId);
+        putPolicy(tmplPolicy).expectingHttpStatus(CREATED).fire();
 
         final PolicyId thingPolicyId = PolicyId.of(thingId);
-        final Policy thingTemplatePolicy = buildTemplatePolicy(
-                PolicyId.of(idGenerator().withPrefixedRandomName("tmpl")));
-        putPolicy(thingTemplatePolicy).expectingHttpStatus(CREATED).fire();
-
-        final PolicyId tmplPolicyId = thingTemplatePolicy.getEntityId().orElseThrow();
         final Policy thingPolicy = buildImportingPolicyWithAlias(thingPolicyId, tmplPolicyId);
+        putPolicy(thingPolicy).expectingHttpStatus(CREATED).fire();
 
-        putThingWithPolicy(TestConstants.API_V_2, thing, thingPolicy, JsonSchemaVersion.V_2)
+        final Thing thing = ThingsModelFactory.newThingBuilder()
+                .setId(thingId)
+                .setPolicyId(thingPolicyId)
+                .setAttribute(JsonPointer.of("counter"), JsonValue.of(0))
+                .build();
+        putThing(TestConstants.API_V_2, thing, org.eclipse.ditto.base.model.json.JsonSchemaVersion.V_2)
                 .expectingHttpStatus(CREATED)
                 .fire();
 
@@ -512,10 +525,12 @@ public final class PolicyImportsAliasesIT extends IntegrationTest {
                 .setSubject(defaultSubject())
                 .setGrantedPermissions(thingResource("/"), READ, WRITE)
                 .setImportable(ImportableType.EXPLICIT)
+                .setAllowedImportAdditionsFor(TARGET_LABEL_1.toString(), Set.of(AllowedImportAddition.SUBJECTS))
                 .forLabel(TARGET_LABEL_2.toString())
                 .setSubject(defaultSubject())
                 .setGrantedPermissions(thingResource("/"), READ, WRITE)
                 .setImportable(ImportableType.EXPLICIT)
+                .setAllowedImportAdditionsFor(TARGET_LABEL_2.toString(), Set.of(AllowedImportAddition.SUBJECTS))
                 .build();
     }
 

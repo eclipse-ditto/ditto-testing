@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -43,6 +44,7 @@ import org.eclipse.ditto.policies.model.PoliciesModelFactory;
 import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.policies.model.PolicyImport;
+import org.eclipse.ditto.policies.model.AllowedImportAddition;
 import org.eclipse.ditto.policies.model.Subject;
 import org.eclipse.ditto.policies.model.SubjectType;
 import org.eclipse.ditto.policies.model.Subjects;
@@ -167,7 +169,7 @@ public final class PolicyImportsAliasesWebSocketIT extends IntegrationTest {
 
         assertThat(response).isInstanceOf(RetrieveImportsAliasResponse.class);
         final RetrieveImportsAliasResponse retrieveResponse = (RetrieveImportsAliasResponse) response;
-        assertThat(retrieveResponse.getImportsAlias()).isEqualTo(alias);
+        assertThat(retrieveResponse.getEntity()).isEqualTo(alias.toJson());
     }
 
     @Test
@@ -191,7 +193,8 @@ public final class PolicyImportsAliasesWebSocketIT extends IntegrationTest {
         ).toCompletableFuture().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
         assertThat(retrieveResponse).isInstanceOf(RetrieveImportsAliasResponse.class);
-        assertThat(((RetrieveImportsAliasResponse) retrieveResponse).getImportsAlias()).isEqualTo(modifiedAlias);
+        final RetrieveImportsAliasResponse verifyResponse = (RetrieveImportsAliasResponse) retrieveResponse;
+        assertThat(verifyResponse.getEntity()).isEqualTo(modifiedAlias.toJson());
     }
 
     @Test
@@ -306,10 +309,12 @@ public final class PolicyImportsAliasesWebSocketIT extends IntegrationTest {
                 .setSubject(testingContext.getOAuthClient().getDefaultSubject())
                 .setGrantedPermissions(thingResource("/"), READ, WRITE)
                 .setImportable(ImportableType.EXPLICIT)
+                .setAllowedImportAdditionsFor("operator-reactor", Set.of(AllowedImportAddition.SUBJECTS))
                 .forLabel("operator-turbine")
                 .setSubject(testingContext.getOAuthClient().getDefaultSubject())
                 .setGrantedPermissions(thingResource("/"), READ, WRITE)
                 .setImportable(ImportableType.EXPLICIT)
+                .setAllowedImportAdditionsFor("operator-turbine", Set.of(AllowedImportAddition.SUBJECTS))
                 .build();
 
         final Signal<?> createTemplateResponse = wsClient.send(

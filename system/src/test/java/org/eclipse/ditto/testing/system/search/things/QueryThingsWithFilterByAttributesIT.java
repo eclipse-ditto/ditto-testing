@@ -16,12 +16,15 @@ package org.eclipse.ditto.testing.system.search.things;
 import static org.eclipse.ditto.testing.common.matcher.search.SearchProperties.attribute;
 import static org.eclipse.ditto.testing.common.matcher.search.SearchResponseMatchers.isEmpty;
 import static org.eclipse.ditto.testing.common.matcher.search.SearchResponseMatchers.isEqualTo;
+import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.and;
+import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.not;
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.newSortOption;
 
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
 import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.testing.common.VersionedSearchIntegrationTest;
 import org.eclipse.ditto.testing.common.matcher.search.SearchMatcher;
+import org.eclipse.ditto.testing.common.matcher.search.SearchProperties;
 import org.eclipse.ditto.testing.common.matcher.search.SortProperties;
 import org.eclipse.ditto.things.model.Attributes;
 import org.eclipse.ditto.things.model.Thing;
@@ -390,12 +393,48 @@ public class QueryThingsWithFilterByAttributesIT extends VersionedSearchIntegrat
                 .fire();
     }
 
+    @Test
+    public void queryByEmptyNullAttribute() {
+        search(attribute(NULL_ATTR).empty())
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByNotEmptyNullAttribute() {
+        search(not(attribute(NULL_ATTR).empty()))
+                .expectingBody(isEqualTo(toThingResult(thing2Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByEmptyStringAttributeNoMatch() {
+        search(attribute(STRING_ATTR).empty())
+                .expectingBody(isEmpty())
+                .fire();
+    }
+
+    @Test
+    public void queryByNotEmptyStringAttribute() {
+        search(not(attribute(STRING_ATTR).empty()))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByEmptyAbsentAttribute() {
+        search(attribute("missingAttr").empty())
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                .fire();
+    }
+
     private SearchMatcher search(final SearchFilter searchFilter) {
         return search(searchFilter, apiVersion);
     }
 
     private static SearchMatcher search(final SearchFilter searchFilter, final JsonSchemaVersion apiVersion) {
-        return searchThings(apiVersion).filter(searchFilter)
+        return searchThings(apiVersion)
+                .filter(and(searchFilter, SearchProperties.thingId().like("*QueryThingsWithFilterByAttributesIT*")))
                 .option(newSortOption(SortProperties.thingId(), SortOptionEntry.SortOrder.ASC));
     }
 

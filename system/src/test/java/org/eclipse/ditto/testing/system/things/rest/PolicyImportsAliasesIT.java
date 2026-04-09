@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Set;
 
 import org.eclipse.ditto.base.model.common.HttpStatus;
+import org.eclipse.ditto.json.JsonArray;
+import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
@@ -329,8 +331,8 @@ public final class PolicyImportsAliasesIT extends IntegrationTest {
                         .build())
                 .set("resources", JsonObject.newBuilder()
                         .set("thing:/", JsonObject.newBuilder()
-                                .set("grant", JsonValue.of("[\"READ\"]"))
-                                .set("revoke", JsonValue.of("[]"))
+                                .set("grant", JsonArray.of("READ"))
+                                .set("revoke", JsonFactory.newArray())
                                 .build())
                         .build())
                 .build();

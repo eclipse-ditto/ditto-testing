@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.eclipse.ditto.json.JsonArray;
+import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.policies.model.AllowedImportAddition;
 import org.eclipse.ditto.policies.model.EffectedImports;
@@ -164,17 +165,21 @@ public final class PolicyImportTransitiveImportsIT extends IntegrationTest {
 
         putPolicy(buildTemplatePolicy(templateId)).expectingHttpStatus(CREATED).fire();
 
-        // Try to create leaf with transitiveImports containing its own ID
-        final EffectedImports effectedImports = PoliciesModelFactory.newEffectedImportedLabels(
-                List.of(Label.of("DEFAULT")),
-                null,
-                List.of(leafId));
-        final PolicyImport policyImport = PoliciesModelFactory.newPolicyImport(templateId, effectedImports);
-        final Policy leafPolicy = buildAdminOnlyPolicy(leafId).toBuilder()
-                .setPolicyImport(policyImport)
+        // Build the policy JSON manually to bypass client-side model validation
+        // (PolicyImportsValidator in the shared model catches self-references during Policy.build())
+        final JsonObject importsJson = JsonObject.newBuilder()
+                .set(templateId.toString(), JsonObject.newBuilder()
+                        .set("entries", JsonArray.newBuilder().add("DEFAULT").build())
+                        .set("transitiveImports", JsonArray.newBuilder()
+                                .add(leafId.toString())
+                                .build())
+                        .build())
+                .build();
+        final JsonObject leafPolicyJson = JsonFactory.newObjectBuilder(buildAdminOnlyPolicy(leafId).toJson())
+                .set("imports", importsJson)
                 .build();
 
-        putPolicy(leafPolicy)
+        putPolicy(leafId, leafPolicyJson)
                 .expectingHttpStatus(BAD_REQUEST)
                 .expectingErrorCode("policies:import.invalid")
                 .fire();

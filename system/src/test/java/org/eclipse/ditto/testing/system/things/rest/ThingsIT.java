@@ -36,7 +36,6 @@ import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.policies.model.Subject;
 import org.eclipse.ditto.policies.model.SubjectIssuer;
 import org.eclipse.ditto.policies.model.Subjects;
-import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
 import org.eclipse.ditto.things.model.FeatureProperties;
 import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.HttpParameter;
@@ -788,16 +787,14 @@ public final class ThingsIT extends IntegrationTest {
     public void getThingWithPartialAccessReturnsOnlyAccessiblePaths() {
         final ThingId thingId = ThingId.of(idGenerator().withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final String clientId1 = serviceEnv.getDefaultTestingContext().getOAuthClient().getClientId();
-        final String clientId2 = serviceEnv.getTestingContext2().getOAuthClient().getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), Permission.WRITE, Permission.READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), Permission.WRITE, Permission.READ)
                 .forLabel("partial")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getTestingContext2().getOAuthClient().getSubject())
                 .setGrantedPermissions("thing", "/attributes/public", "READ")
                 .setGrantedPermissions("thing", "/attributes/shared", "READ")
                 .setGrantedPermissions("thing", "/features/temperature/properties/value", "READ")

@@ -49,7 +49,6 @@ import org.eclipse.ditto.policies.model.PoliciesModelFactory;
 import org.eclipse.ditto.policies.model.PoliciesResourceType;
 import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.PolicyId;
-import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.ThingsModelFactory;
@@ -675,16 +674,14 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
     public void partialAccessEventsAreFilteredViaSse() {
         final ThingId thingId = ThingId.of(idGenerator(interestingNamespace).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final String clientId1 = serviceEnv.getDefaultTestingContext().getOAuthClient().getClientId();
-        final String clientId2 = serviceEnv.getTestingContext2().getOAuthClient().getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), Permission.WRITE, Permission.READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), Permission.WRITE, Permission.READ)
                 .forLabel("partial")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getTestingContext2().getOAuthClient().getSubject())
                 .setGrantedPermissions("thing", "/attributes/public", "READ")
                 .setGrantedPermissions("thing", "/attributes/shared", "READ")
                 .setGrantedPermissions("thing", "/features/temperature/properties/value", "READ")
@@ -802,23 +799,21 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
         final ThingId thingId = ThingId.of(idGenerator(interestingNamespace).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final String clientId1 = serviceEnv.getDefaultTestingContext().getOAuthClient().getClientId();
-        final String clientId2 = serviceEnv.getTestingContext2().getOAuthClient().getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), Permission.WRITE, Permission.READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), Permission.WRITE, Permission.READ)
                 .forLabel("partial1")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject())
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_TYPE, "READ")
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_SOME, "READ")
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_HIDDEN), Permission.READ)
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_COMPLEX_SECRET), Permission.READ)
                 .forLabel("partial2")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getTestingContext2().getOAuthClient().getSubject())
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX, "READ")
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER + "/properties/properties/" + PROP_PUBLIC, "READ")
@@ -1024,16 +1019,14 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
         final ThingId thingId = ThingId.of(idGenerator(interestingNamespace).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final String clientId1 = serviceEnv.getDefaultTestingContext().getOAuthClient().getClientId();
-        final String clientId2 = serviceEnv.getTestingContext2().getOAuthClient().getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), Permission.WRITE, Permission.READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), Permission.WRITE, Permission.READ)
                 .forLabel("partial1")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject())
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_TYPE, "READ")
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_SOME, "READ")
@@ -1045,7 +1038,7 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/features/" + FEATURE_OTHER), Permission.READ)
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/features/" + FEATURE_SHARED + "/properties/" + PROP_SECRET), Permission.READ)
                 .forLabel("partial2")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getTestingContext2().getOAuthClient().getSubject())
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX, "READ")
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER, "READ")

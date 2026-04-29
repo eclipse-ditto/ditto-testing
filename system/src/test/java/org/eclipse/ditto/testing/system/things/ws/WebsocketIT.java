@@ -102,7 +102,6 @@ import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.Solution;
 import org.eclipse.ditto.testing.common.TestingContext;
-import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
 import org.eclipse.ditto.testing.common.categories.Acceptance;
 import org.eclipse.ditto.testing.common.client.BasicAuth;
 import org.eclipse.ditto.testing.common.client.oauth.AuthClient;
@@ -492,10 +491,9 @@ public final class WebsocketIT extends IntegrationTest {
     private Policy prepareSpecialPolicyToCopy() {
         final PolicyId originalPolicyId = PolicyId.of(
                 idGenerator(testingContext1.getSolution().getDefaultNamespace()).withPrefixedRandomName("policyToCopy"));
-        final String clientId = testingContext1.getOAuthClient().getClientId();
         return PoliciesModelFactory.newPolicyBuilder(originalPolicyId)
                 .forLabel("specialCopiedLabel")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(testingContext1.getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
                 .build();
@@ -660,21 +658,15 @@ public final class WebsocketIT extends IntegrationTest {
         //  - that the group1 ("All users group") user1 belongs to may not read the "secret" feature
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
 
-        final String clientId1 = user1OAuthClient.getClientId();
-        final String clientId2 = user2OAuthClient.getClientId();
-
         final PolicyId policyId = PolicyId.of(thingId);
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("granted")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1,
-                        SubjectType.newInstance("user1isBoss"))
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2,
-                        SubjectType.newInstance("user2isBoss"))
+                .setSubject(user1OAuthClient.getSubject())
+                .setSubject(user2OAuthClient.getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
                 .forLabel("revoked")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1,
-                        SubjectType.newInstance("group1mayNotReadSecretFeature"))
+                .setSubject(user1OAuthClient.getSubject())
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/features/secret"), READ)
                 .build();
 
@@ -1567,16 +1559,14 @@ public final class WebsocketIT extends IntegrationTest {
     public void partialAccessEventsAreFilteredForRestrictedSubjects() throws Exception {
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final String clientId1 = user1OAuthClient.getClientId();
-        final String clientId2 = user2OAuthClient.getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user1OAuthClient.getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
                 .forLabel("partial")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user2OAuthClient.getSubject())
                 .setGrantedPermissions("thing", "/attributes/public", "READ")
                 .setGrantedPermissions("thing", "/attributes/shared", "READ")
                 .setGrantedPermissions("thing", "/features/temperature/properties/value", "READ")
@@ -1647,17 +1637,14 @@ public final class WebsocketIT extends IntegrationTest {
         // GIVEN: A user with READ access only to attributes/something/special and features/public
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        // Use a different OAuth client for the owner to avoid permission merging with partial access subjects
-        final String ownerClientId = getOwnerClientId();
-        final String clientId2 = user2OAuthClient.getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, ownerClientId, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(serviceEnv.getTestingContext4().getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
                 .forLabel("partial")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user2OAuthClient.getSubject())
                 .setGrantedPermissions("thing", "/attributes/something/special", "READ")
                 .setGrantedPermissions("thing", "/features/public", "READ")
                 .build();
@@ -1788,17 +1775,14 @@ public final class WebsocketIT extends IntegrationTest {
         // GIVEN: A user with READ access only to attributes/something/special and features/public
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        // Use a different OAuth client for the owner to avoid permission merging
-        final String ownerClientId = getOwnerClientId();
-        final String clientId2 = user2OAuthClient.getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, ownerClientId, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(serviceEnv.getTestingContext4().getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
                 .forLabel("partial")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user2OAuthClient.getSubject())
                 .setGrantedPermissions("thing", "/attributes/something/special", "READ")
                 .setGrantedPermissions("thing", "/features/public", "READ")
                 .build();
@@ -1879,17 +1863,14 @@ public final class WebsocketIT extends IntegrationTest {
         // GIVEN: A user with READ access only to attributes/something/special and features/public
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        // Use a different OAuth client for the owner to avoid permission merging with partial access subjects
-        final String ownerClientId = getOwnerClientId();
-        final String clientId2 = user2OAuthClient.getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, ownerClientId, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(serviceEnv.getTestingContext4().getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
                 .forLabel("partial")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user2OAuthClient.getSubject())
                 .setGrantedPermissions("thing", "/attributes/something/special", "READ")
                 .setGrantedPermissions("thing", "/features/public", "READ")
                 .build();
@@ -2029,16 +2010,14 @@ public final class WebsocketIT extends IntegrationTest {
         // GIVEN: A user with READ access only to attributes/something/special and features/public
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final String clientId1 = user1OAuthClient.getClientId();
-        final String clientId2 = user2OAuthClient.getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user1OAuthClient.getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
                 .forLabel("partial")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user2OAuthClient.getSubject())
                 .setGrantedPermissions("thing", "/attributes/something/special", "READ")
                 .setGrantedPermissions("thing", "/features/public", "READ")
                 .build();
@@ -2132,16 +2111,14 @@ public final class WebsocketIT extends IntegrationTest {
         // GIVEN: A user with READ access to attributes/something/special but with revoke on attributes/something/special/hidden
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final String clientId1 = user1OAuthClient.getClientId();
-        final String clientId2 = user2OAuthClient.getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user1OAuthClient.getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
                 .forLabel("partial")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user2OAuthClient.getSubject())
                 .setGrantedPermissions("thing", "/attributes/something/special", "READ")
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/something/special/hidden"), READ)
                 .build();
@@ -2243,17 +2220,14 @@ public final class WebsocketIT extends IntegrationTest {
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
         // Use a different OAuth client for the owner to avoid permission merging with partial access subjects
-        final String ownerClientId = getOwnerClientId();
-        final String clientId1 = user1OAuthClient.getClientId();
-        final String clientId2 = user2OAuthClient.getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, ownerClientId, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(serviceEnv.getTestingContext4().getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
                 .forLabel("user1")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user1OAuthClient.getSubject())
                 // Don't grant general /attributes access - only specific paths
                 // This ensures User1 is included in partial access subjects
                 .setGrantedPermissions("thing", "/attributes/type", "READ")
@@ -2263,7 +2237,7 @@ public final class WebsocketIT extends IntegrationTest {
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/hidden"), READ)
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/complex/secret"), READ)
                 .forLabel("user2")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user2OAuthClient.getSubject())
                 .setGrantedPermissions("thing", "/attributes/complex", "READ")
                 .setGrantedPermissions("thing", "/attributes/complex/some", "READ")
                 // Note: The Thing structure has double "properties" nesting: properties.properties.public
@@ -2717,16 +2691,14 @@ public final class WebsocketIT extends IntegrationTest {
         // 5. Updating attributes/something/special (specific path)
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final String clientId1 = user1OAuthClient.getClientId();
-        final String clientId2 = user2OAuthClient.getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user1OAuthClient.getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
                 .forLabel("partial")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user2OAuthClient.getSubject())
                 .setGrantedPermissions("thing", "/attributes/something/special", "READ")
                 .setGrantedPermissions("thing", "/features/public", "READ")
                 .build();
@@ -2993,17 +2965,14 @@ public final class WebsocketIT extends IntegrationTest {
 
         final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final String ownerClientId = getOwnerClientId();
-        final String clientId1 = user1OAuthClient.getClientId();
-        final String clientId2 = user2OAuthClient.getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, ownerClientId, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(serviceEnv.getTestingContext4().getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
                 .forLabel("partial1")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user1OAuthClient.getSubject())
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_TYPE, "READ")
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_SOME, "READ")
@@ -3015,7 +2984,7 @@ public final class WebsocketIT extends IntegrationTest {
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/features/" + FEATURE_OTHER), READ)
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/features/" + FEATURE_SHARED + "/properties/" + PROP_SECRET), READ)
                 .forLabel("partial2")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, ARBITRARY_SUBJECT_TYPE)
+                .setSubject(user2OAuthClient.getSubject())
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX, "READ")
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER, "READ")

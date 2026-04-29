@@ -32,11 +32,10 @@ import org.awaitility.core.ConditionFactory;
 import org.eclipse.ditto.base.model.acks.DittoAcknowledgementLabel;
 import org.eclipse.ditto.base.model.headers.DittoHeaderDefinition;
 import org.eclipse.ditto.json.JsonArray;
+import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonObject;
-import org.eclipse.ditto.policies.model.AllowedImportAddition;
+import org.eclipse.ditto.policies.model.AllowedAddition;
 import org.eclipse.ditto.policies.model.EffectedImports;
-import org.eclipse.ditto.policies.model.EntriesAdditions;
-import org.eclipse.ditto.policies.model.EntryAddition;
 import org.eclipse.ditto.policies.model.ImportableType;
 import org.eclipse.ditto.policies.model.Label;
 import org.eclipse.ditto.policies.model.PoliciesModelFactory;
@@ -89,7 +88,7 @@ public final class SearchWithTransitiveImportsIT extends SearchIntegrationTest {
         final PolicyId leafId = PolicyId.of(idGenerator().withPrefixedRandomName("leaf"));
 
         putPolicy(buildTemplatePolicy(templateId)).expectingHttpStatus(CREATED).fire();
-        putPolicy(buildIntermediatePolicy(intermediateId, templateId, subject2))
+        putPolicy(intermediateId, buildIntermediatePolicyJson(intermediateId, templateId, subject2))
                 .expectingHttpStatus(CREATED).fire();
         putPolicy(buildLeafPolicyWithTransitiveImports(leafId, intermediateId, templateId))
                 .expectingHttpStatus(CREATED).fire();
@@ -120,7 +119,7 @@ public final class SearchWithTransitiveImportsIT extends SearchIntegrationTest {
         final PolicyId leafId = PolicyId.of(idGenerator().withPrefixedRandomName("leaf"));
 
         putPolicy(buildTemplatePolicy(templateId)).expectingHttpStatus(CREATED).fire();
-        putPolicy(buildIntermediatePolicy(intermediateId, templateId, subject2))
+        putPolicy(intermediateId, buildIntermediatePolicyJson(intermediateId, templateId, subject2))
                 .expectingHttpStatus(CREATED).fire();
         putPolicy(buildLeafPolicyWithTransitiveImports(leafId, intermediateId, templateId))
                 .expectingHttpStatus(CREATED).fire();
@@ -157,12 +156,12 @@ public final class SearchWithTransitiveImportsIT extends SearchIntegrationTest {
         final PolicyId leafId = PolicyId.of(idGenerator().withPrefixedRandomName("leaf"));
 
         putPolicy(buildTemplatePolicy(templateId)).expectingHttpStatus(CREATED).fire();
-        putPolicy(buildIntermediatePolicy(intermediateId, templateId, subject2))
+        putPolicy(intermediateId, buildIntermediatePolicyJson(intermediateId, templateId, subject2))
                 .expectingHttpStatus(CREATED).fire();
 
         // Leaf imports intermediate WITHOUT transitiveImports
         final PolicyImport simpleImport = PoliciesModelFactory.newPolicyImport(intermediateId,
-                PoliciesModelFactory.newEffectedImportedLabels(List.of(Label.of("DEFAULT"))));
+                PoliciesModelFactory.newEffectedImportedLabels(List.of(Label.of("user-access"))));
         final Policy leafPolicy = buildAdminOnlyPolicy(leafId).toBuilder()
                 .setPolicyImport(simpleImport)
                 .build();
@@ -203,7 +202,7 @@ public final class SearchWithTransitiveImportsIT extends SearchIntegrationTest {
         final PolicyId leafId = PolicyId.of(idGenerator().withPrefixedRandomName("leaf"));
 
         putPolicy(buildTemplatePolicy(templateId)).expectingHttpStatus(CREATED).fire();
-        putPolicy(buildIntermediatePolicy(intermediateId, templateId, subject2))
+        putPolicy(intermediateId, buildIntermediatePolicyJson(intermediateId, templateId, subject2))
                 .expectingHttpStatus(CREATED).fire();
         putPolicy(buildLeafPolicyWithTransitiveImports(leafId, intermediateId, templateId))
                 .expectingHttpStatus(CREATED).fire();
@@ -223,7 +222,7 @@ public final class SearchWithTransitiveImportsIT extends SearchIntegrationTest {
                 List.of(defaultSubject),
                 List.of(PoliciesModelFactory.newResource(thingResource("/"),
                         PoliciesModelFactory.newEffectedPermissions(List.of(READ), List.of()))),
-                ImportableType.NEVER, Set.of(AllowedImportAddition.SUBJECTS));
+                ImportableType.NEVER, Set.of(AllowedAddition.SUBJECTS));
         putPolicyEntry(templateId, neverDefaultEntry)
                 .expectingHttpStatus(NO_CONTENT)
                 .fire();
@@ -249,13 +248,12 @@ public final class SearchWithTransitiveImportsIT extends SearchIntegrationTest {
         putPolicy(buildTemplatePolicy(globalTemplateId)).expectingHttpStatus(CREATED).fire();
 
         // C: regional — imports D with entriesAdditions adding subject2
-        putPolicy(buildIntermediatePolicy(regionalId, globalTemplateId, subject2))
+        putPolicy(regionalId, buildIntermediatePolicyJson(regionalId, globalTemplateId, subject2))
                 .expectingHttpStatus(CREATED).fire();
 
         // B: department — imports C with transitiveImports=["D"]
         final EffectedImports deptEffected = PoliciesModelFactory.newEffectedImportedLabels(
-                List.of(Label.of("DEFAULT")),
-                null,
+                List.of(Label.of("user-access")),
                 List.of(globalTemplateId));
         final PolicyImport deptImport = PoliciesModelFactory.newPolicyImport(regionalId, deptEffected);
         final Policy departmentPolicy = buildAdminOnlyPolicy(departmentId).toBuilder()
@@ -265,8 +263,7 @@ public final class SearchWithTransitiveImportsIT extends SearchIntegrationTest {
 
         // A: leaf — imports B with transitiveImports=["C"]
         final EffectedImports leafEffected = PoliciesModelFactory.newEffectedImportedLabels(
-                List.of(Label.of("DEFAULT")),
-                null,
+                List.of(Label.of("user-access")),
                 List.of(regionalId));
         final PolicyImport leafImport = PoliciesModelFactory.newPolicyImport(departmentId, leafEffected);
         final Policy leafPolicy = buildAdminOnlyPolicy(leafId).toBuilder()
@@ -326,33 +323,63 @@ public final class SearchWithTransitiveImportsIT extends SearchIntegrationTest {
                 List.of(defaultSubject),
                 List.of(PoliciesModelFactory.newResource(thingResource("/"),
                         PoliciesModelFactory.newEffectedPermissions(List.of(READ), List.of()))),
-                ImportableType.IMPLICIT, Set.of(AllowedImportAddition.SUBJECTS));
+                ImportableType.IMPLICIT, Set.of(AllowedAddition.SUBJECTS));
         return PoliciesModelFactory.newPolicyBuilder(policyId)
                 .set(adminEntry)
                 .set(defaultEntry)
                 .build();
     }
 
-    private Policy buildIntermediatePolicy(final PolicyId policyId, final PolicyId templateId,
+    private JsonObject buildIntermediatePolicyJson(final PolicyId policyId, final PolicyId templateId,
             final Subject additionalSubject) {
-        final EntryAddition entryAddition = PoliciesModelFactory.newEntryAddition(
-                Label.of("DEFAULT"),
-                PoliciesModelFactory.newSubjects(additionalSubject), null);
-        final EntriesAdditions additions = PoliciesModelFactory.newEntriesAdditions(List.of(entryAddition));
-        final EffectedImports effectedImports = PoliciesModelFactory.newEffectedImportedLabels(
-                List.of(Label.of("DEFAULT")), additions);
-        final PolicyImport policyImport = PoliciesModelFactory.newPolicyImport(templateId, effectedImports);
-
-        return buildAdminOnlyPolicy(policyId).toBuilder()
-                .setPolicyImport(policyImport)
+        return JsonObject.newBuilder()
+                .set("policyId", policyId.toString())
+                .set("imports", JsonObject.newBuilder()
+                        .set(templateId.toString(), JsonObject.newBuilder()
+                                .set("entries", JsonFactory.newArrayBuilder()
+                                        .add("DEFAULT").build())
+                                .build())
+                        .build())
+                .set("entries", JsonObject.newBuilder()
+                        .set("ADMIN", JsonObject.newBuilder()
+                                .set("subjects", JsonObject.newBuilder()
+                                        .set(defaultSubject.getId().toString(), defaultSubject.toJson())
+                                        .build())
+                                .set("resources", JsonObject.newBuilder()
+                                        .set("policy:/", JsonObject.newBuilder()
+                                                .set("grant", JsonFactory.newArrayBuilder()
+                                                        .add("READ").add("WRITE").build())
+                                                .set("revoke", JsonArray.empty())
+                                                .build())
+                                        .set("thing:/", JsonObject.newBuilder()
+                                                .set("grant", JsonFactory.newArrayBuilder()
+                                                        .add("READ").add("WRITE").build())
+                                                .set("revoke", JsonArray.empty())
+                                                .build())
+                                        .build())
+                                .set("importable", "never")
+                                .build())
+                        .set("user-access", JsonObject.newBuilder()
+                                .set("subjects", JsonObject.newBuilder()
+                                        .set(additionalSubject.getId().toString(),
+                                                additionalSubject.toJson())
+                                        .build())
+                                .set("resources", JsonObject.empty())
+                                .set("references", JsonArray.of(
+                                        JsonObject.newBuilder()
+                                                .set("import", templateId.toString())
+                                                .set("entry", "DEFAULT")
+                                                .build()))
+                                .set("importable", "implicit")
+                                .build())
+                        .build())
                 .build();
     }
 
     private Policy buildLeafPolicyWithTransitiveImports(final PolicyId leafId,
             final PolicyId intermediateId, final PolicyId templateId) {
         final EffectedImports effectedImports = PoliciesModelFactory.newEffectedImportedLabels(
-                List.of(Label.of("DEFAULT")),
-                null,
+                List.of(Label.of("user-access")),
                 List.of(templateId));
         final PolicyImport policyImport = PoliciesModelFactory.newPolicyImport(intermediateId, effectedImports);
         return buildAdminOnlyPolicy(leafId).toBuilder()

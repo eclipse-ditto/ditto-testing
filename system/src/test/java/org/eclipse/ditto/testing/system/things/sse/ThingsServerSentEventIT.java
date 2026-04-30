@@ -18,6 +18,7 @@ import static org.eclipse.ditto.base.model.assertions.DittoBaseAssertions.assert
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -49,7 +50,6 @@ import org.eclipse.ditto.policies.model.PoliciesModelFactory;
 import org.eclipse.ditto.policies.model.PoliciesResourceType;
 import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.policies.model.PolicyId;
-import org.eclipse.ditto.testing.common.ThingsSubjectIssuer;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.things.model.ThingsModelFactory;
@@ -57,6 +57,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.Ignore;
 import org.junit.experimental.categories.Category;
 
 /**
@@ -675,16 +676,14 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
     public void partialAccessEventsAreFilteredViaSse() {
         final ThingId thingId = ThingId.of(idGenerator(interestingNamespace).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final String clientId1 = serviceEnv.getDefaultTestingContext().getOAuthClient().getClientId();
-        final String clientId2 = serviceEnv.getTestingContext2().getOAuthClient().getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), Permission.WRITE, Permission.READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), Permission.WRITE, Permission.READ)
                 .forLabel("partial")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getTestingContext2().getOAuthClient().getSubject())
                 .setGrantedPermissions("thing", "/attributes/public", "READ")
                 .setGrantedPermissions("thing", "/attributes/shared", "READ")
                 .setGrantedPermissions("thing", "/features/temperature/properties/value", "READ")
@@ -778,6 +777,7 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
     @Test
     @Category(Acceptance.class)
+    @Ignore("Fixed with https://github.com/eclipse-ditto/ditto/pull/2287, but not included in Ditto 3.8 at all")
     public void partialAccessEventsFilteredForRevokedPathsStrictMatchingViaSse() {
         final String ATTR_TYPE = "type";
         final String ATTR_HIDDEN = "hidden";
@@ -802,23 +802,21 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
         final ThingId thingId = ThingId.of(idGenerator(interestingNamespace).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final String clientId1 = serviceEnv.getDefaultTestingContext().getOAuthClient().getClientId();
-        final String clientId2 = serviceEnv.getTestingContext2().getOAuthClient().getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), Permission.WRITE, Permission.READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), Permission.WRITE, Permission.READ)
                 .forLabel("partial1")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject())
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_TYPE, "READ")
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_SOME, "READ")
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_HIDDEN), Permission.READ)
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/attributes/" + ATTR_COMPLEX_SECRET), Permission.READ)
                 .forLabel("partial2")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getTestingContext2().getOAuthClient().getSubject())
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX, "READ")
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER + "/properties/properties/" + PROP_PUBLIC, "READ")
@@ -993,6 +991,7 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
     @Test
     @Category(Acceptance.class)
+    @Ignore("Fixed with https://github.com/eclipse-ditto/ditto/pull/2287, but not included in Ditto 3.8 at all")
     public void partialAccessComprehensiveTestAllScenariosViaSse() {
         final String ATTR_TYPE = "type";
         final String ATTR_HIDDEN = "hidden";
@@ -1024,16 +1023,14 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
 
         final ThingId thingId = ThingId.of(idGenerator(interestingNamespace).withRandomName());
         final PolicyId policyId = PolicyId.of(thingId);
-        final String clientId1 = serviceEnv.getDefaultTestingContext().getOAuthClient().getClientId();
-        final String clientId2 = serviceEnv.getTestingContext2().getOAuthClient().getClientId();
 
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(policyId)
                 .forLabel("owner")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject())
                 .setGrantedPermissions(PoliciesResourceType.policyResource("/"), Permission.WRITE, Permission.READ)
                 .setGrantedPermissions(PoliciesResourceType.thingResource("/"), Permission.WRITE, Permission.READ)
                 .forLabel("partial1")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId1, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getDefaultTestingContext().getOAuthClient().getSubject())
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_TYPE, "READ")
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_SOME, "READ")
@@ -1045,7 +1042,7 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/features/" + FEATURE_OTHER), Permission.READ)
                 .setRevokedPermissions(PoliciesResourceType.thingResource("/features/" + FEATURE_SHARED + "/properties/" + PROP_SECRET), Permission.READ)
                 .forLabel("partial2")
-                .setSubject(ThingsSubjectIssuer.DITTO, clientId2, org.eclipse.ditto.policies.model.SubjectType.GENERATED)
+                .setSubject(serviceEnv.getTestingContext2().getOAuthClient().getSubject())
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX, "READ")
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER, "READ")
@@ -1247,7 +1244,7 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
                         return null;
                     }
                 })
-                .filter(jsonValue -> jsonValue != null)
+                .filter(Objects::nonNull)
                 .map(JsonValue::asObject)
                 .forEach(payload -> {
                     assertThat(payload.getValue(JsonPointer.of("/attributes/" + ATTR_HIDDEN))).isEmpty();

@@ -374,6 +374,42 @@ public final class PolicyEntryReferencesIT extends IntegrationTest {
     }
 
     @Test
+    public void flippingImportableToNeverIsRejectedWhenLocalRefExists() {
+        // "shared-subjects" is currently IMPLICIT and is local-referenced by "consumer".
+        // PUT /entries/shared-subjects/importable to "never" must be rejected because that
+        // would orphan the local reference.
+        final Policy policy = PoliciesModelFactory.newPolicyBuilder(importingPolicyId)
+                .forLabel("ADMIN")
+                .setSubject(defaultSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(thingResource("/"), READ, WRITE)
+                .forLabel("shared-subjects")
+                .setSubject(subject2)
+                .setGrantedPermissions(thingResource("/"), READ)
+                .forLabel("consumer")
+                .setSubject(defaultSubject)
+                .setGrantedPermissions(thingResource("/"), READ)
+                .build();
+        putPolicy(policy).expectingHttpStatus(CREATED).fire();
+
+        putReferences(importingPolicyId, "consumer", JsonArray.of(localRef("shared-subjects")))
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        putPolicyEntryImportable(importingPolicyId, "shared-subjects", "never")
+                .expectingHttpStatus(BAD_REQUEST)
+                .fire();
+
+        // Removing the reference unblocks the flip.
+        deleteReferences(importingPolicyId, "consumer")
+                .expectingHttpStatus(NO_CONTENT)
+                .fire();
+        putPolicyEntryImportable(importingPolicyId, "shared-subjects", "never")
+                .expectingHttpStatus(NO_CONTENT)
+                .fire();
+    }
+
+    @Test
     public void shrinkingImportLabelsRejectsWhileEntryReferencesRemovedLabel() {
         // Template with two importable entries (DEFAULT, EXTRA).
         final PolicyEntry adminEntry = PoliciesModelFactory.newPolicyEntry("ADMIN",
@@ -733,6 +769,14 @@ public final class PolicyEntryReferencesIT extends IntegrationTest {
         final String path = ResourcePathBuilder.forPolicy(policyId)
                 .policyEntryReferences(label).toString();
         return delete(dittoUrl(TestConstants.API_V_2, path)).withLogging(LOGGER, "References");
+    }
+
+    private static PutMatcher putPolicyEntryImportable(final CharSequence policyId,
+            final CharSequence label, final String importableType) {
+        final String path = ResourcePathBuilder.forPolicy(policyId)
+                .policyEntry(label).toString() + "/importable";
+        return put(dittoUrl(TestConstants.API_V_2, path), "\"" + importableType + "\"")
+                .withLogging(LOGGER, "PolicyEntryImportable");
     }
 
 }

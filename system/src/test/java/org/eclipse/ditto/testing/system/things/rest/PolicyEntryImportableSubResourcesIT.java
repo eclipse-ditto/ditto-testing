@@ -436,6 +436,80 @@ public final class PolicyEntryImportableSubResourcesIT extends IntegrationTest {
         deleteThing(TestConstants.API_V_2, thingId).expectingHttpStatus(NO_CONTENT).fire();
     }
 
+    @Test
+    public void getAllowedAdditionsReturnsEmptyArrayForAbsentField() {
+        // The DEFAULT entry of buildImportedPolicyWithoutAllowedAdditions has the field absent
+        // in the underlying model. The route now returns 200 + [] instead of 404, distinguishing
+        // "entry exists but field unset" from "entry not found".
+        final Policy importedPolicy = buildImportedPolicyWithoutAllowedAdditions(importedPolicyId);
+        putPolicy(importedPolicy).expectingHttpStatus(CREATED).fire();
+
+        getPolicyEntryAllowedAdditions(importedPolicyId, "DEFAULT")
+                .expectingBody(containsOnly(JsonArray.empty()))
+                .expectingHttpStatus(OK)
+                .fire();
+    }
+
+    @Test
+    public void deleteAllowedAdditionsClearsFieldAndReinstatesNoRestrictionSemantics() {
+        // Start with allowedAdditions=[] (explicit empty deny-all). A consumer's own subject
+        // is stripped at runtime. After DELETE, the field becomes absent which means
+        // "no restriction" -- the consumer's own subject is no longer stripped.
+        final Policy importedPolicy = buildImportedPolicy(importedPolicyId, Set.of());
+        putPolicy(importedPolicy).expectingHttpStatus(CREATED).fire();
+
+        final PolicyImport simpleImport = PoliciesModelFactory.newPolicyImport(importedPolicyId,
+                PoliciesModelFactory.newEffectedImportedLabels(List.of(Label.of("DEFAULT"))));
+        final Policy importingPolicy = buildImportingPolicy(importingPolicyId)
+                .toBuilder().setPolicyImport(simpleImport).build();
+        putPolicy(importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        final PolicyEntry userEntry = PoliciesModelFactory.newPolicyEntry("user-access",
+                List.of(subject2),
+                List.of(),
+                ImportableType.NEVER, Set.of());
+        putPolicyEntry(importingPolicyId, userEntry).expectingHttpStatus(CREATED).fire();
+
+        final JsonArray refs = JsonArray.of(importRef(importedPolicyId, "DEFAULT"));
+        putReferences(importingPolicyId, "user-access", refs)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        final String thingId = importingPolicyId.toString();
+        putThing(TestConstants.API_V_2, JsonObject.newBuilder()
+                        .set("thingId", thingId)
+                        .set("policyId", importingPolicyId.toString())
+                        .build(),
+                org.eclipse.ditto.base.model.json.JsonSchemaVersion.V_2)
+                .expectingHttpStatus(CREATED)
+                .fire();
+
+        // subject2 has no access: explicit empty filter strips the own subject.
+        getThing(TestConstants.API_V_2, thingId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(NOT_FOUND)
+                .fire();
+
+        // DELETE the field on the imported entry -- field becomes absent.
+        deletePolicyEntryAllowedAdditions(importedPolicyId, "DEFAULT")
+                .expectingHttpStatus(NO_CONTENT)
+                .fire();
+
+        // GET reflects the absent field as an empty array on the wire.
+        getPolicyEntryAllowedAdditions(importedPolicyId, "DEFAULT")
+                .expectingBody(containsOnly(JsonArray.empty()))
+                .expectingHttpStatus(OK)
+                .fire();
+
+        // subject2 now gains runtime access -- absent = no restriction, own subject kept.
+        getThing(TestConstants.API_V_2, thingId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(OK)
+                .fire();
+
+        deleteThing(TestConstants.API_V_2, thingId).expectingHttpStatus(NO_CONTENT).fire();
+    }
+
     // --- Helper methods for building policies ---
 
     private Policy buildImportedPolicy(final PolicyId policyId,
@@ -598,6 +672,14 @@ public final class PolicyEntryImportableSubResourcesIT extends IntegrationTest {
         final String path = ResourcePathBuilder.forPolicy(policyId)
                 .policyEntry(label).toString() + "/allowedAdditions";
         return put(dittoUrl(TestConstants.API_V_2, path), allowedAdditions.toString())
+                .withLogging(LOGGER, "PolicyEntryAllowedAdditions");
+    }
+
+    private static DeleteMatcher deletePolicyEntryAllowedAdditions(final CharSequence policyId,
+            final CharSequence label) {
+        final String path = ResourcePathBuilder.forPolicy(policyId)
+                .policyEntry(label).toString() + "/allowedAdditions";
+        return delete(dittoUrl(TestConstants.API_V_2, path))
                 .withLogging(LOGGER, "PolicyEntryAllowedAdditions");
     }
 

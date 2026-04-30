@@ -495,6 +495,11 @@ public final class PolicyEntryImportableSubResourcesIT extends IntegrationTest {
                 .expectingHttpStatus(NO_CONTENT)
                 .fire();
 
+        // Repeated DELETE on the now-absent field is an idempotent no-op (still 204, no event).
+        deletePolicyEntryAllowedAdditions(importedPolicyId, "DEFAULT")
+                .expectingHttpStatus(NO_CONTENT)
+                .fire();
+
         // GET reflects the absent field as an empty array on the wire.
         getPolicyEntryAllowedAdditions(importedPolicyId, "DEFAULT")
                 .expectingBody(containsOnly(JsonArray.empty()))

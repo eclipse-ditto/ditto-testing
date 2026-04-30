@@ -376,8 +376,9 @@ public final class PolicyEntryReferencesIT extends IntegrationTest {
     @Test
     public void flippingImportableToNeverIsRejectedWhenLocalRefExists() {
         // "shared-subjects" is currently IMPLICIT and is local-referenced by "consumer".
-        // PUT /entries/shared-subjects/importable to "never" must be rejected because that
-        // would orphan the local reference.
+        // PUT /entries/shared-subjects/importable to "never" must be rejected with 409
+        // (PolicyEntryReferenceConflictException) -- the same status/code shape used by
+        // DeletePolicyEntry and the import-narrow orphan checks.
         final Policy policy = PoliciesModelFactory.newPolicyBuilder(importingPolicyId)
                 .forLabel("ADMIN")
                 .setSubject(defaultSubject)
@@ -397,7 +398,7 @@ public final class PolicyEntryReferencesIT extends IntegrationTest {
                 .fire();
 
         putPolicyEntryImportable(importingPolicyId, "shared-subjects", "never")
-                .expectingHttpStatus(BAD_REQUEST)
+                .expectingHttpStatus(CONFLICT)
                 .fire();
 
         // Removing the reference unblocks the flip.

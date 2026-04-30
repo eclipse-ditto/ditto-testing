@@ -221,6 +221,12 @@ public final class ResourcePathBuilder {
             return this;
         }
 
+        public Policy policyEntryReferences(final CharSequence label) {
+            policyEntry(label);
+            stringBuilder.append(SLASH).append("references");
+            return this;
+        }
+
         public Policy policyImports() {
             stringBuilder.append(SLASH).append("imports");
             return this;
@@ -228,17 +234,6 @@ public final class ResourcePathBuilder {
 
         public Policy policyImport(final CharSequence importedPolicyId) {
             stringBuilder.append(SLASH).append("imports").append(SLASH).append(importedPolicyId);
-            return this;
-        }
-
-        public Policy policyImportsAliases() {
-            stringBuilder.append(SLASH).append("importsAliases");
-            return this;
-        }
-
-        public Policy policyImportsAlias(final CharSequence label) {
-            policyImportsAliases();
-            stringBuilder.append(SLASH).append(checkNotNull(label, "ImportsAlias label"));
             return this;
         }
 

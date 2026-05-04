@@ -1652,8 +1652,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         }
 
         final String targetAddress = cf.defaultTargetAddress(connectionName);
-        final AuthorizationContext targetAuthContext =
-                baseConnection.getTargets().get(0).getAuthorizationContext();
+        final Target baseTarget = baseConnection.getTargets().get(0);
 
         // Broad topic: matches ALL attribute modifications, enriched with definition
         final FilteredTopic topicBroad = ConnectivityModelFactory.newFilteredTopicBuilder(Topic.TWIN_EVENTS)
@@ -1666,9 +1665,8 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .withExtraFields(ThingFieldSelector.fromString("features"))
                 .build();
 
-        final Target target = ConnectivityModelFactory.newTargetBuilder()
+        final Target target = ConnectivityModelFactory.newTargetBuilder(baseTarget)
                 .address(targetAddress)
-                .authorizationContext(targetAuthContext)
                 .topics(Set.of(topicBroad, topicNarrow))
                 .build();
 
@@ -1781,8 +1779,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         }
 
         final String targetAddress = cf.defaultTargetAddress(connectionName);
-        final AuthorizationContext targetAuthContext =
-                baseConnection.getTargets().get(0).getAuthorizationContext();
+        final Target baseTarget = baseConnection.getTargets().get(0);
 
         // Topic A: matches modifications to /attributes/triggerA, enriched with definition
         final FilteredTopic topicA = ConnectivityModelFactory.newFilteredTopicBuilder(Topic.TWIN_EVENTS)
@@ -1799,9 +1796,8 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .withFilter("and(eq(topic:action,\"modified\"),eq(resource:path,\"/attributes/triggerC\"))")
                 .build();
 
-        final Target target = ConnectivityModelFactory.newTargetBuilder()
+        final Target target = ConnectivityModelFactory.newTargetBuilder(baseTarget)
                 .address(targetAddress)
-                .authorizationContext(targetAuthContext)
                 .topics(Set.of(topicA, topicB, topicC))
                 .build();
 

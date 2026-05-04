@@ -106,15 +106,23 @@ public final class ConnectivityTestWebsocketClient implements WebSocketListener 
      * Connects the client.
      */
     public void connect(final String correlationId) {
+        connect(correlationId, Map.of());
+    }
+
+    /**
+     * Connects the client, sending the given additional HTTP headers on the WebSocket upgrade request.
+     */
+    public void connect(final String correlationId, final Map<String, String> additionalHeaders) {
 
         final WebSocketUpgradeHandler upgradeHandler = new WebSocketUpgradeHandler.Builder()
                 .addWebSocketListener(this)
                 .build();
-        final ListenableFuture<NettyWebSocket> execute = client
+        final var request = client
                 .prepareGet(endpoint)
                 .addHeader(HttpHeader.AUTHORIZATION.getName(), "Bearer " + authToken)
-                .addHeader(HttpHeader.X_CORRELATION_ID.getName(), correlationId)
-                .execute(upgradeHandler);
+                .addHeader(HttpHeader.X_CORRELATION_ID.getName(), correlationId);
+        additionalHeaders.forEach(request::addHeader);
+        final ListenableFuture<NettyWebSocket> execute = request.execute(upgradeHandler);
 
         safeGet(execute);
     }

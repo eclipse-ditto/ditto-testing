@@ -429,6 +429,53 @@ public final class PolicyImportsIT extends IntegrationTest {
     }
 
     @Test
+    public void policyViewResolvedHidesImportedEntriesFromCallerWithoutSourceRead() {
+        final Subject adminSubject = createDefaultSubject();
+        final Subject viewerSubject = serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject();
+
+        final Policy importingPolicy = PoliciesModelFactory.newPolicyBuilder(importingPolicyId)
+                .forLabel("ADMIN")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .forLabel("VIEWER")
+                .setSubject(viewerSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .setPolicyImport(policyImport)
+                .build();
+
+        putPolicy(importedPolicyId, importedPolicyRestrictedAccess).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Negative control: the primary auth gate on B still blocks the viewer entirely.
+        getPolicy(importedPolicyId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(NOT_FOUND)
+                .fire();
+
+        final JsonObject body = JsonFactory.newObject(
+                getPolicy(importingPolicyId)
+                        .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                        .withConfiguredAuth(serviceEnv.getTestingContext2())
+                        .expectingHttpStatus(OK)
+                        .fire().body().asString());
+        final JsonObject entries = body.getValue("entries").orElseThrow().asObject();
+
+        // Mirror the positive assertions in policyViewResolvedMergesImportedEntries with negatives — those
+        // entries must be present for a caller with source-side READ, and absent for this one without.
+        assertThat(entries.contains(JsonFactory.newPointer("imported-" + importedPolicyId + "-EXPLICIT")))
+                .as("imported EXPLICIT entry must NOT leak to caller without source-side READ on B")
+                .isFalse();
+        assertThat(entries.contains(JsonFactory.newPointer("imported-" + importedPolicyId + "-IMPLICIT")))
+                .as("imported IMPLICIT entry must NOT leak to caller without source-side READ on B")
+                .isFalse();
+        assertThat(entries.getKeys().stream().map(Object::toString).toList())
+                .as("only A's own local entries are visible — declaring an import is not a backdoor onto B")
+                .containsExactlyInAnyOrder("ADMIN", "VIEWER");
+    }
+
+    @Test
     public void policyViewResolvedOnPolicyWithoutImportsEqualsOriginal() {
         putPolicy(importedPolicyId, importedPolicyFullAccess).expectingHttpStatus(CREATED).fire();
 

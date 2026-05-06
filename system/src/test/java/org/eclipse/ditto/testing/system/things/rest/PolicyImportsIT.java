@@ -359,6 +359,76 @@ public final class PolicyImportsIT extends IntegrationTest {
     }
 
     @Test
+    public void policyViewResolvedShowsCallerSpecificEffectiveView() {
+        // Same policy, two callers, two different effective views — proves that policy-view=resolved is
+        // filtered per-caller through A's effective enforcer. OWNER has READ on policy:/ and sees the full
+        // merged view (own entries + every imported-<B>-* entry + imports block). GUEST has READ only on
+        // policy:/entries/GUEST and sees only their own entry.
+        //
+        // The imported entries keep their grants on the original-label resource paths
+        // (policy:/entries/EXPLICIT, .../IMPLICIT) but in the merged JSON they live under rewritten labels
+        // imported-<B>-EXPLICIT / imported-<B>-IMPLICIT — so the per-subject READ filter finds no grant on
+        // the rewritten paths for GUEST and drops them. Declaring an import is not a permission backdoor
+        // onto the imported policy's contents.
+        final Subject ownerSubject = createDefaultSubject();
+        final Subject guestSubject = serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject();
+
+        final Policy importingPolicy = PoliciesModelFactory.newPolicyBuilder(importingPolicyId)
+                .forLabel("OWNER")
+                .setSubject(ownerSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .forLabel("GUEST")
+                .setSubject(guestSubject)
+                .setGrantedPermissions(policyResource("/entries/GUEST"), READ)
+                .setImportable(ImportableType.NEVER)
+                .setPolicyImport(policyImport)
+                .build();
+
+        putPolicy(importedPolicyId, importedPolicyRestrictedAccess).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Same GET, two callers — only the .withConfiguredAuth(...) line differs between the two
+        // requests. The contrast in what each caller sees is the security property under test.
+        final JsonObject ownerView = JsonFactory.newObject(
+                getPolicy(importingPolicyId)
+                        .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                        .withConfiguredAuth(serviceEnv.getDefaultTestingContext())
+                        .expectingHttpStatus(OK)
+                        .fire().body().asString());
+
+        final JsonObject guestView = JsonFactory.newObject(
+                getPolicy(importingPolicyId)
+                        .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                        .withConfiguredAuth(serviceEnv.getTestingContext2())
+                        .expectingHttpStatus(OK)
+                        .fire().body().asString());
+
+        // OWNER (READ on policy:/): sees own entries plus both imported-<B>-* entries plus the imports
+        // block — i.e. the full merged view that policyViewResolvedMergesImportedEntries also asserts.
+        final JsonObject ownerEntries = ownerView.getValue("entries").orElseThrow().asObject();
+        assertThat(ownerEntries.getKeys().stream().map(Object::toString).toList())
+                .as("OWNER with READ on policy:/ sees own entries and all imported entries")
+                .containsExactlyInAnyOrder(
+                        "OWNER",
+                        "GUEST",
+                        "imported-" + importedPolicyId + "-EXPLICIT",
+                        "imported-" + importedPolicyId + "-IMPLICIT");
+        assertThat(ownerView.contains(JsonFactory.newPointer("imports")))
+                .as("OWNER with READ on policy:/ sees the imports block").isTrue();
+
+        // GUEST (READ only on policy:/entries/GUEST): the per-path filter strips everything else. No OWNER
+        // entry, no imported-<B>-* entries (their grants are on the original-label resource paths, not on
+        // the rewritten paths the resolved JSON exposes), no imports block.
+        final JsonObject guestEntries = guestView.getValue("entries").orElseThrow().asObject();
+        assertThat(guestEntries.getKeys().stream().map(Object::toString).toList())
+                .as("GUEST sees only their own entry; importing is not a permission backdoor")
+                .containsExactly("GUEST");
+        assertThat(guestView.contains(JsonFactory.newPointer("imports")))
+                .as("GUEST has no READ on policy:/imports → block must be hidden").isFalse();
+    }
+
+    @Test
     public void policyViewResolvedOnPolicyWithoutImportsEqualsOriginal() {
         putPolicy(importedPolicyId, importedPolicyFullAccess).expectingHttpStatus(CREATED).fire();
 

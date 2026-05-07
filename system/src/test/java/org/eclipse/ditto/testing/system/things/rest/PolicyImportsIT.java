@@ -475,6 +475,144 @@ public final class PolicyImportsIT extends IntegrationTest {
                 .containsExactlyInAnyOrder("ADMIN", "VIEWER");
     }
 
+    /**
+     * Affirmative counterpart to {@link #policyViewResolvedHidesImportedEntriesFromCallerWithoutSourceRead}:
+     * a caller WITH per-entry source-side READ on B must still see the imported entry. Locks the source-side
+     * filter against future over-aggressive changes that would silently drop entries the caller is allowed
+     * to see.
+     */
+    @Test
+    public void policyViewResolvedKeepsImportedEntriesForCallerWithSourceRead() {
+        final Subject adminSubject = createDefaultSubject();
+        final Subject viewerSubject = serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject();
+
+        // B grants viewer source-side READ on policy:/entries/EXPLICIT only — NOT on IMPLICIT. So the
+        // resolved view of A as viewer must include imported-<B>-EXPLICIT and exclude imported-<B>-IMPLICIT.
+        final Policy importedPolicyWithViewerOnExplicit = PoliciesModelFactory.newPolicyBuilder(importedPolicyId)
+                .forLabel("ADMIN")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .forLabel("EXPLICIT")
+                .setSubject(adminSubject)
+                .setSubject(viewerSubject)
+                .setGrantedPermissions(policyResource("/entries/EXPLICIT"), READ)
+                .setImportable(ImportableType.EXPLICIT)
+                .forLabel("IMPLICIT")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/entries/IMPLICIT"), READ)
+                .setImportable(ImportableType.IMPLICIT)
+                .build();
+
+        final Policy importingPolicy = PoliciesModelFactory.newPolicyBuilder(importingPolicyId)
+                .forLabel("ADMIN")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .forLabel("VIEWER")
+                .setSubject(viewerSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .setPolicyImport(policyImport)
+                .build();
+
+        putPolicy(importedPolicyId, importedPolicyWithViewerOnExplicit).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        final JsonObject body = JsonFactory.newObject(
+                getPolicy(importingPolicyId)
+                        .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                        .withConfiguredAuth(serviceEnv.getTestingContext2())
+                        .expectingHttpStatus(OK)
+                        .fire().body().asString());
+        final JsonObject entries = body.getValue("entries").orElseThrow().asObject();
+
+        // EXPLICIT: viewer has source-side READ → kept.
+        // IMPLICIT: viewer has no source-side READ → still dropped by the source-side filter.
+        // Pinning the exact set guards against both regressions in one assertion.
+        assertThat(entries.getKeys().stream().map(Object::toString).toList())
+                .as("granular source-side READ allows the corresponding entry through; others stay hidden")
+                .containsExactlyInAnyOrder(
+                        "ADMIN",
+                        "VIEWER",
+                        "imported-" + importedPolicyId + "-EXPLICIT");
+    }
+
+    /**
+     * Transitive imports: A imports B with {@code transitiveImports=[C]}. C's IMPLICIT entry surfaces in
+     * the resolved view of A under the double-prefixed label {@code imported-<B>-imported-<C>-<label>},
+     * provided the caller has source-side READ on the corresponding path in B's enforcer.
+     */
+    @Test
+    public void policyViewResolvedMergesTransitiveImportedEntries() {
+        final Subject adminSubject = createDefaultSubject();
+
+        final PolicyId transitivePolicyId =
+                PolicyId.of(idGenerator().withPrefixedRandomName("transitiveImported"));
+
+        // C: a single IMPLICIT entry that should surface under imported-<B>-imported-<C>-LEAF in A.
+        final Policy transitivePolicy = PoliciesModelFactory.newPolicyBuilder(transitivePolicyId)
+                .forLabel("ADMIN")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .forLabel("LEAF")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/entries/LEAF"), READ)
+                .setImportable(ImportableType.IMPLICIT)
+                .build();
+
+        // B owns its own IMPLICIT entry AND declares an import of C. transitiveImports on A's import is a
+        // filter over B's declared imports, not a way to inject a new edge — without B's `import C` here
+        // the filter matches nothing and C's content never surfaces in A's resolved view.
+        final Policy intermediatePolicy = PoliciesModelFactory.newPolicyBuilder(importedPolicyId)
+                .forLabel("ADMIN")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .forLabel("MID")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ)
+                .setImportable(ImportableType.IMPLICIT)
+                .setPolicyImport(PoliciesModelFactory.newPolicyImport(transitivePolicyId,
+                        PoliciesModelFactory.newEffectedImportedLabels(List.of())))
+                .build();
+
+        // A's import of B carries transitiveImports=[C], opting in to follow B→C during resolution.
+        final PolicyImport transitiveImport = PoliciesModelFactory.newPolicyImport(importedPolicyId,
+                PoliciesModelFactory.newEffectedImportedLabels(List.of(), List.of(transitivePolicyId)));
+
+        final Policy importingPolicy = PoliciesModelFactory.newPolicyBuilder(importingPolicyId)
+                .forLabel("ADMIN")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .setPolicyImport(transitiveImport)
+                .build();
+
+        putPolicy(transitivePolicyId, transitivePolicy).expectingHttpStatus(CREATED).fire();
+        putPolicy(importedPolicyId, intermediatePolicy).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        final JsonObject body = JsonFactory.newObject(
+                getPolicy(importingPolicyId)
+                        .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                        .withConfiguredAuth(serviceEnv.getDefaultTestingContext())
+                        .expectingHttpStatus(OK)
+                        .fire().body().asString());
+        final JsonObject entries = body.getValue("entries").orElseThrow().asObject();
+
+        // Admin has READ on policy:/ everywhere (A, B, transitively C) → both rewrites must surface.
+        // The double-prefix form is what closes the loop on the colleague's manual transitive-imports
+        // verification: B's own entry under imported-<B>-MID, C's entry under imported-<B>-imported-<C>-LEAF.
+        assertThat(entries.getKeys().stream().map(Object::toString).toList())
+                .as("transitive imports surface under imported-<B>-imported-<C>-<label>")
+                .contains(
+                        "ADMIN",
+                        "imported-" + importedPolicyId + "-MID",
+                        "imported-" + importedPolicyId + "-imported-" + transitivePolicyId + "-LEAF");
+    }
+
     @Test
     public void policyViewResolvedOnPolicyWithoutImportsEqualsOriginal() {
         putPolicy(importedPolicyId, importedPolicyFullAccess).expectingHttpStatus(CREATED).fire();

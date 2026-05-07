@@ -12,12 +12,14 @@
  */
 package org.eclipse.ditto.testing.system.things.rest;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.eclipse.ditto.base.model.common.HttpStatus.BAD_REQUEST;
 import static org.eclipse.ditto.base.model.common.HttpStatus.CREATED;
 import static org.eclipse.ditto.base.model.common.HttpStatus.NOT_FOUND;
 import static org.eclipse.ditto.base.model.common.HttpStatus.NO_CONTENT;
 import static org.eclipse.ditto.base.model.common.HttpStatus.OK;
 import static org.eclipse.ditto.policies.model.PoliciesResourceType.policyResource;
+import static org.eclipse.ditto.policies.model.PoliciesResourceType.thingResource;
 import static org.eclipse.ditto.things.api.Permission.READ;
 import static org.eclipse.ditto.things.api.Permission.WRITE;
 
@@ -25,12 +27,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import org.eclipse.ditto.base.model.headers.DittoHeaders;
+import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonFieldSelector;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.policies.model.EffectedImports;
+import org.eclipse.ditto.policies.model.EntryReference;
 import org.eclipse.ditto.policies.model.ImportableType;
 import org.eclipse.ditto.policies.model.Label;
 import org.eclipse.ditto.policies.model.PoliciesModelFactory;
@@ -39,12 +46,16 @@ import org.eclipse.ditto.policies.model.PolicyId;
 import org.eclipse.ditto.policies.model.PolicyImport;
 import org.eclipse.ditto.policies.model.PolicyImports;
 import org.eclipse.ditto.policies.model.Subject;
+import org.eclipse.ditto.policies.model.signals.commands.PolicyCommandResponse;
+import org.eclipse.ditto.policies.model.signals.commands.query.RetrievePolicy;
+import org.eclipse.ditto.policies.model.signals.commands.query.RetrievePolicyResponse;
 import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.ResourcePathBuilder;
 import org.eclipse.ditto.testing.common.TestConstants;
 import org.eclipse.ditto.testing.common.matcher.DeleteMatcher;
 import org.eclipse.ditto.testing.common.matcher.GetMatcher;
 import org.eclipse.ditto.testing.common.matcher.PutMatcher;
+import org.eclipse.ditto.testing.system.connectivity.ConnectivityTestWebsocketClient;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -52,6 +63,10 @@ import org.junit.Test;
  * Integration Tests for /policies/<policyId>/imports resources
  */
 public final class PolicyImportsIT extends IntegrationTest {
+
+    private static final String POLICY_VIEW_PARAM = "policy-view";
+    private static final String VIEW_RESOLVED = "resolved";
+    private static final String VIEW_ORIGINAL = "original";
 
     private PolicyId importingPolicyId;
     private PolicyId importedPolicyId;
@@ -281,6 +296,603 @@ public final class PolicyImportsIT extends IntegrationTest {
                 .expectingErrorCode("policies:imports.toolarge")
                 .expectingHttpStatus(BAD_REQUEST)
                 .fire();
+    }
+
+    // ---- policy-view query parameter (resolved / effective view) ----
+
+    @Test
+    public void getPolicyWithoutPolicyViewReturnsStoredPolicy() {
+        final Policy policyWithImports =
+                importingPolicyRestrictedAccess.toBuilder().setPolicyImport(policyImport).build();
+        putPolicy(importedPolicyId, importedPolicyRestrictedAccess).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, policyWithImports).expectingHttpStatus(CREATED).fire();
+
+        final JsonObject body = JsonFactory.newObject(getPolicyAsJsonString(importingPolicyId, null));
+        final JsonObject entries = body.getValue("entries").orElseThrow().asObject();
+
+        final List<String> importedKeys = entries.getKeys().stream()
+                .map(Object::toString)
+                .filter(k -> k.startsWith("imported-"))
+                .toList();
+        assertThat(importedKeys).as("no imported entries should appear in unresolved view").isEmpty();
+    }
+
+    @Test
+    public void policyViewOriginalEqualsNoView() {
+        final Policy policyWithImports =
+                importingPolicyRestrictedAccess.toBuilder().setPolicyImport(policyImport).build();
+        putPolicy(importedPolicyId, importedPolicyRestrictedAccess).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, policyWithImports).expectingHttpStatus(CREATED).fire();
+
+        final String noView = getPolicyAsJsonString(importingPolicyId, null);
+        final String original = getPolicyAsJsonString(importingPolicyId, VIEW_ORIGINAL);
+        assertThat(original).as("policy-view=original must equal no-view response").isEqualTo(noView);
+    }
+
+    @Test
+    public void policyViewResolvedMergesImportedEntries() {
+        // Use the full-access importing fixture: the per-subject READ filter (applyEnforcerJsonView) runs AFTER
+        // the merge, walking the JSON view of the merged policy. Imported entries land in JSON under rewritten
+        // labels (imported-<id>-<label>), so the user needs READ on policy:/ to see them. With the restricted
+        // fixture (READ only on /imports and /entries/IMPORTS) the filter would correctly drop the imported
+        // entries — that is intentional security and a separate test.
+        final Policy policyWithImports =
+                importingPolicyFullAccess.toBuilder().setPolicyImport(policyImport).build();
+        putPolicy(importedPolicyId, importedPolicyRestrictedAccess).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, policyWithImports).expectingHttpStatus(CREATED).fire();
+
+        final JsonObject body = JsonFactory.newObject(getPolicyAsJsonString(importingPolicyId, VIEW_RESOLVED));
+        final JsonObject entries = body.getValue("entries").orElseThrow().asObject();
+
+        // The consumer's own ADMIN entry is still there.
+        assertThat(entries.contains(JsonFactory.newPointer("ADMIN"))).isTrue();
+
+        // EXPLICIT (in import filter) and IMPLICIT (auto-imported) appear with rewritten labels.
+        // ADMIN and NEVER are ImportableType.NEVER → never imported.
+        assertThat(entries.contains(JsonFactory.newPointer("imported-" + importedPolicyId + "-EXPLICIT"))).isTrue();
+        assertThat(entries.contains(JsonFactory.newPointer("imported-" + importedPolicyId + "-IMPLICIT"))).isTrue();
+        assertThat(entries.contains(JsonFactory.newPointer("imported-" + importedPolicyId + "-ADMIN"))).isFalse();
+        assertThat(entries.contains(JsonFactory.newPointer("imported-" + importedPolicyId + "-NEVER"))).isFalse();
+
+        // imports config block is preserved unchanged.
+        assertThat(body.contains(JsonFactory.newPointer("imports"))).isTrue();
+    }
+
+    @Test
+    public void policyViewResolvedShowsCallerSpecificEffectiveView() {
+        // Same policy, two callers, two different effective views — proves that policy-view=resolved is
+        // filtered per-caller through A's effective enforcer. OWNER has READ on policy:/ and sees the full
+        // merged view (own entries + every imported-<B>-* entry + imports block). GUEST has READ only on
+        // policy:/entries/GUEST and sees only their own entry.
+        //
+        // The imported entries keep their grants on the original-label resource paths
+        // (policy:/entries/EXPLICIT, .../IMPLICIT) but in the merged JSON they live under rewritten labels
+        // imported-<B>-EXPLICIT / imported-<B>-IMPLICIT — so the per-subject READ filter finds no grant on
+        // the rewritten paths for GUEST and drops them. Declaring an import is not a permission backdoor
+        // onto the imported policy's contents.
+        final Subject ownerSubject = createDefaultSubject();
+        final Subject guestSubject = serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject();
+
+        final Policy importingPolicy = PoliciesModelFactory.newPolicyBuilder(importingPolicyId)
+                .forLabel("OWNER")
+                .setSubject(ownerSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .forLabel("GUEST")
+                .setSubject(guestSubject)
+                .setGrantedPermissions(policyResource("/entries/GUEST"), READ)
+                .setImportable(ImportableType.NEVER)
+                .setPolicyImport(policyImport)
+                .build();
+
+        putPolicy(importedPolicyId, importedPolicyRestrictedAccess).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Same GET, two callers — only the .withConfiguredAuth(...) line differs between the two
+        // requests. The contrast in what each caller sees is the security property under test.
+        final JsonObject ownerView = JsonFactory.newObject(
+                getPolicy(importingPolicyId)
+                        .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                        .withConfiguredAuth(serviceEnv.getDefaultTestingContext())
+                        .expectingHttpStatus(OK)
+                        .fire().body().asString());
+
+        final JsonObject guestView = JsonFactory.newObject(
+                getPolicy(importingPolicyId)
+                        .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                        .withConfiguredAuth(serviceEnv.getTestingContext2())
+                        .expectingHttpStatus(OK)
+                        .fire().body().asString());
+
+        // OWNER (READ on policy:/): sees own entries plus both imported-<B>-* entries plus the imports
+        // block — i.e. the full merged view that policyViewResolvedMergesImportedEntries also asserts.
+        final JsonObject ownerEntries = ownerView.getValue("entries").orElseThrow().asObject();
+        assertThat(ownerEntries.getKeys().stream().map(Object::toString).toList())
+                .as("OWNER with READ on policy:/ sees own entries and all imported entries")
+                .containsExactlyInAnyOrder(
+                        "OWNER",
+                        "GUEST",
+                        "imported-" + importedPolicyId + "-EXPLICIT",
+                        "imported-" + importedPolicyId + "-IMPLICIT");
+        assertThat(ownerView.contains(JsonFactory.newPointer("imports")))
+                .as("OWNER with READ on policy:/ sees the imports block").isTrue();
+
+        // GUEST (READ only on policy:/entries/GUEST): the per-path filter strips everything else. No OWNER
+        // entry, no imported-<B>-* entries (their grants are on the original-label resource paths, not on
+        // the rewritten paths the resolved JSON exposes), no imports block.
+        final JsonObject guestEntries = guestView.getValue("entries").orElseThrow().asObject();
+        assertThat(guestEntries.getKeys().stream().map(Object::toString).toList())
+                .as("GUEST sees only their own entry; importing is not a permission backdoor")
+                .containsExactly("GUEST");
+        assertThat(guestView.contains(JsonFactory.newPointer("imports")))
+                .as("GUEST has no READ on policy:/imports → block must be hidden").isFalse();
+    }
+
+    @Test
+    public void policyViewResolvedHidesImportedEntriesFromCallerWithoutSourceRead() {
+        final Subject adminSubject = createDefaultSubject();
+        final Subject viewerSubject = serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject();
+
+        final Policy importingPolicy = PoliciesModelFactory.newPolicyBuilder(importingPolicyId)
+                .forLabel("ADMIN")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .forLabel("VIEWER")
+                .setSubject(viewerSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .setPolicyImport(policyImport)
+                .build();
+
+        putPolicy(importedPolicyId, importedPolicyRestrictedAccess).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        // Negative control: the primary auth gate on B still blocks the viewer entirely.
+        getPolicy(importedPolicyId)
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(NOT_FOUND)
+                .fire();
+
+        final JsonObject body = JsonFactory.newObject(
+                getPolicy(importingPolicyId)
+                        .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                        .withConfiguredAuth(serviceEnv.getTestingContext2())
+                        .expectingHttpStatus(OK)
+                        .fire().body().asString());
+        final JsonObject entries = body.getValue("entries").orElseThrow().asObject();
+
+        // Mirror the positive assertions in policyViewResolvedMergesImportedEntries with negatives — those
+        // entries must be present for a caller with source-side READ, and absent for this one without.
+        assertThat(entries.contains(JsonFactory.newPointer("imported-" + importedPolicyId + "-EXPLICIT")))
+                .as("imported EXPLICIT entry must NOT leak to caller without source-side READ on B")
+                .isFalse();
+        assertThat(entries.contains(JsonFactory.newPointer("imported-" + importedPolicyId + "-IMPLICIT")))
+                .as("imported IMPLICIT entry must NOT leak to caller without source-side READ on B")
+                .isFalse();
+        assertThat(entries.getKeys().stream().map(Object::toString).toList())
+                .as("only A's own local entries are visible — declaring an import is not a backdoor onto B")
+                .containsExactlyInAnyOrder("ADMIN", "VIEWER");
+    }
+
+    /**
+     * Affirmative counterpart to {@link #policyViewResolvedHidesImportedEntriesFromCallerWithoutSourceRead}:
+     * a caller WITH per-entry source-side READ on B must still see the imported entry. Locks the source-side
+     * filter against future over-aggressive changes that would silently drop entries the caller is allowed
+     * to see.
+     */
+    @Test
+    public void policyViewResolvedKeepsImportedEntriesForCallerWithSourceRead() {
+        final Subject adminSubject = createDefaultSubject();
+        final Subject viewerSubject = serviceEnv.getTestingContext2().getOAuthClient().getDefaultSubject();
+
+        // B grants viewer source-side READ on policy:/entries/EXPLICIT only — NOT on IMPLICIT. So the
+        // resolved view of A as viewer must include imported-<B>-EXPLICIT and exclude imported-<B>-IMPLICIT.
+        final Policy importedPolicyWithViewerOnExplicit = PoliciesModelFactory.newPolicyBuilder(importedPolicyId)
+                .forLabel("ADMIN")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .forLabel("EXPLICIT")
+                .setSubject(adminSubject)
+                .setSubject(viewerSubject)
+                .setGrantedPermissions(policyResource("/entries/EXPLICIT"), READ)
+                .setImportable(ImportableType.EXPLICIT)
+                .forLabel("IMPLICIT")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/entries/IMPLICIT"), READ)
+                .setImportable(ImportableType.IMPLICIT)
+                .build();
+
+        final Policy importingPolicy = PoliciesModelFactory.newPolicyBuilder(importingPolicyId)
+                .forLabel("ADMIN")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .forLabel("VIEWER")
+                .setSubject(viewerSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .setPolicyImport(policyImport)
+                .build();
+
+        putPolicy(importedPolicyId, importedPolicyWithViewerOnExplicit).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        final JsonObject body = JsonFactory.newObject(
+                getPolicy(importingPolicyId)
+                        .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                        .withConfiguredAuth(serviceEnv.getTestingContext2())
+                        .expectingHttpStatus(OK)
+                        .fire().body().asString());
+        final JsonObject entries = body.getValue("entries").orElseThrow().asObject();
+
+        // EXPLICIT: viewer has source-side READ → kept.
+        // IMPLICIT: viewer has no source-side READ → still dropped by the source-side filter.
+        // Pinning the exact set guards against both regressions in one assertion.
+        assertThat(entries.getKeys().stream().map(Object::toString).toList())
+                .as("granular source-side READ allows the corresponding entry through; others stay hidden")
+                .containsExactlyInAnyOrder(
+                        "ADMIN",
+                        "VIEWER",
+                        "imported-" + importedPolicyId + "-EXPLICIT");
+    }
+
+    /**
+     * Transitive imports: A imports B with {@code transitiveImports=[C]}. C's IMPLICIT entry surfaces in
+     * the resolved view of A under the double-prefixed label {@code imported-<B>-imported-<C>-<label>},
+     * provided the caller has source-side READ on the corresponding path in B's enforcer.
+     */
+    @Test
+    public void policyViewResolvedMergesTransitiveImportedEntries() {
+        final Subject adminSubject = createDefaultSubject();
+
+        final PolicyId transitivePolicyId =
+                PolicyId.of(idGenerator().withPrefixedRandomName("transitiveImported"));
+
+        // C: a single IMPLICIT entry that should surface under imported-<B>-imported-<C>-LEAF in A.
+        final Policy transitivePolicy = PoliciesModelFactory.newPolicyBuilder(transitivePolicyId)
+                .forLabel("ADMIN")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .forLabel("LEAF")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/entries/LEAF"), READ)
+                .setImportable(ImportableType.IMPLICIT)
+                .build();
+
+        // B owns its own IMPLICIT entry AND declares an import of C. transitiveImports on A's import is a
+        // filter over B's declared imports, not a way to inject a new edge — without B's `import C` here
+        // the filter matches nothing and C's content never surfaces in A's resolved view.
+        final Policy intermediatePolicy = PoliciesModelFactory.newPolicyBuilder(importedPolicyId)
+                .forLabel("ADMIN")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .forLabel("MID")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ)
+                .setImportable(ImportableType.IMPLICIT)
+                .setPolicyImport(PoliciesModelFactory.newPolicyImport(transitivePolicyId,
+                        PoliciesModelFactory.newEffectedImportedLabels(List.of())))
+                .build();
+
+        // A's import of B carries transitiveImports=[C], opting in to follow B→C during resolution.
+        final PolicyImport transitiveImport = PoliciesModelFactory.newPolicyImport(importedPolicyId,
+                PoliciesModelFactory.newEffectedImportedLabels(List.of(), List.of(transitivePolicyId)));
+
+        final Policy importingPolicy = PoliciesModelFactory.newPolicyBuilder(importingPolicyId)
+                .forLabel("ADMIN")
+                .setSubject(adminSubject)
+                .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                .setImportable(ImportableType.NEVER)
+                .setPolicyImport(transitiveImport)
+                .build();
+
+        putPolicy(transitivePolicyId, transitivePolicy).expectingHttpStatus(CREATED).fire();
+        putPolicy(importedPolicyId, intermediatePolicy).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, importingPolicy).expectingHttpStatus(CREATED).fire();
+
+        final JsonObject body = JsonFactory.newObject(
+                getPolicy(importingPolicyId)
+                        .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                        .withConfiguredAuth(serviceEnv.getDefaultTestingContext())
+                        .expectingHttpStatus(OK)
+                        .fire().body().asString());
+        final JsonObject entries = body.getValue("entries").orElseThrow().asObject();
+
+        // Admin has READ on policy:/ everywhere (A, B, transitively C) → both rewrites must surface.
+        // The double-prefix form is what closes the loop on the colleague's manual transitive-imports
+        // verification: B's own entry under imported-<B>-MID, C's entry under imported-<B>-imported-<C>-LEAF.
+        assertThat(entries.getKeys().stream().map(Object::toString).toList())
+                .as("transitive imports surface under imported-<B>-imported-<C>-<label>")
+                .contains(
+                        "ADMIN",
+                        "imported-" + importedPolicyId + "-MID",
+                        "imported-" + importedPolicyId + "-imported-" + transitivePolicyId + "-LEAF");
+    }
+
+    @Test
+    public void policyViewResolvedOnPolicyWithoutImportsEqualsOriginal() {
+        putPolicy(importedPolicyId, importedPolicyFullAccess).expectingHttpStatus(CREATED).fire();
+
+        final JsonObject originalEntries =
+                JsonFactory.newObject(getPolicyAsJsonString(importedPolicyId, null))
+                        .getValue("entries").orElseThrow().asObject();
+        final JsonObject resolvedEntries =
+                JsonFactory.newObject(getPolicyAsJsonString(importedPolicyId, VIEW_RESOLVED))
+                        .getValue("entries").orElseThrow().asObject();
+
+        assertThat(resolvedEntries)
+                .as("policy-view=resolved on no-imports policy must equal original entries")
+                .isEqualTo(originalEntries);
+    }
+
+    @Test
+    public void policyViewResolvedDoesNotLeakHiddenFields() {
+        putPolicy(importedPolicyId, importedPolicyFullAccess).expectingHttpStatus(CREATED).fire();
+
+        // The resolved view must mirror the original-view shape: hidden fields like _revision / _modified /
+        // __lifecycle are opt-in via fields= and absent by default. The merge step keeps only the top-level
+        // keys present in the strategy-built original entity, so it doesn't leak special fields the user
+        // didn't ask for.
+        final JsonObject originalBody = JsonFactory.newObject(getPolicyAsJsonString(importedPolicyId, null));
+        final JsonObject resolvedBody = JsonFactory.newObject(getPolicyAsJsonString(importedPolicyId, VIEW_RESOLVED));
+
+        assertThat(resolvedBody.getKeys())
+                .as("resolved view top-level keys must equal original view")
+                .containsExactlyInAnyOrderElementsOf(originalBody.getKeys());
+        assertThat(resolvedBody.contains(JsonFactory.newPointer("_revision"))).isFalse();
+        assertThat(resolvedBody.contains(JsonFactory.newPointer("_modified"))).isFalse();
+        assertThat(resolvedBody.contains(JsonFactory.newPointer("__lifecycle"))).isFalse();
+    }
+
+    @Test
+    public void policyViewResolvedRespectsFieldsSelector() {
+        // full-access importing — same reason as policyViewResolvedMergesImportedEntries.
+        final Policy policyWithImports =
+                importingPolicyFullAccess.toBuilder().setPolicyImport(policyImport).build();
+        putPolicy(importedPolicyId, importedPolicyRestrictedAccess).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, policyWithImports).expectingHttpStatus(CREATED).fire();
+
+        // fields=entries on resolved view must trim everything except entries (no policyId, no imports),
+        // matching the behaviour of fields=entries on the unresolved view.
+        final JsonObject body = JsonFactory.newObject(
+                getPolicy(importingPolicyId)
+                        .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                        .withParam("fields", "entries")
+                        .expectingHttpStatus(OK)
+                        .fire().body().asString());
+
+        assertThat(body.getKeys().stream().map(Object::toString).toList())
+                .as("only 'entries' key should be returned when fields=entries on resolved view")
+                .containsExactly("entries");
+
+        // and the merged content is still inside.
+        final JsonObject entries = body.getValue("entries").orElseThrow().asObject();
+        assertThat(entries.contains(JsonFactory.newPointer("imported-" + importedPolicyId + "-EXPLICIT")))
+                .as("merged content still present under entries").isTrue();
+    }
+
+    @Test
+    public void policyViewResolvedHasNoEtagHeader() {
+        putPolicy(importedPolicyId, importedPolicyFullAccess).expectingHttpStatus(CREATED).fire();
+
+        // Original view exposes etag.
+        final String originalEtag =
+                getPolicy(importedPolicyId).expectingHttpStatus(OK).fire().header("etag");
+        assertThat(originalEtag).as("original view must expose etag").isNotEmpty();
+
+        // Resolved view must NOT expose etag, because the etag would only reflect the importing policy's
+        // revision and would otherwise let clients 304 stale merged content when imported state has changed.
+        getPolicy(importedPolicyId)
+                .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                .expectingHttpStatus(OK)
+                .expectingHeaderIsNotPresent("etag")
+                .fire();
+    }
+
+    @Test
+    public void policyViewResolvedIgnoresIfNoneMatchAndReturns200() {
+        putPolicy(importedPolicyId, importedPolicyFullAccess).expectingHttpStatus(CREATED).fire();
+
+        // Capture the policy's current etag from the original view, then send it as If-None-Match together
+        // with policy-view=resolved. The resolved view must NOT short-circuit to 304 (the importing policy's
+        // revision alone is a poor proxy for "merged content unchanged"); it must serve a fresh 200.
+        final String etag = getPolicy(importedPolicyId).expectingHttpStatus(OK).fire().header("etag");
+        assertThat(etag).as("baseline etag must be present").isNotEmpty();
+
+        getPolicy(importedPolicyId)
+                .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                .withHeader("If-None-Match", etag)
+                .expectingHttpStatus(OK)
+                .fire();
+    }
+
+    @Test
+    public void policyViewIsNoOpOnEntriesSubResource() {
+        final Policy policyWithImports =
+                importingPolicyRestrictedAccess.toBuilder().setPolicyImport(policyImport).build();
+        putPolicy(importedPolicyId, importedPolicyRestrictedAccess).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, policyWithImports).expectingHttpStatus(CREATED).fire();
+
+        // policy-view is no longer auto-promoted via query-params-as-headers, so on the entries sub-resource
+        // it must be a no-op: the response only contains local entries, never imported ones.
+        final String entriesViewResolved = getPolicyEntries(importingPolicyId)
+                .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                .expectingHttpStatus(OK)
+                .fire().body().asString();
+        final String entriesNoView = getPolicyEntries(importingPolicyId)
+                .expectingHttpStatus(OK)
+                .fire().body().asString();
+
+        assertThat(entriesViewResolved)
+                .as("policy-view must be silently ignored on /entries (no merging)")
+                .isEqualTo(entriesNoView);
+        final JsonObject entries = JsonFactory.newObject(entriesViewResolved);
+        assertThat(entries.getKeys().stream().map(Object::toString).filter(k -> k.startsWith("imported-")).toList())
+                .as("no imported-* entries on /entries even with policy-view=resolved").isEmpty();
+    }
+
+    /**
+     * Regression: when {@code policy-view} is invalid AND the policy exists, the WS error envelope used to
+     * carry topic {@code unknown/unknown/policies/errors} and lose the request {@code correlation-id} because
+     * the {@link org.eclipse.ditto.policies.model.PolicyViewInvalidException} was thrown without the response
+     * {@code DittoHeaders} attached. The error envelope must keep the original correlation-id and resolve to
+     * the actual policy id.
+     */
+    @Test
+    public void retrievePolicyViaWebSocketWithInvalidPolicyViewKeepsCorrelationIdAndPolicyId() throws Exception {
+        putPolicy(importedPolicyId, importedPolicyFullAccess).expectingHttpStatus(CREATED).fire();
+
+        final String correlationId = "policy-view-ws-bogus-" + UUID.randomUUID();
+        final ConnectivityTestWebsocketClient client = ConnectivityTestWebsocketClient.newInstance(
+                dittoWsUrl(TestConstants.API_V_2),
+                serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken());
+        try {
+            client.connect(correlationId);
+
+            final DittoHeaders headers = DittoHeaders.newBuilder()
+                    .correlationId(correlationId)
+                    .responseRequired(true)
+                    .putHeader(POLICY_VIEW_PARAM, "bogus")
+                    .build();
+            final RetrievePolicy retrievePolicy = RetrievePolicy.of(importedPolicyId, headers);
+
+            final PolicyCommandResponse<?> response = (PolicyCommandResponse<?>)
+                    client.send(retrievePolicy).get(20, TimeUnit.SECONDS);
+
+            assertThat(response.getHttpStatus().getCode()).as("400 expected").isEqualTo(400);
+            assertThat(response.getDittoHeaders().getCorrelationId())
+                    .as("correlation-id must be preserved on error envelope").contains(correlationId);
+            assertThat(response.getEntityId().toString())
+                    .as("error envelope topic must resolve to the requested policy id, not unknown:unknown")
+                    .isEqualTo(importedPolicyId.toString());
+        } finally {
+            client.disconnect();
+        }
+    }
+
+    @Test
+    public void policyViewResolvedMergesLocalEntryReferences() {
+        // Build a consumer with a local entry reference: VIEWER -> OWNER (local).
+        final Label ownerLabel = Label.of("OWNER");
+        final Label viewerLabel = Label.of("VIEWER");
+        final Subject defaultSubject = createDefaultSubject();
+        final Policy localRefPolicy = PoliciesModelFactory.newPolicyBuilder(importingPolicyId)
+                .forLabel(ownerLabel)
+                    .setSubject(defaultSubject)
+                    .setGrantedPermissions(policyResource("/"), READ, WRITE)
+                    .setGrantedPermissions(thingResource("/"), READ, WRITE)
+                .forLabel(viewerLabel)
+                    .setSubject(defaultSubject)
+                .setReferencesFor(viewerLabel,
+                        List.of((EntryReference) PoliciesModelFactory.newLocalEntryReference(ownerLabel)))
+                .build();
+        putPolicy(importingPolicyId, localRefPolicy).expectingHttpStatus(CREATED).fire();
+
+        final JsonObject body = JsonFactory.newObject(getPolicyAsJsonString(importingPolicyId, VIEW_RESOLVED));
+        final JsonObject viewer = body.getValue("entries/" + viewerLabel).orElseThrow().asObject();
+
+        // VIEWER's own subject survives resolution.
+        final JsonObject subjects = viewer.getValue("subjects").orElseThrow().asObject();
+        assertThat(subjects.contains(JsonFactory.newPointer(defaultSubject.getId().toString()))).isTrue();
+
+        // Local-ref to OWNER pulls OWNER's resources into VIEWER.
+        final JsonObject resources = viewer.getValue("resources").orElseThrow().asObject();
+        assertThat(resources.getKeys()).as("VIEWER inherits resources from local-ref target OWNER").isNotEmpty();
+    }
+
+    @Test
+    public void policyViewEffectiveAliasIsRejected() {
+        // The 'effective' alias was removed during review — only 'original' and 'resolved' are accepted.
+        putPolicy(importedPolicyId, importedPolicyFullAccess).expectingHttpStatus(CREATED).fire();
+
+        getPolicy(importedPolicyId)
+                .withParam(POLICY_VIEW_PARAM, "effective")
+                .expectingHttpStatus(BAD_REQUEST)
+                .fire();
+    }
+
+    @Test
+    public void policyViewParameterIsCaseInsensitive() {
+        putPolicy(importedPolicyId, importedPolicyFullAccess).expectingHttpStatus(CREATED).fire();
+
+        getPolicy(importedPolicyId).withParam(POLICY_VIEW_PARAM, "Resolved").expectingHttpStatus(OK).fire();
+        getPolicy(importedPolicyId).withParam(POLICY_VIEW_PARAM, "RESOLVED").expectingHttpStatus(OK).fire();
+        getPolicy(importedPolicyId).withParam(POLICY_VIEW_PARAM, "ORIGINAL").expectingHttpStatus(OK).fire();
+    }
+
+    @Test
+    public void invalidPolicyViewValueReturnsBadRequest() {
+        putPolicy(importedPolicyId, importedPolicyFullAccess).expectingHttpStatus(CREATED).fire();
+
+        getPolicy(importedPolicyId)
+                .withParam(POLICY_VIEW_PARAM, "junk")
+                .expectingHttpStatus(BAD_REQUEST)
+                .fire();
+    }
+
+    @Test
+    public void policyViewResolvedOnNonExistentPolicyReturnsNotFound() {
+        // Parameter is valid → 400 doesn't apply; missing policy surfaces as 404.
+        getPolicy(importedPolicyId)
+                .withParam(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                .expectingHttpStatus(NOT_FOUND)
+                .fire();
+    }
+
+    /**
+     * Cross-protocol parity: the resolution lives in {@code PolicyCommandEnforcement.filterResponse}
+     * (transport-neutral), so a {@code RetrievePolicy} sent over WebSocket with a {@code policy-view: resolved}
+     * header must produce the same merged view as the HTTP test above.
+     */
+    @Test
+    public void retrievePolicyViaWebSocketWithPolicyViewResolvedReturnsMergedView() throws Exception {
+        // full-access importing — same reason as policyViewResolvedMergesImportedEntries.
+        final Policy policyWithImports =
+                importingPolicyFullAccess.toBuilder().setPolicyImport(policyImport).build();
+        putPolicy(importedPolicyId, importedPolicyRestrictedAccess).expectingHttpStatus(CREATED).fire();
+        putPolicy(importingPolicyId, policyWithImports).expectingHttpStatus(CREATED).fire();
+
+        final String correlationId = "policy-view-ws-" + UUID.randomUUID();
+        final ConnectivityTestWebsocketClient client = ConnectivityTestWebsocketClient.newInstance(
+                dittoWsUrl(TestConstants.API_V_2),
+                serviceEnv.getDefaultTestingContext().getOAuthClient().getAccessToken());
+        try {
+            client.connect(correlationId);
+
+            final DittoHeaders headers = DittoHeaders.newBuilder()
+                    .correlationId(correlationId)
+                    .responseRequired(true)
+                    .putHeader(POLICY_VIEW_PARAM, VIEW_RESOLVED)
+                    .build();
+            final RetrievePolicy retrievePolicy = RetrievePolicy.of(importingPolicyId, headers);
+
+            final PolicyCommandResponse<?> response = (PolicyCommandResponse<?>)
+                    client.send(retrievePolicy).get(20, TimeUnit.SECONDS);
+
+            assertThat(response).as("expected RetrievePolicyResponse").isInstanceOf(RetrievePolicyResponse.class);
+            final RetrievePolicyResponse retrieveResp = (RetrievePolicyResponse) response;
+            final JsonObject entries = retrieveResp.getPolicy().toJson()
+                    .getValue("entries").orElseThrow().asObject();
+
+            assertThat(entries.contains(JsonFactory.newPointer("imported-" + importedPolicyId + "-EXPLICIT")))
+                    .isTrue();
+            assertThat(entries.contains(JsonFactory.newPointer("imported-" + importedPolicyId + "-IMPLICIT")))
+                    .isTrue();
+        } finally {
+            client.disconnect();
+        }
+    }
+
+    private static String getPolicyAsJsonString(final PolicyId policyId, final String viewValue) {
+        final var matcher = getPolicy(policyId).expectingHttpStatus(OK);
+        if (viewValue != null) {
+            matcher.withParam(POLICY_VIEW_PARAM, viewValue);
+        }
+        return matcher.fire().body().asString();
     }
 
     private static PolicyImports createPolicyImports(final int importsNumber, final PolicyId importedPolicyId) {

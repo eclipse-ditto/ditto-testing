@@ -16,11 +16,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.ByteBuffer;
 import java.text.MessageFormat;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -28,6 +30,7 @@ import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 import org.apache.commons.lang3.RandomStringUtils;
+import org.awaitility.Awaitility;
 import org.eclipse.ditto.base.model.acks.AcknowledgementLabel;
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.base.model.headers.DittoHeaders;
@@ -164,19 +167,33 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
     }
 
     protected static List<Connection> getAllConnectionsById(final String connectionIdPrefixToMatch) {
-        final Response response = connectionsClient().getConnections()
-                .withDevopsAuth()
-                .fire();
-
-        return JsonFactory.newArray(response.body().asString()).stream()
-                .filter(JsonValue::isObject)
-                .map(JsonValue::asObject)
-                .filter(connectionJson -> connectionJson.getValue(Connection.JsonFields.ID)
-                        .filter(id -> id.startsWith(connectionIdPrefixToMatch))
-                        .isPresent()
-                )
-                .map(ConnectivityModelFactory::connectionFromJson)
-                .collect(Collectors.toList());
+        // GET /api/2/connections can transiently return 500 connectivity:internalerror when a
+        // parallel test deletes a connection between the gateway's list-IDs step and the per-shard
+        // retrieveConnection step. The race window is sub-second, so retry briefly.
+        final AtomicReference<List<Connection>> result = new AtomicReference<>();
+        Awaitility.await("getAllConnectionsById")
+                .atMost(Duration.ofSeconds(10))
+                .pollDelay(Duration.ZERO)
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() -> {
+                    final Response response = connectionsClient().getConnections()
+                            .withDevopsAuth()
+                            .fire();
+                    assertThat(response.statusCode())
+                            .as("GET /api/2/connections returned non-200; body: %s",
+                                    response.body().asString())
+                            .isEqualTo(200);
+                    result.set(JsonFactory.newArray(response.body().asString()).stream()
+                            .filter(JsonValue::isObject)
+                            .map(JsonValue::asObject)
+                            .filter(connectionJson -> connectionJson.getValue(Connection.JsonFields.ID)
+                                    .filter(id -> id.startsWith(connectionIdPrefixToMatch))
+                                    .isPresent()
+                            )
+                            .map(ConnectivityModelFactory::connectionFromJson)
+                            .collect(Collectors.toList()));
+                });
+        return result.get();
     }
 
     protected static List<Connection> getAllConnections(final String connectionNamePrefixToMatch) {

@@ -1766,8 +1766,8 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         // A single target with 3 twin event topics, each with a different RQL filter and different extra fields.
         // Verifies that for each modification, only the matching topic's filter passes,
         // and only the matching topic's extra fields are included in the outbound signal.
-        // Extra fields use different root keys (definition vs features) because setTrimmedExtra
-        // removes by root key — same-root fields (e.g. attributes/x, attributes/y) would collide.
+        // Topics A and B share common root paths (attributes/* and features/sensor/properties/*) to verify
+        // that enrichWithNeededExtra correctly preserves nested subsets and does not strip sibling needed sub-fields.
         final String connectionName = "multi-twin-" + UUID.randomUUID();
         final Connection baseConnection = cf.getSingleConnection(connectionName);
         if (baseConnection.getConnectionType() == ConnectionType.AMQP_10 ||
@@ -1781,15 +1781,19 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         final String targetAddress = cf.defaultTargetAddress(connectionName);
         final Target baseTarget = baseConnection.getTargets().get(0);
 
-        // Topic A: matches modifications to /attributes/triggerA, enriched with definition
+        // Topic A: matches modifications to /attributes/triggerA,
+        // enriched with attributes/triggerA + features/sensor/properties/value
         final FilteredTopic topicA = ConnectivityModelFactory.newFilteredTopicBuilder(Topic.TWIN_EVENTS)
                 .withFilter("and(eq(topic:action,\"modified\"),eq(resource:path,\"/attributes/triggerA\"))")
-                .withExtraFields(ThingFieldSelector.fromString("definition"))
+                .withExtraFields(ThingFieldSelector.fromString(
+                        "attributes/triggerA,features/sensor/properties/value"))
                 .build();
-        // Topic B: matches modifications to /attributes/triggerB, enriched with features
+        // Topic B: matches modifications to /attributes/triggerB,
+        // enriched with attributes/triggerB + features/sensor/properties/temp (shared roots with topic A)
         final FilteredTopic topicB = ConnectivityModelFactory.newFilteredTopicBuilder(Topic.TWIN_EVENTS)
                 .withFilter("and(eq(topic:action,\"modified\"),eq(resource:path,\"/attributes/triggerB\"))")
-                .withExtraFields(ThingFieldSelector.fromString("features"))
+                .withExtraFields(ThingFieldSelector.fromString(
+                        "attributes/triggerB,features/sensor/properties/temp"))
                 .build();
         // Topic C: matches modifications to /attributes/triggerC, no extra fields
         final FilteredTopic topicC = ConnectivityModelFactory.newFilteredTopicBuilder(Topic.TWIN_EVENTS)
@@ -1812,6 +1816,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         final PolicyId policyId = putPolicyForThing(thingId, connectionName);
         final FeatureProperties sensorProps = ThingsModelFactory.newFeaturePropertiesBuilder()
                 .set("value", 42)
+                .set("temp", 20)
                 .build();
         final Thing thing = Thing.newBuilder()
                 .setId(thingId)
@@ -1829,7 +1834,8 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .fire();
         Thread.sleep(1000);
 
-        // --- Step 1: modify triggerA → matches topicA → extra should contain definition only ---
+        // --- Step 1: modify triggerA → matches topicA →
+        // extra must contain attributes/triggerA + features/sensor/properties/value, and nothing from topicB ---
         putAttribute(2, thingId, "triggerA", "\"fired\"")
                 .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
@@ -1843,18 +1849,25 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         assertThat(adaptableA.getPayload().getPath().toString())
                 .describedAs("event path should be /attributes/triggerA")
                 .isEqualTo(JsonPointer.of("attributes/triggerA").toString());
-        assertThat(adaptableA.getPayload().getExtra()).describedAs("topicA extra should contain definition")
+        assertThat(adaptableA.getPayload().getExtra()).describedAs("topicA extra")
                 .isPresent()
                 .hasValueSatisfying(extra -> {
-                    assertThat(extra.contains(JsonKey.of("definition")))
-                            .describedAs("topicA extra must include definition")
-                            .isTrue();
-                    assertThat(extra.contains(JsonKey.of("features")))
-                            .describedAs("topicA extra must NOT include features")
-                            .isFalse();
+                    assertThat(extra.getValue(JsonPointer.of("attributes/triggerA")))
+                            .describedAs("topicA extra must include attributes/triggerA")
+                            .contains(JsonValue.of("fired"));
+                    assertThat(extra.getValue(JsonPointer.of("features/sensor/properties/value")))
+                            .describedAs("topicA extra must include features/sensor/properties/value")
+                            .contains(JsonValue.of(42));
+                    assertThat(extra.getValue(JsonPointer.of("attributes/triggerB")))
+                            .describedAs("topicA extra must NOT include sibling attributes/triggerB from topicB")
+                            .isNotPresent();
+                    assertThat(extra.getValue(JsonPointer.of("features/sensor/properties/temp")))
+                            .describedAs("topicA extra must NOT include sibling features/sensor/properties/temp from topicB")
+                            .isNotPresent();
                 });
 
-        // --- Step 2: modify triggerB → matches topicB → extra should contain features only ---
+        // --- Step 2: modify triggerB → matches topicB →
+        // extra must contain attributes/triggerB + features/sensor/properties/temp, and nothing from topicA ---
         putAttribute(2, thingId, "triggerB", "\"fired\"")
                 .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
@@ -1868,18 +1881,21 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         assertThat(adaptableB.getPayload().getPath().toString())
                 .describedAs("event path should be /attributes/triggerB")
                 .isEqualTo(JsonPointer.of("attributes/triggerB").toString());
-        assertThat(adaptableB.getPayload().getExtra()).describedAs("topicB extra should contain features")
+        assertThat(adaptableB.getPayload().getExtra()).describedAs("topicB extra")
                 .isPresent()
                 .hasValueSatisfying(extra -> {
-                    assertThat(extra.contains(JsonKey.of("features")))
-                            .describedAs("topicB extra must include features")
-                            .isTrue();
+                    assertThat(extra.getValue(JsonPointer.of("attributes/triggerB")))
+                            .describedAs("topicB extra must include attributes/triggerB")
+                            .contains(JsonValue.of("fired"));
+                    assertThat(extra.getValue(JsonPointer.of("features/sensor/properties/temp")))
+                            .describedAs("topicB extra must include features/sensor/properties/temp")
+                            .contains(JsonValue.of(20));
+                    assertThat(extra.getValue(JsonPointer.of("attributes/triggerA")))
+                            .describedAs("topicB extra must NOT include sibling attributes/triggerA from topicA")
+                            .isNotPresent();
                     assertThat(extra.getValue(JsonPointer.of("features/sensor/properties/value")))
-                            .describedAs("topicB extra must include sensor feature value")
-                            .contains(JsonValue.of(42));
-                    assertThat(extra.contains(JsonKey.of("definition")))
-                            .describedAs("topicB extra must NOT include definition")
-                            .isFalse();
+                            .describedAs("topicB extra must NOT include sibling features/sensor/properties/value from topicA")
+                            .isNotPresent();
                 });
 
         // --- Step 3: modify triggerC → matches topicC → no extra fields ---
@@ -1899,6 +1915,144 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         assertThat(adaptableC.getPayload().getExtra())
                 .describedAs("topicC extra should be empty (topic has no extraFields)")
                 .isEmpty();
+    }
+
+    @Test
+    @Connections(NONE)
+    public void multipleTwinTopicsWithWildcardExtraFields() throws Exception {
+        // A single target with 2 twin event topics, each with a different RQL filter and
+        // wildcard extra fields of the form features/*/properties/<key>.
+        // Verifies that the feature-id wildcard is expanded against the actual feature IDs,
+        // and that enrichWithNeededExtra preserves only the matching topic's expanded pointers
+        // while dropping sibling pointers contributed by the other topic.
+        final String connectionName = "multi-twin-wildcard-" + UUID.randomUUID();
+        final Connection baseConnection = cf.getSingleConnection(connectionName);
+        if (baseConnection.getConnectionType() == ConnectionType.AMQP_10 ||
+                baseConnection.getConnectionType() == ConnectionType.AMQP_091) {
+            LOGGER.info("Skipping multipleTwinTopicsWithWildcardExtraFields for {} - " +
+                    "requires protocol-specific setup for dynamically created connections",
+                    baseConnection.getConnectionType());
+            return;
+        }
+
+        final String targetAddress = cf.defaultTargetAddress(connectionName);
+        final Target baseTarget = baseConnection.getTargets().get(0);
+
+        // Topic X: matches modifications to /attributes/triggerX,
+        // enriched with features/*/properties/status across all features
+        final FilteredTopic topicX = ConnectivityModelFactory.newFilteredTopicBuilder(Topic.TWIN_EVENTS)
+                .withFilter("and(eq(topic:action,\"modified\"),eq(resource:path,\"/attributes/triggerX\"))")
+                .withExtraFields(ThingFieldSelector.fromString("features/*/properties/status"))
+                .build();
+        // Topic Y: matches modifications to /attributes/triggerY,
+        // enriched with features/*/properties/other across all features (sibling property of topic X)
+        final FilteredTopic topicY = ConnectivityModelFactory.newFilteredTopicBuilder(Topic.TWIN_EVENTS)
+                .withFilter("and(eq(topic:action,\"modified\"),eq(resource:path,\"/attributes/triggerY\"))")
+                .withExtraFields(ThingFieldSelector.fromString("features/*/properties/other"))
+                .build();
+
+        final Target target = ConnectivityModelFactory.newTargetBuilder(baseTarget)
+                .address(targetAddress)
+                .topics(Set.of(topicX, topicY))
+                .build();
+
+        final Connection connection = baseConnection.toBuilder()
+                .setTargets(Collections.singletonList(target))
+                .build();
+
+        cf.asyncCreateConnection(connection).get(60, TimeUnit.SECONDS);
+        final C consumer = initTargetsConsumer(connectionName, targetAddress);
+
+        final ThingId thingId = generateThingId();
+        final PolicyId policyId = putPolicyForThing(thingId, connectionName);
+        final FeatureProperties featureAProps = ThingsModelFactory.newFeaturePropertiesBuilder()
+                .set("status", "on")
+                .set("other", "foo")
+                .build();
+        final FeatureProperties featureBProps = ThingsModelFactory.newFeaturePropertiesBuilder()
+                .set("status", "off")
+                .set("other", "bar")
+                .build();
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setPolicyId(policyId)
+                .setAttribute(JsonPointer.of("triggerX"), JsonValue.of("initial"))
+                .setAttribute(JsonPointer.of("triggerY"), JsonValue.of("initial"))
+                .setFeature("featureA", featureAProps)
+                .setFeature("featureB", featureBProps)
+                .build();
+
+        putThing(2, thing, JsonSchemaVersion.V_2)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+        Thread.sleep(1000);
+
+        // --- Step 1: modify triggerX → matches topicX →
+        // wildcard expands to features/featureA/properties/status + features/featureB/properties/status,
+        // and the 'other' sibling pointers from topicY must NOT leak in ---
+        putAttribute(2, thingId, "triggerX", "\"fired\"")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        final M messageX = consumeFromTarget(connectionName, consumer);
+        assertThat(messageX).describedAs("event for triggerX modification").isNotNull();
+        final Adaptable adaptableX = jsonifiableAdaptableFrom(messageX);
+        assertThat(adaptableX.getTopicPath().getChannel()).isEqualTo(TopicPath.Channel.TWIN);
+        assertThat(adaptableX.getTopicPath().getAction()).contains(TopicPath.Action.MODIFIED);
+        assertThat(adaptableX.getPayload().getPath().toString())
+                .describedAs("event path should be /attributes/triggerX")
+                .isEqualTo(JsonPointer.of("attributes/triggerX").toString());
+        assertThat(adaptableX.getPayload().getExtra()).describedAs("topicX extra")
+                .isPresent()
+                .hasValueSatisfying(extra -> {
+                    assertThat(extra.getValue(JsonPointer.of("features/featureA/properties/status")))
+                            .describedAs("topicX wildcard must expand to featureA/properties/status")
+                            .contains(JsonValue.of("on"));
+                    assertThat(extra.getValue(JsonPointer.of("features/featureB/properties/status")))
+                            .describedAs("topicX wildcard must expand to featureB/properties/status")
+                            .contains(JsonValue.of("off"));
+                    assertThat(extra.getValue(JsonPointer.of("features/featureA/properties/other")))
+                            .describedAs("topicX extra must NOT include sibling featureA/properties/other from topicY")
+                            .isNotPresent();
+                    assertThat(extra.getValue(JsonPointer.of("features/featureB/properties/other")))
+                            .describedAs("topicX extra must NOT include sibling featureB/properties/other from topicY")
+                            .isNotPresent();
+                });
+
+        // --- Step 2: modify triggerY → matches topicY →
+        // wildcard expands to features/featureA/properties/other + features/featureB/properties/other,
+        // and 'status' sibling pointers from topicX must NOT leak in ---
+        putAttribute(2, thingId, "triggerY", "\"fired\"")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        final M messageY = consumeFromTarget(connectionName, consumer);
+        assertThat(messageY).describedAs("event for triggerY modification").isNotNull();
+        final Adaptable adaptableY = jsonifiableAdaptableFrom(messageY);
+        assertThat(adaptableY.getTopicPath().getChannel()).isEqualTo(TopicPath.Channel.TWIN);
+        assertThat(adaptableY.getTopicPath().getAction()).contains(TopicPath.Action.MODIFIED);
+        assertThat(adaptableY.getPayload().getPath().toString())
+                .describedAs("event path should be /attributes/triggerY")
+                .isEqualTo(JsonPointer.of("attributes/triggerY").toString());
+        assertThat(adaptableY.getPayload().getExtra()).describedAs("topicY extra")
+                .isPresent()
+                .hasValueSatisfying(extra -> {
+                    assertThat(extra.getValue(JsonPointer.of("features/featureA/properties/other")))
+                            .describedAs("topicY wildcard must expand to featureA/properties/other")
+                            .contains(JsonValue.of("foo"));
+                    assertThat(extra.getValue(JsonPointer.of("features/featureB/properties/other")))
+                            .describedAs("topicY wildcard must expand to featureB/properties/other")
+                            .contains(JsonValue.of("bar"));
+                    assertThat(extra.getValue(JsonPointer.of("features/featureA/properties/status")))
+                            .describedAs("topicY extra must NOT include sibling featureA/properties/status from topicX")
+                            .isNotPresent();
+                    assertThat(extra.getValue(JsonPointer.of("features/featureB/properties/status")))
+                            .describedAs("topicY extra must NOT include sibling featureB/properties/status from topicX")
+                            .isNotPresent();
+                });
     }
 
     @Test

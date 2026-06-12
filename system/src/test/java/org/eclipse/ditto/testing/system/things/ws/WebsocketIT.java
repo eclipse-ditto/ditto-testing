@@ -2681,7 +2681,7 @@ public final class WebsocketIT extends IntegrationTest {
 
     @Test
     @Category(Acceptance.class)
-    public void partialAccessComprehensiveScenariosAsSuggestedByColleague() throws Exception {
+    public void partialAccessComprehensiveScenarios() throws Exception {
         // GIVEN: A user with READ access only to attributes/something/special and features/public
         // This test covers all scenarios suggested by the colleague:
         // 1. User with READ access to specific paths (attributes/something/special and features/public)
@@ -2728,8 +2728,7 @@ public final class WebsocketIT extends IntegrationTest {
         final CountDownLatch eventLatch = new CountDownLatch(2);
 
         clientUser2.startConsumingEvents(event -> {
-            if (event instanceof ThingEvent) {
-                final ThingEvent<?> thingEvent = (ThingEvent<?>) event;
+            if (event instanceof ThingEvent<?> thingEvent) {
                 if (thingEvent.getEntityId().equals(thingId)) {
                     receivedEvents.add(thingEvent);
                     eventLatch.countDown();
@@ -2813,7 +2812,7 @@ public final class WebsocketIT extends IntegrationTest {
 
         // THEN: Partial user should only receive events for accessible paths
         // Some events may be filtered to empty payloads and cause exceptions
-        final boolean latchCompleted = eventLatch.await(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        eventLatch.await(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         // Even if latch timed out, we should have received some events
         assertThat(receivedEvents).as("Should have received at least some events").isNotEmpty();
 
@@ -2829,21 +2828,18 @@ public final class WebsocketIT extends IntegrationTest {
                 break;
             }
             try {
-                if (event instanceof AttributeModified) {
-                    final AttributeModified attrEvent = (AttributeModified) event;
+                if (event instanceof AttributeModified attrEvent) {
                     final String path = attrEvent.getAttributePointer().toString();
                     receivedPaths.add(path);
                     // Should only receive /something/special, not /something/other or /something/hidden
                     assertThat(path).isEqualTo("/something/special");
-                } else if (event instanceof FeaturePropertyModified) {
-                    final FeaturePropertyModified fpEvent = (FeaturePropertyModified) event;
+                } else if (event instanceof FeaturePropertyModified fpEvent) {
                     final String featurePath = "/features/" + fpEvent.getFeatureId() + fpEvent.getPropertyPointer().toString();
                     receivedFeaturePaths.add(featurePath);
                     // Should only receive /features/public, not /features/private
                     assertThat(fpEvent.getFeatureId()).isEqualTo("public");
-                } else if (event instanceof ThingModified) {
+                } else if (event instanceof ThingModified tmEvent) {
                     hasThingModified = true;
-                    final ThingModified tmEvent = (ThingModified) event;
                     final Thing modifiedThing = tmEvent.getThing();
                     // Verify filtering: should only see accessible paths
                     if (modifiedThing.getAttributes().isPresent()) {
@@ -2864,9 +2860,8 @@ public final class WebsocketIT extends IntegrationTest {
                         assertThat(modifiedThing.getFeatures().get().getFeature("private")).isEmpty();
                         assertThat(modifiedThing.getFeatures().get().getFeature("newFeature")).isEmpty();
                     }
-                } else if (event instanceof ThingMerged) {
+                } else if (event instanceof ThingMerged mergedEvent) {
                     hasThingMerged = true;
-                    final ThingMerged mergedEvent = (ThingMerged) event;
                     final JsonValue mergedValue = mergedEvent.getValue();
                     if (mergedValue.isObject()) {
                         final JsonObject mergedObj = mergedValue.asObject();
@@ -2987,7 +2982,6 @@ public final class WebsocketIT extends IntegrationTest {
                 .setSubject(user2OAuthClient.getSubject())
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX, "READ")
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
-                .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER + "/properties/properties/" + PROP_PUBLIC, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER + "/properties/" + PROP_PUBLIC, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_SHARED, "READ")
@@ -3325,15 +3319,9 @@ public final class WebsocketIT extends IntegrationTest {
             } else if (event instanceof FeaturePropertyModified) {
                 final FeaturePropertyModified fpEvent = (FeaturePropertyModified) event;
                 final String path = "/features/" + fpEvent.getFeatureId() + fpEvent.getPropertyPointer().toString();
-                if (fpEvent.getFeatureId().equals(FEATURE_OTHER) && 
-                    !fpEvent.getPropertyPointer().toString().equals("/" + PROP_PROPERTIES + "/" + PROP_PUBLIC)) {
-                    LOGGER.info("partial2 filtering out FeaturePropertyModified: featureId={}, propertyPointer={}, fullPath={} (not accessible)", 
-                            fpEvent.getFeatureId(), fpEvent.getPropertyPointer(), path);
-                } else {
-                    user2Paths.add(path);
-                    LOGGER.info("partial2 received FeaturePropertyModified: featureId={}, propertyPointer={}, fullPath={}", 
-                            fpEvent.getFeatureId(), fpEvent.getPropertyPointer(), path);
-                }
+                user2Paths.add(path);
+                LOGGER.info("partial2 received FeaturePropertyModified: featureId={}, propertyPointer={}, fullPath={}",
+                        fpEvent.getFeatureId(), fpEvent.getPropertyPointer(), path);
             } else if (event instanceof ThingModified) {
                 user2ThingModified.add((ThingModified) event);
                 LOGGER.info("partial2 received ThingModified");
@@ -3473,6 +3461,9 @@ public final class WebsocketIT extends IntegrationTest {
         } else {
             return;
         }
+        assertThat(user1Thing.getEntityId())
+                .as("partial1 must see thingId per partial-access allowlist (Ditto PR #2465)")
+                .contains(thingId);
         if (user1Thing.getAttributes().isPresent()) {
             final Attributes user1Attrs = user1Thing.getAttributes().get();
             assertThat(user1Attrs.getValue(ATTR_PTR_TYPE)).isPresent();
@@ -3514,6 +3505,9 @@ public final class WebsocketIT extends IntegrationTest {
         } else {
             return;
         }
+        assertThat(user2Thing.getEntityId())
+                .as("partial2 must see thingId per partial-access allowlist (Ditto PR #2465)")
+                .contains(thingId);
         if (user2Thing.getAttributes().isPresent()) {
             final Attributes user2Attrs = user2Thing.getAttributes().get();
             assertThat(user2Attrs.getValue(ATTR_PTR_TYPE)).isEmpty();

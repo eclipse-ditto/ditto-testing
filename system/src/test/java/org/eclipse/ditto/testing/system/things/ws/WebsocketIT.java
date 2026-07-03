@@ -820,9 +820,7 @@ public final class WebsocketIT extends IntegrationTest {
     }
 
     @Test
-    public void createThingAndChangeDesiredProperties() throws InterruptedException {
-        final CountDownLatch latch = new CountDownLatch(1);
-
+    public void createThingAndChangeDesiredProperties() throws Exception {
         //Before
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
@@ -844,16 +842,26 @@ public final class WebsocketIT extends IntegrationTest {
 
         final CreateThing createThing = CreateThing.of(thing, policy.toJson(), COMMAND_HEADERS_V2);
 
-        clientUser4.send(createThing).whenComplete((commandResponse, throwable) -> {
-            assertThat(throwable).isNull();
-            assertThat(commandResponse).isInstanceOf(CreateThingResponse.class);
-        });
+        // await the CreateThingResponse so the ThingCreated event is published before we subscribe
+        final CommandResponse<?> createResponse =
+                clientUser4.send(createThing).toCompletableFuture().get(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        assertThat(createResponse).isInstanceOf(CreateThingResponse.class);
 
-        //Then
+        //Then: consume only events for this thing (server-side RQL filter) and queue them, so the
+        // type assertion runs on the test thread. Asserting inside the consumer would run on the WS
+        // IO thread; an unrelated event leaked from another test would throw there, break frame
+        // processing for this connection and surface as an opaque "Did not receive ...:ACK" timeout.
+        final BlockingQueue<ThingEvent<?>> receivedEvents = new LinkedBlockingQueue<>();
+        final CountDownLatch latch = new CountDownLatch(1);
         clientUser5.startConsumingEvents(event -> {
-            assertThat(event).isInstanceOf(FeatureDesiredPropertyModified.class);
-            latch.countDown();
-        }).join();
+            if (event instanceof ThingEvent) {
+                final ThingEvent<?> thingEvent = (ThingEvent<?>) event;
+                if (thingEvent.getEntityId().equals(thingId)) {
+                    receivedEvents.add(thingEvent);
+                    latch.countDown();
+                }
+            }
+        }, "eq(thingId,\"" + thingId + "\")").join();
 
         final TopicPath topicPath = TopicPath.newBuilder(thingId).things().twin().commands().modify().build();
 
@@ -871,6 +879,10 @@ public final class WebsocketIT extends IntegrationTest {
                 });
 
         assertThat(latch.await(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+
+        final ThingEvent<?> firstEvent = receivedEvents.poll(5, TimeUnit.SECONDS);
+        assertThat(firstEvent).isNotNull();
+        assertThat(firstEvent).isInstanceOf(FeatureDesiredPropertyModified.class);
     }
 
     @Test

@@ -1041,7 +1041,9 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
                 .setSubject(serviceEnv.getTestingContext2().getOAuthClient().getSubject())
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX, "READ")
                 .setGrantedPermissions("thing", "/attributes/" + ATTR_COMPLEX_SOME, "READ")
-                .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER, "READ")
+                // partial2 only gets the "public" property of feature "other" (NOT the whole feature):
+                // the assertions below expect "bar" to be filtered out for partial2, which requires
+                // that "/features/other" is not granted as a whole.
                 .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER + "/properties/properties/" + PROP_PUBLIC, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_OTHER + "/properties/" + PROP_PUBLIC, "READ")
                 .setGrantedPermissions("thing", "/features/" + FEATURE_SHARED, "READ")

@@ -13,7 +13,6 @@
 package org.eclipse.ditto.testing.common.ws;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -23,6 +22,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -95,7 +95,7 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
     private final ConcurrentHashMap<String, CompletableFuture<Void>> waitForAckStages;
     private final Map<String, String> additionalHttpHeaders;
 
-    private final List<Throwable> errors;
+    private final List<Throwable> errors = new CopyOnWriteArrayList<>();
 
     private ThingsWebsocketClient(String endpoint,
             final String jwt,
@@ -136,7 +136,6 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
         this.endpoint = queryParams.toString();
         pendingResponses = new ConcurrentHashMap<>();
         waitForAckStages = new ConcurrentHashMap<>();
-        this.errors = new ArrayList<>();
     }
 
     public static ThingsWebsocketClient newInstance(final String endpoint,
@@ -285,7 +284,9 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
 
         new CompletableFuture<Void>().completeOnTimeout(null, ROUNDTRIP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .thenApply(unused ->
-                        completableFuture.completeExceptionally(new TimeoutException("Did not receive a response")));
+                        completableFuture.completeExceptionally(new TimeoutException("Did not receive a response " +
+                                "within " + ROUNDTRIP_TIMEOUT_SECONDS + "s (webSocketOpen=" + isOpen() +
+                                ", recordedErrors=" + errors + ")")));
 
         return completableFuture;
     }
@@ -339,7 +340,9 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
                         .thenAccept(unused -> {
                             if (!future.isDone()) {
                                 future.completeExceptionally(
-                                        new TimeoutException("Did not receive " + acknowledgement));
+                                        new TimeoutException("Did not receive " + acknowledgement + " within " +
+                                                ROUNDTRIP_TIMEOUT_SECONDS + "s (webSocketOpen=" + isOpen() +
+                                                ", recordedErrors=" + errors + ")"));
                             }
                         });
             } else {
@@ -454,7 +457,17 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
         final boolean consumed;
         final var adaptableConsumer = adaptableConsumerReference.get();
         if (adaptableConsumer != null) {
-            adaptableConsumer.accept(jsonifiableAdaptable);
+            try {
+                adaptableConsumer.accept(jsonifiableAdaptable);
+            } catch (final Throwable t) {
+                // Never let a consumer exception (e.g. a failing assertion in a test consumer) escape the
+                // WebSocket IO thread: it would derail frame processing on this connection, causing subsequent
+                // frames - including pending protocol acknowledgements - to be dropped, which surfaces as an
+                // opaque "Did not receive <...>:ACK" timeout instead of the real failure. Record and continue.
+                LOGGER.error("Adaptable consumer threw while handling <{}>. Recording error and continuing " +
+                        "frame processing.", jsonifiableAdaptable, t);
+                errors.add(t);
+            }
             consumed = true;
         } else {
             consumed = false;
@@ -492,6 +505,9 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
     @Override
     public void onClose(final WebSocket webSocket, final int code, final String reason) {
         LOGGER.info("Connection to <{}> closed by remote (code: {}, reason: {}).", endpoint, code, reason);
+        failPendingStages(new IllegalStateException(
+                String.format("WebSocket connection to <%s> was closed (code: %d, reason: %s)",
+                        endpoint, code, reason)));
     }
 
     @Override
@@ -508,6 +524,30 @@ public final class ThingsWebsocketClient implements WebSocketListener, AutoClose
                 LOGGER.error("Error in WebSocket occurred: {}", throwable.getMessage(), throwable);
             }
         }
+        failPendingStages(new IllegalStateException(
+                String.format("WebSocket connection to <%s> failed with an error", endpoint), throwable));
+    }
+
+    /**
+     * Fails all outstanding acknowledgement and response futures with the given cause, so callers get an immediate,
+     * diagnosable failure instead of waiting for the round-trip timeout when the connection breaks.
+     *
+     * @param cause the cause to complete the pending futures exceptionally with.
+     */
+    private void failPendingStages(final Throwable cause) {
+        waitForAckStages.forEach((acknowledgement, future) -> {
+            if (future != null && !future.isDone()) {
+                future.completeExceptionally(cause);
+            }
+        });
+        waitForAckStages.clear();
+        pendingResponses.forEach((correlationId, pendingResponse) -> {
+            final var responseFuture = pendingResponse.getResponseFuture();
+            if (!responseFuture.isDone()) {
+                responseFuture.completeExceptionally(cause);
+            }
+        });
+        pendingResponses.clear();
     }
 
     /**

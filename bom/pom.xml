@@ -34,7 +34,7 @@
         <asynchttpclient.version>2.15.0</asynchttpclient.version>
         <netty-bom.version>4.2.4.Final</netty-bom.version>
         <lz4-java.version>1.10.1</lz4-java.version>
-        <amqp-client.version>3.5.4</amqp-client.version>
+        <amqp-client.version>5.18.0</amqp-client.version>
         <kafka-client.version>3.9.2</kafka-client.version>
         <typesafe-config.version>1.4.3</typesafe-config.version>
         <slf4j.version>2.0.17</slf4j.version>

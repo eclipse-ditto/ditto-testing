@@ -50,7 +50,6 @@ import org.slf4j.LoggerFactory;
 
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.QueueingConsumer;
 
 /**
  * Integration tests for Connectivity of RabbitMQ connections.

@@ -34,7 +34,6 @@ import org.slf4j.Logger;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Envelope;
-import com.rabbitmq.client.QueueingConsumer;
 
 public final class RabbitMqConnectivityWorker
         extends AbstractConnectivityWorker<QueueingConsumer, QueueingConsumer.Delivery> {

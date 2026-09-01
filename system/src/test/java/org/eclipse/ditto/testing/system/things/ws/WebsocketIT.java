@@ -2117,6 +2117,173 @@ public final class WebsocketIT extends IntegrationTest {
         }
     }
 
+    /**
+     * Builds a policy granting the owner everything and {@code user2} READ on {@code /features/public} only,
+     * together with a thing carrying an accessible and an inaccessible feature.
+     */
+    private Policy partialFeatureAccessPolicy(final PolicyId policyId) {
+        return PoliciesModelFactory.newPolicyBuilder(policyId)
+                .forLabel("owner")
+                .setSubject(user1OAuthClient.getSubject())
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), WRITE, READ)
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), WRITE, READ)
+                .forLabel("partial")
+                .setSubject(user2OAuthClient.getSubject())
+                .setGrantedPermissions("thing", "/features/public", "READ")
+                .build();
+    }
+
+    private Thing partialFeatureAccessThing(final ThingId thingId, final PolicyId policyId) {
+        return Thing.newBuilder()
+                .setId(thingId)
+                .setPolicyId(policyId)
+                .setFeature("public", FeatureProperties.newBuilder()
+                        .set("value", JsonValue.of("public-value"))
+                        .build())
+                .setFeature("secret", FeatureProperties.newBuilder()
+                        .set("value", JsonValue.of("secret-value"))
+                        .build())
+                .build();
+    }
+
+    /**
+     * A merge whose value is a JSON object and whose path is a granted subtree must be delivered in full.
+     *
+     * <p>The payload of a non-root event is relative to the event path, so filtering it against thing-absolute
+     * accessible paths matches nothing and empties it, after which the signal is dropped without any metric or
+     * log. Scalar payloads take a different, path-aware branch, which is why only object payloads regressed.</p>
+     */
+    @Test
+    @Category(Acceptance.class)
+    public void partialAccessObjectMergeAtGrantedPathIsDelivered() throws Exception {
+        final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+        final PolicyId policyId = PolicyId.of(thingId);
+
+        clientUser1.send(CreateThing.of(partialFeatureAccessThing(thingId, policyId),
+                partialFeatureAccessPolicy(policyId).toJson(), COMMAND_HEADERS_V2)).toCompletableFuture().get();
+
+        final BlockingQueue<ThingEvent<?>> receivedEvents = new LinkedBlockingQueue<>();
+        final CountDownLatch eventLatch = new CountDownLatch(1);
+        consumePartialAccessEvents(thingId, receivedEvents, eventLatch);
+
+        // WHEN: the owner merges an object at exactly the granted path
+        final JsonObject mergeValue = JsonObject.newBuilder()
+                .set("properties", JsonObject.newBuilder()
+                        .set("value", JsonValue.of("merged-public-value"))
+                        .build())
+                .build();
+        clientUser1.send(MergeThing.of(thingId, JsonPointer.of("features/public"), mergeValue, COMMAND_HEADERS_V2))
+                .toCompletableFuture().get();
+
+        // THEN: the partial reader receives it, with the value intact rather than emptied
+        assertThat(eventLatch.await(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+        final ThingEvent<?> event = receivedEvents.poll(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        assertThat(event).isInstanceOf(ThingMerged.class);
+        final ThingMerged merged = (ThingMerged) event;
+        assertThat(merged.getResourcePath().toString()).isEqualTo("/features/public");
+        assertThat(merged.getValue()).isEqualTo(mergeValue);
+
+        cleanupWithOwnerClient(clientUser1, thingId, policyId);
+    }
+
+    /**
+     * A merge rooted above the grant must be narrowed to the granted subtree, not emptied and not leaked.
+     */
+    @Test
+    @Category(Acceptance.class)
+    public void partialAccessObjectMergeAtParentOfGrantIsNarrowed() throws Exception {
+        final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+        final PolicyId policyId = PolicyId.of(thingId);
+
+        clientUser1.send(CreateThing.of(partialFeatureAccessThing(thingId, policyId),
+                partialFeatureAccessPolicy(policyId).toJson(), COMMAND_HEADERS_V2)).toCompletableFuture().get();
+
+        final BlockingQueue<ThingEvent<?>> receivedEvents = new LinkedBlockingQueue<>();
+        final CountDownLatch eventLatch = new CountDownLatch(1);
+        consumePartialAccessEvents(thingId, receivedEvents, eventLatch);
+
+        // WHEN: the owner merges at /features, touching a granted and a non-granted feature at once
+        final JsonObject mergeValue = JsonObject.newBuilder()
+                .set("public", JsonObject.newBuilder()
+                        .set("properties", JsonObject.newBuilder()
+                                .set("value", JsonValue.of("merged-public")).build())
+                        .build())
+                .set("secret", JsonObject.newBuilder()
+                        .set("properties", JsonObject.newBuilder()
+                                .set("value", JsonValue.of("merged-secret")).build())
+                        .build())
+                .build();
+        clientUser1.send(MergeThing.of(thingId, JsonPointer.of("features"), mergeValue, COMMAND_HEADERS_V2))
+                .toCompletableFuture().get();
+
+        // THEN: the granted feature survives and the non-granted one is stripped
+        assertThat(eventLatch.await(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+        final ThingEvent<?> event = receivedEvents.poll(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        assertThat(event).isInstanceOf(ThingMerged.class);
+        final JsonObject value = ((ThingMerged) event).getValue().asObject();
+        assertThat(value.getValue(JsonPointer.of("/public/properties/value")))
+                .contains(JsonValue.of("merged-public"));
+        assertThat(value.getValue(JsonPointer.of("/secret"))).isEmpty();
+
+        cleanupWithOwnerClient(clientUser1, thingId, policyId);
+    }
+
+    /**
+     * A merge wholly outside the granted subtrees must not reach the partial reader at all.
+     *
+     * <p>Uses a granted merge afterwards as an ordering fence: once that one has been delivered the pipeline has
+     * demonstrably caught up, so the absence of the first is a real drop and not a race.</p>
+     */
+    @Test
+    @Category(Acceptance.class)
+    public void partialAccessObjectMergeOutsideGrantsIsNotDelivered() throws Exception {
+        final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+        final PolicyId policyId = PolicyId.of(thingId);
+
+        clientUser1.send(CreateThing.of(partialFeatureAccessThing(thingId, policyId),
+                partialFeatureAccessPolicy(policyId).toJson(), COMMAND_HEADERS_V2)).toCompletableFuture().get();
+
+        final BlockingQueue<ThingEvent<?>> receivedEvents = new LinkedBlockingQueue<>();
+        final CountDownLatch eventLatch = new CountDownLatch(1);
+        consumePartialAccessEvents(thingId, receivedEvents, eventLatch);
+
+        // WHEN: a merge on the non-granted feature is followed by one on the granted feature
+        clientUser1.send(MergeThing.of(thingId, JsonPointer.of("features/secret"),
+                JsonObject.newBuilder().set("properties", JsonObject.newBuilder()
+                        .set("value", JsonValue.of("merged-secret")).build()).build(),
+                COMMAND_HEADERS_V2)).toCompletableFuture().get();
+        clientUser1.send(MergeThing.of(thingId, JsonPointer.of("features/public"),
+                JsonObject.newBuilder().set("properties", JsonObject.newBuilder()
+                        .set("value", JsonValue.of("merged-public")).build()).build(),
+                COMMAND_HEADERS_V2)).toCompletableFuture().get();
+
+        // THEN: only the granted one arrives
+        assertThat(eventLatch.await(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+        final ThingEvent<?> event = receivedEvents.poll(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        assertThat(event).isInstanceOf(ThingMerged.class);
+        assertThat(((ThingMerged) event).getResourcePath().toString()).isEqualTo("/features/public");
+        assertThat(receivedEvents).as("no event may be delivered for the non-granted feature").isEmpty();
+
+        cleanupWithOwnerClient(clientUser1, thingId, policyId);
+    }
+
+    private void consumePartialAccessEvents(final ThingId thingId,
+            final BlockingQueue<ThingEvent<?>> receivedEvents,
+            final CountDownLatch eventLatch) throws Exception {
+
+        clientUser2.startConsumingEvents(event -> {
+            if (event instanceof ThingEvent) {
+                final ThingEvent<?> thingEvent = (ThingEvent<?>) event;
+                if (thingEvent.getEntityId().equals(thingId)) {
+                    receivedEvents.add(thingEvent);
+                    eventLatch.countDown();
+                }
+            }
+        }, "eq(thingId,\"" + thingId + "\")").join();
+        Thread.sleep(1000);
+    }
+
+
     @Test
     @Category(Acceptance.class)
     public void partialAccessEventsFilteredWithRevokeOnNestedPath() throws Exception {

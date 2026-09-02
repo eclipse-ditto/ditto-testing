@@ -11,9 +11,38 @@
 #
 # SPDX-License-Identifier: EPL-2.0
 
+# Tears down the environment started by start.sh (run from docker/). Honours the same DITTO_DB selector
+# (mongodb default | postgres) so the SAME compose file stack is downed: in postgres mode a bare
+# `docker-compose down` would not know the `postgres` service and would leave its container running.
+
 set -e
 
-# can be used for debugging purpose
-# docker-compose logs --no-color &> docker.log
+DITTO_DB="${DITTO_DB:-mongodb}"
 
-docker-compose down --volumes --remove-orphans
+# Spelled without the literal "docker-compose" on purpose (CI's `sed 's/docker-compose/docker compose/g'`
+# must not mangle the file names): see start.sh.
+COMPOSE_STEM='docker-''compose'
+COMPOSE_FILES=()
+
+case "$DITTO_DB" in
+  mongodb)
+    ;;
+  postgres)
+    COMPOSE_FILES=(-f "$COMPOSE_STEM.yml")
+    if [ -f "$COMPOSE_STEM.override.yml" ]; then
+      COMPOSE_FILES+=(-f "$COMPOSE_STEM.override.yml")
+    fi
+    # Always include the search overlay regardless of the SEARCH_BACKEND used at start time: downing a
+    # service that was never started is a no-op, so one stop tears down either variant.
+    COMPOSE_FILES+=(-f "$COMPOSE_STEM-postgres.yml" -f "$COMPOSE_STEM-postgres-search.yml")
+    ;;
+  *)
+    printf "ERROR: DITTO_DB=<%s> is invalid; expected 'mongodb' or 'postgres'.\n" "$DITTO_DB" >&2
+    exit 1
+    ;;
+esac
+
+# can be used for debugging purpose
+# docker-compose "${COMPOSE_FILES[@]}" logs --no-color &> docker.log
+
+docker-compose "${COMPOSE_FILES[@]}" down --volumes --remove-orphans

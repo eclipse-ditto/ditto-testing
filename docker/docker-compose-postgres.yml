@@ -9,26 +9,28 @@
 #
 # SPDX-License-Identifier: EPL-2.0
 
-# PostgreSQL persistence override for the system-test environment. Layer AFTER docker-compose.yml
-# (and docker-compose.override.yml when present):
+# PostgreSQL persistence override for the system-test environment. Layered by `DITTO_DB=postgres ./start.sh`
+# AFTER docker-compose.yml (and docker-compose.override.yml when present):
 #
 #   docker-compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose-postgres.yml up -d
 #
-# or simply use ./start-postgres.sh / ./stop-postgres.sh (see README-postgres.md).
+# See README-postgres.md.
 #
-# policies/things/connectivity persist journals + snapshots to PostgreSQL via two extension JARs
-# mounted into /opt/ditto/extensions/ (picked up by the image's
-# CLASSPATH=/opt/ditto/*:/opt/ditto/extensions/*): the shaded base
-# ditto-postgres-client-extension (postgres-client infra + all third-party deps) plus the thin
-# ditto-postgres-persistence-extension (persistence-r2dbc classes). All extension JARs are 0-SNAPSHOT
-# and MUST come from the same build (a boot self-check fails fast on mismatch or on a thin JAR without
-# its base).
+# policies/things/connectivity persist journals + snapshots to PostgreSQL via two extension JARs that are
+# BAKED INTO the service images (ditto/build-images.sh with BAKE_POSTGRES_EXTENSIONS=true copies them to
+# /opt/ditto/extensions/, which is on the image's CLASSPATH=/opt/ditto/*:/opt/ditto/extensions/*): the shaded
+# base ditto-postgres-client-extension plus the thin ditto-postgres-persistence-extension. Nothing is
+# bind-mounted from a ditto checkout; the images must be local builds (eclipse/ditto-<svc>:0-SNAPSHOT,
+# DITTO_VERSION defaults to 0-SNAPSHOT in postgres mode). What this file adds is the overlay config
+# (HOSTING_ENVIRONMENT=filebased) and the POSTGRES_* connection environment.
 #
 # things-search's backend is SELECTABLE, not fixed: by default (SEARCH_BACKEND=postgres) it runs on
 # PostgreSQL via the docker-compose-postgres-search.yml overlay (layered after this file); with
 # SEARCH_BACKEND=mongodb it keeps indexing in MongoDB and only this file is used. Either way MongoDB
-# stays defined (see the mongodb note below). DITTO_REPO_DIR must point at a ditto worktree containing
-# the Postgres persistence + search feature (the search-branch worktree; default: ./../../ditto).
+# stays defined (see the mongodb note below).
+#
+# The host port for psql debugging lives in docker-compose.override.yml (deleted by CI), so CI binds no
+# host port for postgres.
 
 version: "2.4"
 
@@ -40,9 +42,6 @@ services:
       - test
     expose:
       - "5432"
-    ports:
-      # published for host-side psql debugging
-      - ${POSTGRES_PORT_TCP:-5432}:5432
     environment:
       - POSTGRES_DB=ditto
       - POSTGRES_USER=ditto
@@ -67,11 +66,6 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      # Explicit JAR file names (compose cannot glob); the module version is fixed at 0-SNAPSHOT
-      # (the ditto repo's `revision` property) independent of the image tag. Mount the shaded base
-      # (client infra + third-party deps) AND the thin persistence JAR — both from the same build.
-      - ${DITTO_REPO_DIR:-./../../ditto}/internal/utils/postgres-client-extension/target/ditto-postgres-client-extension-0-SNAPSHOT.jar:/opt/ditto/extensions/ditto-postgres-client-extension-0-SNAPSHOT.jar:ro
-      - ${DITTO_REPO_DIR:-./../../ditto}/internal/utils/postgres-persistence-extension/target/ditto-postgres-persistence-extension-0-SNAPSHOT.jar:/opt/ditto/extensions/ditto-postgres-persistence-extension-0-SNAPSHOT.jar:ro
       - ./postgres/policies-postgres.conf:/opt/ditto/policies-postgres.conf:ro
     environment:
       - HOSTING_ENVIRONMENT=filebased
@@ -88,8 +82,6 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ${DITTO_REPO_DIR:-./../../ditto}/internal/utils/postgres-client-extension/target/ditto-postgres-client-extension-0-SNAPSHOT.jar:/opt/ditto/extensions/ditto-postgres-client-extension-0-SNAPSHOT.jar:ro
-      - ${DITTO_REPO_DIR:-./../../ditto}/internal/utils/postgres-persistence-extension/target/ditto-postgres-persistence-extension-0-SNAPSHOT.jar:/opt/ditto/extensions/ditto-postgres-persistence-extension-0-SNAPSHOT.jar:ro
       - ./postgres/things-postgres.conf:/opt/ditto/things-postgres.conf:ro
     environment:
       - HOSTING_ENVIRONMENT=filebased
@@ -106,8 +98,6 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ${DITTO_REPO_DIR:-./../../ditto}/internal/utils/postgres-client-extension/target/ditto-postgres-client-extension-0-SNAPSHOT.jar:/opt/ditto/extensions/ditto-postgres-client-extension-0-SNAPSHOT.jar:ro
-      - ${DITTO_REPO_DIR:-./../../ditto}/internal/utils/postgres-persistence-extension/target/ditto-postgres-persistence-extension-0-SNAPSHOT.jar:/opt/ditto/extensions/ditto-postgres-persistence-extension-0-SNAPSHOT.jar:ro
       - ./postgres/connectivity-postgres.conf:/opt/ditto/connectivity-postgres.conf:ro
     environment:
       - HOSTING_ENVIRONMENT=filebased

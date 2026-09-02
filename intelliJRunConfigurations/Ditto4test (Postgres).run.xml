@@ -2,9 +2,10 @@
   <configuration default="false" name="Ditto for test (Postgres)" type="Multirun" separateTabs="false" reuseTabsWithFailures="true" startOneByOne="true" markFailedProcess="true" hideSuccessProcess="true" delayTime="0.0">
     <!-- Postgres twin of "Ditto for test" (needs the Multirun plugin). The four persistence services use
          their (Postgres) variants; Gateway intentionally reuses the unchanged Mongo-era "Gateway for test"
-         (stateless, no PG profile exists — it keeps DEVOPS_SECURED=true/DEVOPS_PASSWORD=foobar, which
-         test-common-local-postgres.conf re-enables on the test side so CleanupIT's /devops/piggyback
-         calls are not 401'd). Requires a `postgres` container on localhost:5432. -->
+         (stateless, no PG profile exists — it keeps DEVOPS_SECURED=true/DEVOPS_PASSWORD=foobar, so run the
+         tests with -Dgateway.devops.auth.enabled=true -Dgateway.devops.auth.password=foobar as documented in
+         docker/README-postgres.md, IntelliJ mode; otherwise CleanupIT's /devops/piggyback calls are 401'd).
+         Requires a `postgres` container on localhost:5432. -->
     <runConfiguration name="Policies for test (Postgres)" type="Application" />
     <runConfiguration name="Things for test (Postgres)" type="Application" />
     <runConfiguration name="ThingsSearch for test (Postgres)" type="Application" />

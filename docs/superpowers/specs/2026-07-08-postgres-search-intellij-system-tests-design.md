@@ -1,5 +1,10 @@
 # System tests: things-search on PostgreSQL + IntelliJ-run Ditto (docker optional)
 
+> **Superseded (2026-09-02).** The two-script / suffixed-environment design below was replaced by a
+> `DITTO_DB` selector in the CI entry points: `DITTO_DB=postgres ./start.sh` / `./stop.sh`,
+> `-Dpersistence.backend=postgres` on the plain `docker-compose` / `local` environments, extension JARs baked
+> into the images. See `docker/README-postgres.md`; the content below is retained for history.
+
 *Design spec, 2026-07-08. Supersedes the docker-only / search-stays-on-Mongo scope of
 `docs/postgres-system-tests-plan.md` (whose Parts A–D are implemented on this branch: Parts A/B and
 the `postgres/{policies,things,connectivity}-postgres.conf` overlays stay as-is, while Part C's

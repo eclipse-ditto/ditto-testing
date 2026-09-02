@@ -15,15 +15,15 @@
 #   docker-compose -f docker-compose.yml -f docker-compose.override.yml \
 #                  -f docker-compose-postgres.yml -f docker-compose-postgres-search.yml up -d
 #
-# ./start-postgres.sh appends this file automatically when SEARCH_BACKEND=postgres (its default);
+# `DITTO_DB=postgres ./start.sh` appends this file automatically when SEARCH_BACKEND=postgres (its default);
 # with SEARCH_BACKEND=mongodb it is omitted and things-search keeps indexing in MongoDB.
 #
-# It touches ONLY the things-search service: two extension JARs from /opt/ditto/extensions/ (the shaded
-# base ditto-postgres-client-extension + the thin ditto-postgres-search-extension — both 0-SNAPSHOT and
-# from the SAME build as the persistence JARs; a boot self-check fails fast on mismatch) plus the
-# search-postgres.conf overlay selected via HOSTING_ENVIRONMENT=filebased. things-search needs the DDL
-# role to `CREATE EXTENSION IF NOT EXISTS pg_trgm` at boot — auto-satisfied by the local `ditto`
-# superuser in postgres:16.
+# It touches ONLY the things-search service. The two extension JARs it needs (the shaded base
+# ditto-postgres-client-extension + the thin ditto-postgres-search-extension) are BAKED INTO the
+# things-search image by ditto/build-images.sh (BAKE_POSTGRES_EXTENSIONS=true) under /opt/ditto/extensions/;
+# this file only adds the search-postgres.conf overlay (HOSTING_ENVIRONMENT=filebased) and the POSTGRES_*
+# environment. things-search needs the DDL role to `CREATE EXTENSION IF NOT EXISTS pg_trgm` at boot —
+# auto-satisfied by the local `ditto` superuser in postgres:16.
 
 version: "2.4"
 
@@ -34,8 +34,6 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ${DITTO_REPO_DIR:-./../../ditto}/internal/utils/postgres-client-extension/target/ditto-postgres-client-extension-0-SNAPSHOT.jar:/opt/ditto/extensions/ditto-postgres-client-extension-0-SNAPSHOT.jar:ro
-      - ${DITTO_REPO_DIR:-./../../ditto}/internal/utils/postgres-search-extension/target/ditto-postgres-search-extension-0-SNAPSHOT.jar:/opt/ditto/extensions/ditto-postgres-search-extension-0-SNAPSHOT.jar:ro
       - ./postgres/search-postgres.conf:/opt/ditto/search-postgres.conf:ro
     environment:
       - HOSTING_ENVIRONMENT=filebased

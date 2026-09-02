@@ -1,5 +1,13 @@
 # Run Ditto system tests against PostgreSQL persistence
 
+> **Superseded again (2026-09-02) by the unified entry points.** `start-postgres.sh` / `stop-postgres.sh` and
+> the `docker-compose-postgres` / `local-postgres` test environments described below no longer exist: use
+> `DITTO_DB=postgres ./start.sh` / `DITTO_DB=postgres ./stop.sh` (same scripts as CI) and run the tests with
+> `-Dtest.environment=docker-compose -Dpersistence.backend=postgres` (host runs: `-Dtest.environment=local
+> -Dpersistence.backend=postgres`). The extension JARs are baked into the service images
+> (`BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh`), not bind-mounted, so `DITTO_REPO_DIR` only matters for
+> the opt-in local image build (`BUILD_IMAGES=1`). Current instructions: `docker/README-postgres.md`.
+
 > **Superseded (2026-07-08) by
 > [`docs/superpowers/specs/2026-07-08-postgres-search-intellij-system-tests-design.md`](superpowers/specs/2026-07-08-postgres-search-intellij-system-tests-design.md).**
 > That spec updates this work for three facts this document predates: things-search now also runs on

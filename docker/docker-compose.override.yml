@@ -48,6 +48,15 @@ services:
       - ${MONGODB_PORT_TCP:-27017}:27017
     command: mongod --storageEngine wiredTiger # start without replicaset param
 
+  postgres:
+    # Only meaningful with DITTO_DB=postgres (the service is defined in docker-compose-postgres.yml): publishes
+    # PostgreSQL for host-side psql debugging. The image is repeated here because compose rejects a service
+    # without one even if it is never started, and in mongodb mode this file is loaded alone on top of
+    # docker-compose.yml. CI deletes this file, so CI binds no host port for postgres.
+    image: docker.io/postgres:16
+    ports:
+      - ${POSTGRES_PORT_TCP:-5432}:5432
+
   gateway:
     environment:
       - AUTH_HTTP_PROXY_ENABLED=${PROXY_ENABLED:-false}

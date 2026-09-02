@@ -58,22 +58,23 @@ Or, simply make use of the [multirun plugin](https://plugins.jetbrains.com/plugi
 
 Ditto's persistence layer is pluggable, so the system tests can run against a Ditto stack that persists
 things/policies/connectivity to PostgreSQL. things-search's backend is **selectable** (PostgreSQL by
-default, or MongoDB). Both modes need a sibling **ditto search-branch worktree**
-(`internal/utils/postgres-persistence-extension` is the marker) built once with `mvn install -DskipTests`.
+default, or MongoDB). The Postgres extension JARs are baked into the service images (built from a ditto
+worktree on the `feat/postgres-persistance-search` branch with `BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh`).
 
-**Docker mode (CI-style):** `docker/start-postgres.sh` (default `SEARCH_BACKEND=postgres`; set
-`SEARCH_BACKEND=mongodb` for the persistence-on-PG / search-on-Mongo split) plus the
-`docker-compose-postgres` test environment — see
+**Docker mode (CI-style):** the same scripts as for MongoDB with the database selected by `DITTO_DB`:
+`DITTO_DB=postgres docker/start.sh` (default `SEARCH_BACKEND=postgres`; set `SEARCH_BACKEND=mongodb` for the
+persistence-on-PG / search-on-Mongo split), `DITTO_DB=postgres docker/stop.sh`, and the tests with
+`-Dtest.environment=docker-compose -Dpersistence.backend=postgres` — see
 [docker/README-postgres.md](docker/README-postgres.md).
 
 **IntelliJ mode (docker optional):** run Ditto from IntelliJ with only infrastructure in docker:
 
 1. Start the `postgres` container (either the `Postgres for test`
    [run config](intelliJRunConfigurations/Postgres.run.xml), or
-   `docker-compose -f docker-compose.yml -f docker-compose-postgres.yml up -d postgres` from `docker/`),
-   plus `oauth` and the brokers exactly as in the sections above. Start `mongodb` only if you launch
-   ThingsSearch on Mongo. Do **not** also run ditto's own `deployment/postgres-local` stack — it binds
-   the same host `5432`.
+   `docker-compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose-postgres.yml up -d postgres`
+   from `docker/`), plus `oauth` and the brokers exactly as in the sections above. Start `mongodb` only if
+   you launch ThingsSearch on Mongo. Do **not** also run ditto's own `deployment/postgres-local` stack — it
+   binds the same host `5432`.
 2. Launch the `(Postgres)` run configs (`Policies`, `Things`, `ThingsSearch`, `Connectivity` — all
    `for test (Postgres)` — plus the unchanged `Gateway for test`), or the
    [`Ditto for test (Postgres)`](intelliJRunConfigurations/Ditto4test%20%28Postgres%29.run.xml) compound
@@ -81,10 +82,13 @@ default, or MongoDB). Both modes need a sibling **ditto search-branch worktree**
    into the ditto project and put the r2dbc modules on the classpath via the `ditto-ide-postgres-launcher`
    module. Selecting the search backend in this mode = launching `ThingsSearch for test (Postgres)` vs
    the Mongo `ThingsSearch for test`.
-3. Run the tests from the host against `-Dtest.environment=local-postgres`, e.g.:
+3. Run the tests from the host against the plain `local` environment plus the Postgres switch, e.g.:
    ```bash
-   mvn verify -am --projects=:system -Dit.test=QueryThingsIT -Dtest.environment=local-postgres
+   mvn verify -am --projects=:system -Dit.test=QueryThingsIT -Dtest.environment=local -Dpersistence.backend=postgres \
+     -Dgateway.devops.auth.enabled=true -Dgateway.devops.auth.password=foobar -Dconnectivity.http.tunnel=host.docker.internal
    ```
+   (the last three flags are host-run specifics explained in
+   [docker/README-postgres.md](docker/README-postgres.md#intellij-mode-docker-optional)).
 
 ## Authorization server mock
 

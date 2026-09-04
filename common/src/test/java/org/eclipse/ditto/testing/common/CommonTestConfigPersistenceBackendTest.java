@@ -15,6 +15,8 @@ package org.eclipse.ditto.testing.common;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assume.assumeTrue;
 
+import javax.annotation.Nullable;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -30,7 +32,7 @@ import com.typesafe.config.ConfigFactory;
  * <p>
  * Uses the protected constructor instead of {@link CommonTestConfig#getInstance()} because the singleton captures the
  * system properties present at class-load time; {@link ConfigFactory#invalidateCaches()} is required because
- * {@code ConfigFactory.systemProperties()} is memoised.
+ * {@code ConfigFactory.systemProperties()} is memoised; system properties are restored after each test.
  * </p>
  */
 public final class CommonTestConfigPersistenceBackendTest {
@@ -38,16 +40,39 @@ public final class CommonTestConfigPersistenceBackendTest {
     private static final String PERSISTENCE_BACKEND = "persistence.backend";
     private static final String TEST_ENVIRONMENT = "test.environment";
 
+    private String persistenceBackendBefore;
+    private String testEnvironmentBefore;
+
+    /**
+     * Starts every test from the {@code local} environment with no backend override, whatever the Maven invocation
+     * carried. {@code test.environment} is SET rather than cleared on purpose: surefire's {@code -Dtest=<class>}
+     * selector becomes the system property {@code test=<class>}, a scalar that would shadow the whole
+     * {@code test.*} object of the conf files; an explicit {@code test.environment} system property makes the
+     * property parser drop that scalar again. The previous values are restored in {@link #tearDown()} because
+     * {@link CommonTestConfig#getInstance()} freezes the properties it sees at class-load time for the whole fork.
+     */
     @Before
-    public void clearOverrides() {
+    public void setUp() {
+        persistenceBackendBefore = System.getProperty(PERSISTENCE_BACKEND);
+        testEnvironmentBefore = System.getProperty(TEST_ENVIRONMENT);
         System.clearProperty(PERSISTENCE_BACKEND);
-        System.clearProperty(TEST_ENVIRONMENT);
+        System.setProperty(TEST_ENVIRONMENT, "local");
         ConfigFactory.invalidateCaches();
     }
 
     @After
-    public void restoreDefaults() {
-        clearOverrides();
+    public void tearDown() {
+        restore(PERSISTENCE_BACKEND, persistenceBackendBefore);
+        restore(TEST_ENVIRONMENT, testEnvironmentBefore);
+        ConfigFactory.invalidateCaches();
+    }
+
+    private static void restore(final String key, @Nullable final String previousValue) {
+        if (previousValue == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, previousValue);
+        }
     }
 
     @Test

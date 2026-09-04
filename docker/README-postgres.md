@@ -141,10 +141,10 @@ docker run --rm --network test --network-alias system-test-container \
 To run the Ditto services from IntelliJ (as the Mongo-based `intelliJRunConfigurations/*.run.xml` flow
 does) with only infrastructure in docker, and point the system tests at them:
 
-1. **Infrastructure only** in docker: `postgres` (via the `Postgres for test` run config, or
-   `docker-compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose-postgres.yml up -d postgres`
-   — the `postgres` service is defined **only** in `docker-compose-postgres.yml`, and the override publishes
-   it on `localhost:5432`), plus `oauth` and the brokers as in the main README's IntelliJ section. Start
+1. **Infrastructure only** in docker: `postgres` (via the `Postgres for test` run config, or simply
+   `docker-compose up -d postgres` from `docker/` — the override defines a self-contained `postgres` published
+   on `localhost:5432`; the full definition with the healthcheck lives in `docker-compose-postgres.yml` and is
+   what `DITTO_DB=postgres ./start.sh` uses), plus `oauth` and the brokers as in the main README's IntelliJ section. Start
    `mongodb` only if you run ThingsSearch on Mongo. Do **not** also run ditto's own
    `deployment/postgres-local` stack (it binds the same port).
 2. **Ditto from IntelliJ**: launch the `(Postgres)` run configs (`Policies`, `Things`, `ThingsSearch`,

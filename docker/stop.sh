@@ -17,6 +17,9 @@
 
 set -e
 
+# Resolve the compose files relative to docker/ (see start.sh).
+cd "$(dirname "$0")"
+
 DITTO_DB="${DITTO_DB:-mongodb}"
 
 # Spelled without the literal "docker-compose" on purpose (CI's `sed 's/docker-compose/docker compose/g'`

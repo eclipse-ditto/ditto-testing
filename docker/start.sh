@@ -27,6 +27,10 @@
 
 set -e
 
+# Resolve everything (compose files, overlays, log files, the DITTO_REPO_DIR default) relative to docker/, so the
+# script also works as `docker/start.sh` from the repository root. No-op for CI, which already runs from docker/.
+cd "$(dirname "$0")"
+
 DITTO_DB="${DITTO_DB:-mongodb}"
 
 # The compose file basename is assembled WITHOUT the literal "docker-compose" on purpose: ditto's CI

@@ -11,9 +11,10 @@
 #
 # SPDX-License-Identifier: EPL-2.0
 
-# Tears down the environment started by start.sh (run from docker/). Honours the same DITTO_DB selector
-# (mongodb default | postgres) so the SAME compose file stack is downed: in postgres mode a bare
-# `docker-compose down` would not know the `postgres` service and would leave its container running.
+# Tears down the environment started by start.sh. Honours the same DITTO_DB selector (mongodb default |
+# postgres) so the SAME compose file stack is downed as was started: `down` on the explicit four-file stack
+# removes the overlay-declared resources deterministically (--remove-orphans would also catch a stray
+# `postgres` container, but only by label matching). Always stop with the DITTO_DB you started with.
 
 set -e
 

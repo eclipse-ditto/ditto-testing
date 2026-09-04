@@ -7,7 +7,7 @@
          folderName (group/reference with the sibling "for test" configs), ALTERNATIVE_JRE_PATH=temurin-25
          and INSTANCE_INDEX=1 (both are the testing-repo convention its cluster-mates use). Selecting the
          search backend in IntelliJ mode = launching this vs the Mongo "ThingsSearch for test". Requires a
-         `postgres` container on localhost:5432 (see intelliJRunConfigurations/Postgres.run.xml). -->
+         `postgres` container on localhost:5432 (see intelliJRunConfigurations/Postgres for test.run.xml). -->
     <option name="ALTERNATIVE_JRE_PATH" value="temurin-25" />
     <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
     <envs>

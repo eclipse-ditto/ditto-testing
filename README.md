@@ -70,7 +70,7 @@ persistence-on-PG / search-on-Mongo split), `DITTO_DB=postgres docker/stop.sh`, 
 **IntelliJ mode (docker optional):** run Ditto from IntelliJ with only infrastructure in docker:
 
 1. Start the `postgres` container (either the `Postgres for test`
-   [run config](intelliJRunConfigurations/Postgres.run.xml), or
+   [run config](intelliJRunConfigurations/Postgres%20for%20test.run.xml), or
    `docker-compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose-postgres.yml up -d postgres`
    from `docker/`), plus `oauth` and the brokers exactly as in the sections above. Start `mongodb` only if
    you launch ThingsSearch on Mongo. Do **not** also run ditto's own `deployment/postgres-local` stack — it
@@ -87,6 +87,9 @@ persistence-on-PG / search-on-Mongo split), `DITTO_DB=postgres docker/stop.sh`, 
    mvn verify -am --projects=:system -Dit.test=QueryThingsIT -Dtest.environment=local -Dpersistence.backend=postgres \
      -Dgateway.devops.auth.enabled=true -Dgateway.devops.auth.password=foobar -Dconnectivity.http.tunnel=host.docker.internal
    ```
+   Run it from the repository root, not from `system/`: `-am` then builds `bom` and `common` in the reactor;
+   resolved from `~/.m2` instead, their uninterpolated `${revision}` parent fails the build with
+   `Could not find artifact …:bom:pom:${revision}`.
    (the last three flags are host-run specifics explained in
    [docker/README-postgres.md](docker/README-postgres.md#intellij-mode-docker-optional)).
 

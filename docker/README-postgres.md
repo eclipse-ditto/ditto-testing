@@ -53,10 +53,13 @@ The Postgres backend is activated per service by
    ```bash
    cd /path/to/ditto && mvn install -DskipTests && BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh
    ```
-   or let `start.sh` do the image step for you with `BUILD_IMAGES=1` (see below).
-2. Docker + docker-compose (or the `docker compose` plugin), Maven, JDK — the same toolchain as for the
-   MongoDB run. `DITTO_REPO_DIR` (default `./../../ditto`, relative to `docker/`) only matters for
-   `BUILD_IMAGES=1`.
+   (prefix `IMAGE_VERSION=<tag>` if you override `DITTO_VERSION`), or let `start.sh` do the image step for you
+   with `BUILD_IMAGES=1` (see below).
+2. Docker + a `docker-compose` binary on the PATH (the Compose v2 standalone build is fine), Maven, JDK — the
+   same toolchain as for the MongoDB run. The scripts call `docker-compose` by that name (CI rewrites them to
+   `docker compose` with `sed`); if you only have the `docker compose` plugin, put a two-line shim named
+   `docker-compose` on your PATH: `#!/usr/bin/env bash` / `exec docker compose "$@"`. `DITTO_REPO_DIR`
+   (default `./../../ditto`, relative to `docker/`) only matters for `BUILD_IMAGES=1`.
 
 ## One-command run
 
@@ -74,7 +77,8 @@ In postgres mode the script assembles the compose stack explicitly (`docker-comp
 healthcheck, then starts the Ditto services in the usual order. `postgres` is included in the log tailing
 (`postgres-<TAG>.log`) and in the container check. With `BUILD_IMAGES=1` it first fails fast if
 `DITTO_REPO_DIR` is not a worktree with the marker module or if the extension JAR has not been built, then
-runs `BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh` there. `BUILD_IMAGES` is ignored in mongodb mode.
+runs `IMAGE_VERSION="$DITTO_VERSION" BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh` there. `BUILD_IMAGES` is
+ignored in mongodb mode.
 
 Because the local `docker-compose.override.yml` stays in the stack, the gateway is published on
 `localhost:8080` as usual and Postgres on `localhost:5432` (`POSTGRES_PORT_TCP` to change it) for debugging;
@@ -98,8 +102,9 @@ DITTO_DB=postgres ./stop.sh
 ```
 
 `stop.sh` downs the same compose file stack (the search overlay is always included, so one command tears
-down either `SEARCH_BACKEND` variant). A plain `./stop.sh` would not know the `postgres` service and would
-leave its container running.
+down either `SEARCH_BACKEND` variant). Always stop with the `DITTO_DB` you started with, and stop before
+switching modes: `start.sh`'s own pre-start cleanup only knows the services of its mode, so a mongodb-mode
+start after a postgres run would leave the `postgres` container behind and fail to remove the network.
 
 ## Running the tests (in-network, CI-style)
 
@@ -129,6 +134,13 @@ docker run --rm --network test --network-alias system-test-container \
   mvn verify -am --projects=:system -Dit.test=CleanupIT,QueryThingsIT \
     -Dtest.environment=docker-compose -Dpersistence.backend=postgres
 ```
+
+> **Run Maven from the repository root** (the `-w /ws` above already does). `-am --projects=:system` then
+> builds the `bom` and `common` modules from source in the reactor. If instead Maven resolves them from
+> `~/.m2` (e.g. you run from `system/`, or without `-am`), this repo's CI-friendly `${revision}` versions —
+> it has no flatten plugin, so an installed `common`/`bom` pom keeps a literal `${revision}` parent — make
+> the build fail with `Could not find artifact …:bom:pom:${revision}`. `-Drevision` on the CLI does **not**
+> fix that; building the modules in-reactor from the root does.
 
 `mvn verify` here does **not** fail the build on IT failures (`system/pom.xml` binds only failsafe's
 `integration-test` goal), so read the result from the report, not the exit code:

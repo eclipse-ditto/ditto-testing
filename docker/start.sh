@@ -71,7 +71,7 @@ case "$DITTO_DB" in
     printf "Using DITTO_DB=postgres (SEARCH_BACKEND=%s for things-search).\n" "$SEARCH_BACKEND"
 
     # The Postgres-capable service images are local builds (ditto/build-images.sh tags
-    # eclipse/ditto-<svc>:0-SNAPSHOT), so never pull them: only the third-party images.
+    # eclipse/ditto-<svc>:$IMAGE_VERSION, 0-SNAPSHOT by default), so never pull them: only the third-party images.
     export DITTO_VERSION="${DITTO_VERSION:-0-SNAPSHOT}"
     export DOCKER_REGISTRY_NAMESPACE="${DOCKER_REGISTRY_NAMESPACE:-eclipse}"
     PULL_SERVICES=(postgres mongodb oauth ssh mqtt kafka rabbitmq artemis fluentbit)
@@ -142,7 +142,7 @@ function wait_for_postgres {
 # Postgres mode needs service images built with BAKE_POSTGRES_EXTENSIONS=true (the two extension JARs live in
 # /opt/ditto/extensions/ inside the image). Check that BEFORE starting anything: with an unbaked image the
 # overlays' `include required(classpath(...))` only surfaces in the container log once the stack is up.
-# Only `docker image` / `docker run` are used here (CI's sed rewrites `docker-compose` alone).
+# Only `docker image` / `docker run` are used here (CI's sed rewrites the compose command name only).
 function check_service_images {
   local svc image
   for svc in policies things things-search connectivity; do

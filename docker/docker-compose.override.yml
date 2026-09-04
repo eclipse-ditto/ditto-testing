@@ -49,7 +49,7 @@ services:
     command: mongod --storageEngine wiredTiger # start without replicaset param
 
   postgres:
-    # Host port for psql debugging in DITTO_DB=postgres mode (the full service — healthcheck, DDL role — is
+    # Host port for psql debugging in DITTO_DB=postgres mode (the full service — healthcheck, DDL-role wiring — is
     # defined in docker-compose-postgres.yml). The image, network and credentials are repeated here so that this
     # file stays a valid compose project on its own in mongodb mode (compose rejects an image-less service) AND
     # a plain `docker-compose up -d postgres` from docker/ gives a working PostgreSQL on localhost:5432 for the

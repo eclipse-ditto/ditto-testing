@@ -3,7 +3,7 @@
     <!-- Postgres twin of "Policies for test": same test env vars + VM params, but the classpath module is
          the ditto-ide-postgres-launcher (puts persistence-r2dbc on the run classpath) and the Postgres
          dev profile is injected as the highest-priority FILE_BASED config layer. Requires a `postgres`
-         container on localhost:5432 (see intelliJRunConfigurations/Postgres.run.xml). -->
+         container on localhost:5432 (see intelliJRunConfigurations/Postgres for test.run.xml). -->
     <option name="ALTERNATIVE_JRE_PATH" value="temurin-25" />
     <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
     <envs>

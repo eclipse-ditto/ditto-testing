@@ -1,3 +1,7 @@
+> **Superseded (2026-09-02).** Findings record for the two-script design; the scripts and suffixed test
+> environments it reviews were replaced by `DITTO_DB=postgres ./start.sh` + `-Dpersistence.backend=postgres`.
+> Current instructions: `docker/README-postgres.md`.
+
 # Critical review — `docs/postgres-system-tests-plan.md`
 
 Reviewed 2026-07-02 against both repos at their current state:

@@ -103,9 +103,9 @@ DITTO_DB=postgres ./stop.sh
 
 `stop.sh` downs the same compose file stack (the search overlay is always included, so one command tears
 down either `SEARCH_BACKEND` variant). Always stop with the `DITTO_DB` you started with, and stop before
-switching modes: `start.sh` performs no teardown before `up`, and its failure-path `compose down` (no
-`--remove-orphans`) only knows the services of its own mode, so leftovers from a run in the other mode stay
-behind and can make the network removal fail; `stop.sh`'s `down --volumes --remove-orphans` on the explicit
+switching modes: `start.sh` does run `compose down` (no `--remove-orphans`) before `up`, but only with the
+compose files of its own mode, so leftovers from a run in the other mode stay behind and can make the
+network removal fail (which aborts the start); `stop.sh`'s `down --volumes --remove-orphans` on the explicit
 stack is the complete teardown.
 
 ## Running the tests (in-network, CI-style)

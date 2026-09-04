@@ -41,8 +41,12 @@ The Postgres backend is activated per service by
 
 ## Prerequisites
 
-1. **Ditto service images with the Postgres extensions baked in**, tagged `eclipse/ditto-<svc>:0-SNAPSHOT`
-   (postgres mode defaults `DITTO_VERSION` to `0-SNAPSHOT` and `DOCKER_REGISTRY_NAMESPACE` to `eclipse`).
+1. **Ditto service images with the Postgres extensions baked in**, tagged `eclipse/ditto-<svc>:$DITTO_VERSION`
+   (postgres mode defaults `DITTO_VERSION` to `0-SNAPSHOT` and `DOCKER_REGISTRY_NAMESPACE` to `eclipse`;
+   `BUILD_IMAGES=1` tags what it builds with the same `DITTO_VERSION`). `start.sh` refuses to start when an
+   image is missing or was built without the JARs, and a service started from such an image by other means
+   dies at config load with `ConfigException$IO: … resource not found on classpath: ditto-postgres-persistence.conf`
+   (`…-search.conf` for things-search).
    CI builds them before calling `start.sh`. Locally, build them once from a ditto worktree on the
    `feat/postgres-persistance-search` branch (it contains the marker module
    `internal/utils/postgres-persistence-extension`):

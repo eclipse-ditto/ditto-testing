@@ -121,7 +121,9 @@ function build_images {
     return 1
   fi
   printf "\nBuilding Ditto service images with baked Postgres extensions from <%s> ...\n\n" "$ditto_repo_dir"
-  (cd "$ditto_repo_dir" && BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh)
+  # IMAGE_VERSION: tag the images with the version compose will look for (DITTO_VERSION, default 0-SNAPSHOT);
+  # build-images.sh would otherwise always tag 0-SNAPSHOT.
+  (cd "$ditto_repo_dir" && IMAGE_VERSION="$DITTO_VERSION" BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh)
 }
 
 function wait_for_postgres {

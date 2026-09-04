@@ -137,6 +137,27 @@ function wait_for_postgres {
   return 1
 }
 
+# Postgres mode needs service images built with BAKE_POSTGRES_EXTENSIONS=true (the two extension JARs live in
+# /opt/ditto/extensions/ inside the image). Check that BEFORE starting anything: with an unbaked image the
+# overlays' `include required(classpath(...))` only surfaces in the container log once the stack is up.
+# Only `docker image` / `docker run` are used here (CI's sed rewrites `docker-compose` alone).
+function check_service_images {
+  local svc image
+  for svc in policies things things-search connectivity; do
+    image="${DOCKER_REGISTRY:-docker.io}/${DOCKER_REGISTRY_NAMESPACE}/${DITTO_SERVICE_PREFIX-ditto-}${svc}:${DITTO_VERSION}"
+    if ! docker image inspect "$image" >/dev/null 2>&1; then
+      printf "ERROR: image <%s> not found locally.\n" "$image" >&2
+      printf "Build it with BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh in the ditto worktree (or BUILD_IMAGES=1 here), see README-postgres.md.\n" >&2
+      return 1
+    fi
+    if ! docker run --rm --entrypoint sh "$image" -c 'ls /opt/ditto/extensions/ditto-postgres-client-extension-*.jar >/dev/null 2>&1'; then
+      printf "ERROR: image <%s> has no Postgres extension JARs in /opt/ditto/extensions/ (built without BAKE_POSTGRES_EXTENSIONS=true).\n" "$image" >&2
+      printf "Rebuild it with BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh (or BUILD_IMAGES=1 here), see README-postgres.md.\n" >&2
+      return 1
+    fi
+  done
+}
+
 # shellcheck disable=SC2317  # the trailing `} || {` handler is kept as in upstream start.sh
 {
   (cleanup)
@@ -144,6 +165,11 @@ function wait_for_postgres {
 
   if [ "$DITTO_DB" = "postgres" ] && [ "${BUILD_IMAGES:-0}" = "1" ]; then
     (build_images)
+    assert_success $?
+  fi
+
+  if [ "$DITTO_DB" = "postgres" ]; then
+    (check_service_images)
     assert_success $?
   fi
 

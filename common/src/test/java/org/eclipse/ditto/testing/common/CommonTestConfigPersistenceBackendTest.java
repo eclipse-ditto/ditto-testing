@@ -13,6 +13,7 @@
 package org.eclipse.ditto.testing.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assume.assumeTrue;
 
 import javax.annotation.Nullable;
@@ -21,6 +22,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
 
 /**
@@ -48,8 +50,9 @@ public final class CommonTestConfigPersistenceBackendTest {
      * carried. {@code test.environment} is SET rather than cleared on purpose: surefire's {@code -Dtest=<class>}
      * selector becomes the system property {@code test=<class>}, a scalar that would shadow the whole
      * {@code test.*} object of the conf files; an explicit {@code test.environment} system property makes the
-     * property parser drop that scalar again. The previous values are restored in {@link #tearDown()} because
-     * {@link CommonTestConfig#getInstance()} freezes the properties it sees at class-load time for the whole fork.
+     * property parser drop that scalar again. The previous values are restored in {@link #tearDown()} so that no
+     * other test class in the same fork observes this class's overrides (a later
+     * {@link CommonTestConfig#getInstance()} would freeze whatever it sees at first use for the whole fork).
      */
     @Before
     public void setUp() {
@@ -80,6 +83,7 @@ public final class CommonTestConfigPersistenceBackendTest {
         final CommonTestConfig config = new CommonTestConfig();
 
         assertThat(config.getTestEnvironment()).isEqualTo("local");
+        assertThat(config.isLocalOrDockerTestEnvironment()).isTrue();
         assertThat(config.getPersistenceBackend()).isEqualTo("mongodb");
     }
 
@@ -119,14 +123,19 @@ public final class CommonTestConfigPersistenceBackendTest {
         assertThat(config.getPostgresPassword()).isEqualTo("ditto");
     }
 
+    /**
+     * The suffixed environments {@code docker-compose-postgres} / {@code local-postgres} were removed in favour of
+     * {@code -Dpersistence.backend=postgres}; a stale command line must fail with the missing file's name instead of
+     * silently loading only {@code test-common.conf} (which would skip every environment-gated suite).
+     */
     @Test
-    public void onlyExactLocalAndDockerComposeAreLocalOrDockerEnvironments() {
+    public void removedSuffixedEnvironmentNameFailsFast() {
         System.setProperty(TEST_ENVIRONMENT, "docker-compose-postgres");
         ConfigFactory.invalidateCaches();
 
-        final CommonTestConfig config = new CommonTestConfig();
-
-        assertThat(config.isLocalOrDockerTestEnvironment()).isFalse();
+        assertThatThrownBy(CommonTestConfig::new)
+                .isInstanceOf(ConfigException.IO.class)
+                .hasMessageContaining("test-common-docker-compose-postgres");
     }
 
 }

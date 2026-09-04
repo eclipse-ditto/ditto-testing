@@ -117,7 +117,10 @@ public class CommonTestConfig {
         LOG.info("Running against test environment: {}", testEnvironment);
 
         final String envSpecificBaseTestConfigFile = String.format("test-common-%s.conf", testEnvironment);
-        final Config envSpecificBaseTestConfig = ConfigFactory.parseResourcesAnySyntax(envSpecificBaseTestConfigFile);
+        // required: an unknown environment name (e.g. the removed "docker-compose-postgres") must fail here with the
+        // file name instead of silently loading only test-common.conf — same as config.TestConfig does.
+        final Config envSpecificBaseTestConfig = ConfigFactory.parseResourcesAnySyntax(envSpecificBaseTestConfigFile,
+                ConfigParseOptions.defaults().setAllowMissing(false));
         LOG.debug("Environment specific base config: {}", envSpecificBaseTestConfig);
 
         final Config mergedBaseConfig = envSpecificBaseTestConfig.withFallback(baseConfig);

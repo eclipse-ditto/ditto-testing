@@ -10,7 +10,8 @@
 > the parser's generic duplicate-key rejection like on eclipse master, so the two "two params" REST tests of rev 2
 > were REMOVED and replaced by `createConnectionWithPipelineExpressionInRqlFilterParamFailsPointingToFnFilter`.
 > Updated: `ConnectivityFactory` (all four pipeline connection builders now emit `fn-filter=`), scenario comments
-> in `AbstractConnectivityITestCases`, `RestConnectionsIT` (now 8 pipeline tests). Runtime scenarios A–E2 unchanged
+> in `AbstractConnectivityITestCases`, `RestConnectionsIT` (11 pipeline tests after the 2026-09-14 gap closure; 8
+> at the rev-3 alignment). Runtime scenarios A–E2 unchanged
 > in substance. **Placeholder placement (verified 2026-09-14):** `8d06aa9f89` accepts BOTH documented forms —
 > function-first `fn:filter(header:x,...)` (placeholder as function parameter; the primary docs example) and
 > placeholder-first `header:x|fn:filter(...)` (placeholder feeds the pipeline, consistent with the placeholder
@@ -21,7 +22,7 @@
 > (new category `CONNECTION_WITH_PLACEHOLDER_FIRST_ORIGIN_PIPELINE_FILTER`, connection #20, topic
 > `live/messages?fn-filter=header:ditto-origin|fn:filter('ne','<conn1>')`: HTTP-sent = absent origin → suppressed,
 > via connection1 → suppressed, via connection2 → delivered), a placeholder-first topic in the REST round-trip
-> test, and `createConnectionWithNamelessLeadingPlaceholderInFnFilterFails` (`header:|fn:filter('eq','x')` → 400). **Status: re-verified 2026-09-14 against ditto 8d06aa9f89 — RestConnectionsIT 18/18 (133 s), Amqp10ConnectivityIT 7/7 (117 s).**
+> test, and `createConnectionWithNamelessLeadingPlaceholderInFnFilterFails` (`header:|fn:filter('eq','x')` → 400). **Status: rev-3 alignment gate re-verified 2026-09-14 against ditto 8d06aa9f89 — RestConnectionsIT 18/18 (133 s), Amqp10ConnectivityIT 7/7 (117 s) at commit 4cde8d7; the full post-gap-closure run (5 broker suites 10/10, RestConnectionsIT 21/21 at 449bab4) is in the "Verification evidence (rev 3 + gap closure)" section below.**
 
 ## Verification evidence (rev 3 + gap closure, 2026-09-14)
 
@@ -54,7 +55,7 @@ No flakes: every broker suite and `RestConnectionsIT` passed green on the first 
 > and per-topic-anchored round-trip assertions), stale scenario-B comments. `ConnectivityFactory` unchanged
 > (its RQL+fn: two-param topic is valid under both revisions). Runtime scenarios A–E2 unchanged.
 
-**Date:** 2026-07-17 · **Branch:** `feature/target-topic-pipeline-filter` (ditto-testing) · **Commits:** `d862134..adc961c` — rev-1: `761eed2` + `6c94457` (per-task shas in the table below are historical, pre-squash; the 2026-07-17 "review fixes" are long since committed); rev-2: `7eb7c7a` + evidence `adc961c` · **Status:** rev 3 re-verified 2026-09-14 against ditto `8d06aa9f89` (RestConnectionsIT 18/18, Amqp10ConnectivityIT 7/7), committed as `4cde8d7`, NOT pushed; the rev-2 evidence below (RestConnectionsIT 8/8, Amqp10ConnectivityIT 6/6 against ditto `9ad6669a1c`) is for the superseded syntax.
+**Date:** 2026-07-17 · **Branch:** `feature/target-topic-pipeline-filter` (ditto-testing) · **Commits:** `d862134..adc961c` — rev-1: `761eed2` + `6c94457` (per-task shas in the table below are historical, pre-squash; the 2026-07-17 "review fixes" are long since committed); rev-2: `7eb7c7a` + evidence `adc961c` · **Status:** rev 3 alignment gate re-verified 2026-09-14 against ditto `8d06aa9f89` (RestConnectionsIT 18/18, Amqp10ConnectivityIT 7/7) at commit `4cde8d7`, NOT pushed; the full post-gap-closure run (5 broker suites 10/10, RestConnectionsIT 21/21 at `449bab4`) is in the "Verification evidence (rev 3 + gap closure)" section below; the rev-2 evidence below (RestConnectionsIT 8/8, Amqp10ConnectivityIT 6/6 against ditto `9ad6669a1c`) is for the superseded syntax.
 
 Companion to the feature in the main ditto repo (same-named branch, commits `b369d86bd4..26f68dd19f`, spec `docs/superpowers/specs/2026-07-14-target-topic-pipeline-filter-plan.md` there). Execution plan + full task briefs/reports/review packages: `.superpowers/sdd/` in this worktree (ledger: `progress.md`); the master plan file was `~/.claude/plans/for-the-feature-implementedf-memoized-acorn.md`.
 

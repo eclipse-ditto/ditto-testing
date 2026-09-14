@@ -1,6 +1,29 @@
 # Target Topic Pipeline Filter — System Tests (ditto-testing)
 
-> **SYNTAX CHANGE 2026-07-31 (rev 2, chained-pipeline redesign):** a target topic carries at most TWO
+> **SYNTAX CHANGE 2026-09-14 (rev 3, separate `fn-filter` parameter):** main-repo commit `8d06aa9f89`
+> ("fn-filter and filter as separate connection topic parameters", 2026-07-31, replacing the vanished
+> `9ad6669a1c`) splits the two filter kinds by NAME: `filter` is RQL-only, `fn-filter` holds the (optionally
+> `|`-chained, max 10 stages) placeholder pipeline; both may be present and are ANDed:
+> `?filter=gt(attributes/counter,42)&fn-filter=fn:filter(...)`. An `fn:` expression placed in `filter` → 400
+> `connectivity:connection.configuration.invalid` whose description points to `fn-filter` (raised BEFORE the
+> RQL parser). Repeating ANY query param (`filter`, `fn-filter`, `namespaces`) is no longer a defined 400 — it is
+> the parser's generic duplicate-key rejection like on eclipse master, so the two "two params" REST tests of rev 2
+> were REMOVED and replaced by `createConnectionWithPipelineExpressionInRqlFilterParamFailsPointingToFnFilter`.
+> Updated: `ConnectivityFactory` (all four pipeline connection builders now emit `fn-filter=`), scenario comments
+> in `AbstractConnectivityITestCases`, `RestConnectionsIT` (now 8 pipeline tests). Runtime scenarios A–E2 unchanged
+> in substance. **Placeholder placement (verified 2026-09-14):** `8d06aa9f89` accepts BOTH documented forms —
+> function-first `fn:filter(header:x,...)` (placeholder as function parameter; the primary docs example) and
+> placeholder-first `header:x|fn:filter(...)` (placeholder feeds the pipeline, consistent with the placeholder
+> function docs). They differ only for an ABSENT header: function-first applies the rqlFunction to the missing
+> value (`ne` → published, the "ne trap"), placeholder-first never resolves (always suppressed). The runtime
+> scenarios keep the function-first form (scenario E2 pins the ne trap); NEW coverage for placeholder-first:
+> runtime scenario E3 `suppressLiveMessagesWithAbsentOriginHeaderForPlaceholderFirstNeOriginPipelineFilter`
+> (new category `CONNECTION_WITH_PLACEHOLDER_FIRST_ORIGIN_PIPELINE_FILTER`, connection #20, topic
+> `live/messages?fn-filter=header:ditto-origin|fn:filter('ne','<conn1>')`: HTTP-sent = absent origin → suppressed,
+> via connection1 → suppressed, via connection2 → delivered), a placeholder-first topic in the REST round-trip
+> test, and `createConnectionWithNamelessLeadingPlaceholderInFnFilterFails` (`header:|fn:filter('eq','x')` → 400). **Status: re-verified 2026-09-14 against ditto 8d06aa9f89 — RestConnectionsIT 18/18, Amqp10ConnectivityIT 7/7 (117 s).**
+
+> **SYNTAX CHANGE 2026-07-31 (rev 2, chained-pipeline redesign — SUPERSEDED by rev 3 above):** a target topic carries at most TWO
 > `filter` query params — at most one RQL expression and at most one `fn:` pipeline expression, ANDed:
 > `?filter=gt(attributes/counter,42)&filter=fn:filter(...)`. Several pipeline conditions are chained with
 > `|` INSIDE the single `fn:` param (AND, max 10 stages): `?filter=fn:filter(...)|fn:filter(...)`. A second
@@ -12,7 +35,7 @@
 > and per-topic-anchored round-trip assertions), stale scenario-B comments. `ConnectivityFactory` unchanged
 > (its RQL+fn: two-param topic is valid under both revisions). Runtime scenarios A–E2 unchanged.
 
-**Date:** 2026-07-17 · **Branch:** `feature/target-topic-pipeline-filter` (ditto-testing) · **Commits:** `d862134..adc961c` — rev-1: `761eed2` + `6c94457` (per-task shas in the table below are historical, pre-squash; the 2026-07-17 "review fixes" are long since committed); rev-2: `7eb7c7a` + evidence `adc961c` · **Status:** REDESIGNED 2026-07-31, re-verified same day: RestConnectionsIT 8/8, Amqp10ConnectivityIT 6/6 against ditto `9ad6669a1c` (see evidence section below). NOT pushed.
+**Date:** 2026-07-17 · **Branch:** `feature/target-topic-pipeline-filter` (ditto-testing) · **Commits:** `d862134..adc961c` — rev-1: `761eed2` + `6c94457` (per-task shas in the table below are historical, pre-squash; the 2026-07-17 "review fixes" are long since committed); rev-2: `7eb7c7a` + evidence `adc961c` · **Status:** rev 3 (2026-09-14, `fn-filter` param) compiled, re-run PENDING against ditto `8d06aa9f89`; the rev-2 evidence below (RestConnectionsIT 8/8, Amqp10ConnectivityIT 6/6 against ditto `9ad6669a1c`) is for the superseded syntax. Testing branch pushed up to `f617e71`; rev-3 edits uncommitted.
 
 Companion to the feature in the main ditto repo (same-named branch, commits `b369d86bd4..26f68dd19f`, spec `docs/superpowers/specs/2026-07-14-target-topic-pipeline-filter-plan.md` there). Execution plan + full task briefs/reports/review packages: `.superpowers/sdd/` in this worktree (ledger: `progress.md`); the master plan file was `~/.claude/plans/for-the-feature-implementedf-memoized-acorn.md`.
 

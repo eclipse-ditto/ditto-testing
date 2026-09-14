@@ -23,6 +23,25 @@
 > via connection1 → suppressed, via connection2 → delivered), a placeholder-first topic in the REST round-trip
 > test, and `createConnectionWithNamelessLeadingPlaceholderInFnFilterFails` (`header:|fn:filter('eq','x')` → 400). **Status: re-verified 2026-09-14 against ditto 8d06aa9f89 — RestConnectionsIT 18/18 (133 s), Amqp10ConnectivityIT 7/7 (117 s).**
 
+## Verification evidence (rev 3 + gap closure, 2026-09-14)
+
+Full-suite proof of all 10 `PIPE` runtime scenario methods (Tasks 0–5, including the three new Task 5 scenarios and the Task 4 REST additions) on every broker suite, plus the whole `RestConnectionsIT` class. Ditto commit under test: `8d06aa9f89`. Testing commit under test: `449bab4`. Stack: host-run IntelliJ Ditto (gateway `localhost:8080`, devops `devops:foobar`), dockerized artemis/rabbitmq/mqtt/kafka/oauth/ssh, local mongod.
+
+`PIPE` = `sendCommandsConsumeEventsFilteredByPipelineOriginatorFilter+sendCommandsConsumeEventsFilteredByCombinedRqlAndPipelineFilter+publishEnrichedSignalsFilteredByPipelineOriginatorFilter+filterLiveMessagesByPipelineOriginatorFilter+consumeEventsFilteredByOriginPipelineFilter+deliverLiveMessagesWithAbsentOriginHeaderForNeOriginPipelineFilter+suppressLiveMessagesWithAbsentOriginHeaderForPlaceholderFirstNeOriginPipelineFilter+publishLiveCommandsFilteredByChainedLikeAndOriginPipelineFilter+consumeOnlyModifiedTwinEventsForTopicActionPipelineFilter+suppressLiveMessagesWithAbsentOriginHeaderForTwoParamExistsPipelineFilter`
+
+| Suite | Result |
+|---|---|
+| `Amqp10ConnectivityIT` | 10/10 (165.1 s) |
+| `RabbitMqConnectivityIT` | 10/10 (166.1 s) |
+| `Mqtt3ConnectivitySuite` | 10/10 (216.9 s) |
+| `Mqtt5ConnectivitySuite` | 10/10 (217.8 s) |
+| `KafkaConnectivitySuite` | 10/10 (195.0 s) |
+| `RestConnectionsIT` | 21/21 (147.8 s) |
+
+Unit run: `TargetTopicFilterTest` 46/46, `ImmutableFilteredTopicTest` 34/34 (Task 1 run, main repo commit `b0fc40543f`); full 4-class re-run owed once the IntelliJ stack is stopped (Ruling 9).
+
+No flakes: every broker suite and `RestConnectionsIT` passed green on the first attempt, sequential one-Maven-invocation-per-class, run 2026-09-14.
+
 > **SYNTAX CHANGE 2026-07-31 (rev 2, chained-pipeline redesign — SUPERSEDED by rev 3 above):** a target topic carries at most TWO
 > `filter` query params — at most one RQL expression and at most one `fn:` pipeline expression, ANDed:
 > `?filter=gt(attributes/counter,42)&filter=fn:filter(...)`. Several pipeline conditions are chained with
@@ -117,8 +136,11 @@ The main repo added (same day) a user-visible connection-log FAILURE entry whene
 1. ~~Comment in scenario C "AttributeModified"~~ — fixed in `7e7682e`.
 2. Style: `setupSingleConnectionWithPipelineFilter` hoists the filter string; the origin variant inlines its two (eq/ne) strings.
 3. Excluded-subject literal `"integration:" + username + ":" + connectionName1` in the supplier map re-derives what `connectionAuthIdentifier` encodes (mirrors existing CONNECTION1 entry style).
-4. Review M-2: the `like`/2-param-`exists` absent-header rows of the docs matrix have no system test (`eq`/`ne` are covered; the matrix is unit-tested in the main repo). Bolting extra topics onto the existing origin-filter connection is unsafe — topics OR across a target, so an added always-matching topic would un-suppress the existing assertions; a proper fix needs its own topic/target and test.
+4. ~~Review M-2: the `like`/2-param-`exists` absent-header rows of the docs matrix have no system test (`eq`/`ne` are covered; the matrix is unit-tested in the main repo). Bolting extra topics onto the existing origin-filter connection is unsafe — topics OR across a target, so an added always-matching topic would un-suppress the existing assertions; a proper fix needs its own topic/target and test.~~ — closed by suppressLiveMessagesWithAbsentOriginHeaderForTwoParamExistsPipelineFilter (2026-09-14)
 5. Review M-6: the six near-identical 20-line DEFAULT/RESTRICTED policy blocks in `AbstractConnectivityITestCases` could share a small `policyWithRestrictedReader(reader, writers...)` helper (~100 lines; `putPolicyForThing` cannot be reused — it grants WRITE to all subjects, the tests deliberately keep the observing target read-only).
+6. `like` on an ABSENT header (docs: dropped unless pattern matches `''`) is unit-only (`matchesFnFilterAbsentHeaderLikeDrops` / `…MatchAllPatternPublishes`) — no system path produces an authenticated signal without `ditto-originator`.
+7. Pre-existing `FilteredTopic` behavior (eclipse master, not this feature): topic query values are URL-decoded on every parse and never re-encoded on serialization, so an encoded `+` (`%2B`) in a `filter`/`fn-filter` compared value becomes a space after the first persistence cycle; `%7C` round-trips. The docs sentence "a literal + ... must itself be URL-encoded" holds only for the first parse. Round-trip test uses `%7C` only (see `createConnectionWithValidPipelineTargetTopicFilters`). Candidate upstream fix: re-encode in `ImmutableFilteredTopic.toString()`.
+8. `setupSingleConnectionWithPipelineFilterMatrix` declares an unused `excludedOriginatorSubject` parameter (plan-mandated; remove in a cleanup).
 
 Final whole-branch review verdict: **Ready** (0 Critical / 0 Important). Every filter string, suppress/deliver outcome, and error code was cross-verified against `TargetTopicFilter`, `SignalFilter`, `OutboundMappingProcessorActor`, `ConnectionValidator`, `PipelineFunctionFilter`, `ImmutableFilteredTopic` in the main repo.
 2. (2026-07-31 final review, optional) Main-repo `TargetTopicFilterTest`: add a rejection test for a bare placeholder mid-pipeline (`fn:filter(header:a,'exists')|header:foo`) to pin the docs' restrictions bullet to code, and optionally one for an empty middle stage (`fn:a||fn:b`). Enforcement lives in the untouched placeholders module; behavior verified correct in review.

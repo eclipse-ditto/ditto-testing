@@ -28,6 +28,7 @@ import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.C
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_NAMESPACE_AND_RQL_FILTER;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_ORIGIN_PIPELINE_FILTER;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_PLACEHOLDER_FIRST_ORIGIN_PIPELINE_FILTER;
+import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_PIPELINE_FILTER_MATRIX;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_PIPELINE_FILTER;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.NONE;
 import static org.hamcrest.CoreMatchers.anyOf;
@@ -1532,6 +1533,85 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .correlationId(message.getHeaders().getCorrelationId().orElseThrow())
                 .responseRequired(false)
                 .build());
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION2, CONNECTION_WITH_PIPELINE_FILTER_MATRIX})
+    public void publishLiveCommandsFilteredByChainedLikeAndOriginPipelineFilter() {
+
+        // Given
+        // the live-commands topic of connectionNameWithPipelineFilterMatrix is:
+        //   ?fn-filter=fn:filter(header:ditto-originator,'like','integration:*')
+        //             |fn:filter(header:ditto-origin,'ne','<connection-id-of-connection1>')
+        // chained stages are ANDed: the 'like' stage requires a connection originator, the 'ne' stage
+        // excludes connection1 -> only live commands caused via connection2 pass both stages.
+        // (live/commands is the topic where an RQL 'filter' is not supported at all)
+        final ThingId thingId = generateThingId();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setSubject(connectionSubject(cf.connectionName2))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithPipelineFilterMatrix))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final C consumer = initTargetsConsumer(cf.connectionNameWithPipelineFilterMatrix);
+
+        // the HTTP-created thing yields a ThingCreated (topic action 'created') on twin/events -> suppressed
+        // there by the twin-events topic's own filter ('modified'), so nothing leaks into this scenario
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // When: live command via HTTP -> originator is the OAuth subject: 'like integration:*' fails -> suppressed
+        putAttribute(2, thingId, "viaHttp", "1")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .withParam("channel", "live")
+                .withParam("timeout", "0")
+                .withCorrelationId(correlationId + "-live-http")
+                .expectingHttpStatus(HttpStatus.ACCEPTED)
+                .fire();
+
+        // live command via connection1 -> 'like' passes, origin == connection1 -> 'ne' fails -> suppressed
+        sendSignal(cf.connectionName1, ModifyAttribute.of(thingId, JsonPointer.of("viaConnection1"),
+                JsonValue.of(1), liveHeaders(correlationId + "-live-conn1")));
+        waitMillis(500);
+
+        // live command via connection2 -> both stages pass -> PUBLISHED
+        sendSignal(cf.connectionName2, ModifyAttribute.of(thingId, JsonPointer.of("viaConnection2"),
+                JsonValue.of(2), liveHeaders(correlationId + "-live-conn2")));
+
+        // Then
+        final M received = consumeFromTarget(cf.connectionNameWithPipelineFilterMatrix, consumer);
+        assertThat(received).describedAs("live command caused via connection2").isNotNull();
+        final Adaptable adaptable = jsonifiableAdaptableFrom(received);
+        assertThat(adaptable.getTopicPath().getChannel()).isEqualTo(TopicPath.Channel.LIVE);
+        assertThat(adaptable.getTopicPath().getAction()).contains(TopicPath.Action.MODIFY);
+        assertThat(adaptable.getPayload().getPath().toString()).isEqualTo("/attributes/viaConnection2");
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithPipelineFilterMatrix, consumer);
+        assertThat(unexpected)
+                .describedAs("live commands via HTTP (like fails) and via connection1 (ne fails) must be suppressed")
+                .isNull();
+    }
+
+    private static DittoHeaders liveHeaders(final String correlationId) {
+        return createDittoHeaders(correlationId).toBuilder()
+                .responseRequired(false)
+                .channel(TopicPath.Channel.LIVE.getName())
+                .build();
     }
 
     @Test

@@ -27,6 +27,7 @@ import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.C
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_EXTRA_FIELDS_AND_PIPELINE_FILTER;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_NAMESPACE_AND_RQL_FILTER;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_ORIGIN_PIPELINE_FILTER;
+import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_PLACEHOLDER_FIRST_ORIGIN_PIPELINE_FILTER;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_PIPELINE_FILTER;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.NONE;
 import static org.hamcrest.CoreMatchers.anyOf;
@@ -1006,7 +1007,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Given
         // the twin-events topic filter of connectionNameWithPipelineFilter is:
-        //   ?filter=fn:filter(header:ditto-originator,'ne','integration:<username>:<connectionName1>')
+        //   ?fn-filter=fn:filter(header:ditto-originator,'ne','integration:<username>:<connectionName1>')
         // i.e. events caused by connection1's authorization subject are suppressed for THIS target,
         // events of any other originator are published.
         // (Ditto's built-in "Was sent by myself" drop in OutboundDispatchingActor only prevents
@@ -1079,7 +1080,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Given
         // the twin-events topic filters of connectionNameWithCombinedRqlAndPipelineFilter are:
-        //   ?filter=gt(attributes/counter,42)&filter=fn:filter(header:ditto-originator,'ne','<subject-of-connection1>')
+        //   ?filter=gt(attributes/counter,42)&fn-filter=fn:filter(header:ditto-originator,'ne','<subject-of-connection1>')
         // combined with AND semantics: counter > 42 AND not caused via connection1
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
@@ -1154,7 +1155,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         // Given
         // the twin-events topic of connectionNameWithExtraFieldsAndPipelineFilter is:
         //   _/_/things/twin/events?extraFields=attributes/counter
-        //       &filter=fn:filter(header:ditto-originator,'ne','<subject-of-connection1>')
+        //       &fn-filter=fn:filter(header:ditto-originator,'ne','<subject-of-connection1>')
         // extraFields force the post-enrichment re-evaluation in OutboundMappingProcessorActor -
         // the pipeline outcome must be identical to the pre-enrichment gate
         final Policy policy = Policy.newBuilder()
@@ -1241,7 +1242,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Given
         // the live-messages topic of connectionNameWithPipelineFilter is:
-        //   _/_/things/live/messages?filter=fn:filter(header:ditto-originator,'ne','<subject-of-connection1>')
+        //   _/_/things/live/messages?fn-filter=fn:filter(header:ditto-originator,'ne','<subject-of-connection1>')
         // a thing-state RQL filter can never distinguish message originators - the pipeline filter can
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
@@ -1316,7 +1317,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Given
         // the twin-events topic of connectionNameWithOriginPipelineFilter is:
-        //   _/_/things/twin/events?filter=fn:filter(header:ditto-origin,'eq','<connection-id-of-connection1>')
+        //   _/_/things/twin/events?fn-filter=fn:filter(header:ditto-origin,'eq','<connection-id-of-connection1>')
         // ditto-origin is ONLY set for signals caused via a connection; it is ABSENT for HTTP-triggered
         // changes - an absent header with 'eq' does not resolve -> suppressed
         final ThingId thingId = generateThingId();
@@ -1381,7 +1382,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Given
         // the live-messages topic of connectionNameWithOriginPipelineFilter is:
-        //   _/_/things/live/messages?filter=fn:filter(header:ditto-origin,'ne','<connection-id-of-connection1>')
+        //   _/_/things/live/messages?fn-filter=fn:filter(header:ditto-origin,'ne','<connection-id-of-connection1>')
         // the "ne trap": for HTTP-sent messages ditto-origin is ABSENT and an absent header with 'ne'
         // RESOLVES -> the message is published
         final ThingId thingId = generateThingId();
@@ -1445,6 +1446,92 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         assertThat(unexpected)
                 .describedAs("live message caused via connection1 must be suppressed by the 'ne' filter")
                 .isNull();
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION2, CONNECTION_WITH_PLACEHOLDER_FIRST_ORIGIN_PIPELINE_FILTER})
+    public void suppressLiveMessagesWithAbsentOriginHeaderForPlaceholderFirstNeOriginPipelineFilter() {
+
+        // Given
+        // the live-messages topic of connectionNameWithPlaceholderFirstOriginPipelineFilter is:
+        //   _/_/things/live/messages?fn-filter=header:ditto-origin|fn:filter('ne','<connection-id-of-connection1>')
+        // placeholder-first form: the leading placeholder must RESOLVE before fn:filter runs, so an ABSENT
+        // ditto-origin (HTTP-sent message) is SUPPRESSED - the documented difference to the function-first
+        // "ne trap" proven in deliverLiveMessagesWithAbsentOriginHeaderForNeOriginPipelineFilter
+        final ThingId thingId = generateThingId();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setSubject(connectionSubject(cf.connectionName2))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithPlaceholderFirstOriginPipelineFilter))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final C messagesConsumer = initTargetsConsumer(cf.connectionNameWithPlaceholderFirstOriginPipelineFilter);
+
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // When: live message via HTTP -> ditto-origin ABSENT -> leading placeholder unresolved -> SUPPRESSED
+        final String suppressedHttpSubject = "subject-via-http-without-origin";
+        postMessage(2, thingId, MessageDirection.TO, suppressedHttpSubject, ContentType.JSON,
+                "\"message via HTTP\"", "0")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken(), true)
+                .expectingHttpStatus(HttpStatus.ACCEPTED)
+                .fire();
+
+        // live message via connection1 -> ditto-origin == connection1's id -> 'ne' does not match -> suppressed
+        final String suppressedOriginSubject = "subject-via-excluded-origin-connection";
+        sendSignal(cf.connectionName1, liveMessageTo(thingId, suppressedOriginSubject, "message via connection1"));
+        waitMillis(500);
+
+        // live message via connection2 -> ditto-origin == connection2's id -> resolves, 'ne' matches -> PUBLISHED
+        final String deliveredSubject = "subject-via-other-origin-connection";
+        sendSignal(cf.connectionName2, liveMessageTo(thingId, deliveredSubject, "message via connection2"));
+
+        // Then
+        final M received = consumeFromTarget(cf.connectionNameWithPlaceholderFirstOriginPipelineFilter,
+                messagesConsumer);
+        assertThat(received).describedAs("live message caused via connection2 (ditto-origin present, ne matches)")
+                .isNotNull();
+        assertThat(textFrom(received)).contains(deliveredSubject);
+        assertThat(textFrom(received)).doesNotContain(suppressedHttpSubject);
+        assertThat(textFrom(received)).doesNotContain(suppressedOriginSubject);
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithPlaceholderFirstOriginPipelineFilter,
+                messagesConsumer);
+        assertThat(unexpected)
+                .describedAs("live messages without ditto-origin (HTTP) and via connection1 must both be " +
+                        "suppressed by the placeholder-first 'ne' filter")
+                .isNull();
+    }
+
+    private static SendThingMessage<?> liveMessageTo(final ThingId thingId, final String subject,
+            final String payload) {
+        final Message<?> message = Message.newBuilder(
+                        MessageBuilder.newHeadersBuilder(MessageDirection.TO, thingId, subject)
+                                .contentType("text/plain")
+                                .correlationId(createNewCorrelationId())
+                                .build())
+                .payload(payload)
+                .build();
+        return SendThingMessage.of(thingId, message, DittoHeaders.newBuilder()
+                .correlationId(message.getHeaders().getCorrelationId().orElseThrow())
+                .responseRequired(false)
+                .build());
     }
 
     @Test

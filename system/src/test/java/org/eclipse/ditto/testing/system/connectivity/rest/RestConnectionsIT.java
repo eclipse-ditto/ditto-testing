@@ -369,9 +369,9 @@ public final class RestConnectionsIT extends IntegrationTest {
 
     @Test
     public void createConnectionWithUnknownPipelineFunctionInTargetTopicFilterFails() {
-        // WHEN the target topic filter references an unknown pipeline function
+        // WHEN the target topic 'fn-filter' references an unknown pipeline function
         final JsonObject connection = connectionWithTargetTopics(
-                "_/_/things/twin/events?filter=fn:unknownfn('x')");
+                "_/_/things/twin/events?fn-filter=fn:unknownfn('x')");
 
         // THEN connection creation is rejected as invalid connection configuration
         connectionsClient()
@@ -384,11 +384,10 @@ public final class RestConnectionsIT extends IntegrationTest {
 
     @Test
     public void createConnectionWithMalformedRqlFilterParamAlongsidePipelineFilterParamFails() {
-        // WHEN the RQL filter param of a topic is malformed
-        // (the pipeline filter param alongside it is valid and is validated first - the RQL param must still
-        // be rejected)
+        // WHEN the RQL 'filter' param of a topic is malformed
+        // (the 'fn-filter' param alongside it is valid - the RQL param must still be rejected)
         final JsonObject connection = connectionWithTargetTopics(
-                "_/_/things/twin/events?filter=gt(attributes/x,)&filter=fn:filter(header:x,'exists')");
+                "_/_/things/twin/events?filter=gt(attributes/x,)&fn-filter=fn:filter(header:x,'exists')");
 
         connectionsClient()
                 .postConnection(connection)
@@ -399,26 +398,30 @@ public final class RestConnectionsIT extends IntegrationTest {
     }
 
     @Test
-    public void createConnectionWithTwoRqlTargetTopicFilterParamsFails() {
-        // WHEN a topic declares two RQL filter params (at most one is allowed - RQL conditions must be
-        // combined with and(...) inside a single param instead)
+    public void createConnectionWithPipelineExpressionInRqlFilterParamFailsPointingToFnFilter() {
+        // WHEN a placeholder pipeline expression is put into the RQL-only 'filter' param instead of 'fn-filter'
+        // THEN it is rejected as invalid connection configuration BEFORE reaching the RQL parser, and the error
+        // description tells the user to move it into 'fn-filter'
         final JsonObject connection = connectionWithTargetTopics(
-                "_/_/things/twin/events?filter=gt(attributes/a,1)&filter=lt(attributes/b,2)");
+                "_/_/things/twin/events?filter=fn:filter(header:ditto-originator,'ne','integration:some:excluded')");
 
         connectionsClient()
                 .postConnection(connection)
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .expectingErrorCode("connectivity:connection.configuration.invalid")
+                .expectingBody(satisfies(jsonString -> assertThat(String.valueOf(jsonString))
+                        .contains("'filter' only accepts an RQL expression")
+                        .contains("fn-filter")))
                 .fire();
     }
 
     @Test
-    public void createConnectionWithTwoPipelineTargetTopicFilterParamsFails() {
-        // WHEN a topic declares two fn: filter params (at most one is allowed - several pipeline conditions
-        // must be chained with '|' inside the single fn: param instead)
+    public void createConnectionWithNamelessLeadingPlaceholderInFnFilterFails() {
+        // WHEN a placeholder-first 'fn-filter' starts with a placeholder prefix without a name
+        // (passes the pipeline grammar but could never be evaluated at runtime)
         final JsonObject connection = connectionWithTargetTopics(
-                "_/_/things/twin/events?filter=fn:filter(header:x,'exists')&filter=fn:filter(header:y,'exists')");
+                "_/_/things/twin/events?fn-filter=header:|fn:filter('eq','x')");
 
         connectionsClient()
                 .postConnection(connection)
@@ -462,16 +465,18 @@ public final class RestConnectionsIT extends IntegrationTest {
 
     @Test
     public void createConnectionWithValidPipelineTargetTopicFilters() {
-        // WHEN a connection defines pure-pipeline, chained-pipeline and RQL-plus-pipeline target topic filter
-        // params - including an unknown rqlFunction NAME ('nope'), which is accepted at creation time
-        // (documented behavior; it simply never matches at runtime)
+        // WHEN a connection defines pure-pipeline, placeholder-first, chained-pipeline and RQL-plus-pipeline
+        // target topic filters ('fn-filter' alone in both documented forms, a chained 'fn-filter', and
+        // 'filter' + 'fn-filter' ANDed) - including an unknown rqlFunction NAME ('nope'), which is accepted at
+        // creation time (documented behavior; it simply never matches at runtime)
         final JsonObject connection = connectionWithTargetTopics(
-                "_/_/things/twin/events?filter=fn:filter(header:ditto-originator,'ne','integration:some:excluded')",
-                "_/_/things/twin/events?filter=fn:filter(header:ditto-origin,'ne','chained-excluded-connection')" +
+                "_/_/things/twin/events?fn-filter=fn:filter(header:ditto-originator,'ne','integration:some:excluded')",
+                "_/_/things/twin/events?fn-filter=header:ditto-originator|fn:filter('ne','integration:some:excluded')",
+                "_/_/things/twin/events?fn-filter=fn:filter(header:ditto-origin,'ne','chained-excluded-connection')" +
                         "|fn:filter(header:ditto-originator,'exists')",
                 "_/_/things/live/messages?filter=gt(attributes/counter,42)" +
-                        "&filter=fn:filter(header:ditto-originator,'ne','integration:some:excluded')",
-                "_/_/things/live/events?filter=fn:filter(header:ditto-originator,'nope','integration:some:excluded')");
+                        "&fn-filter=fn:filter(header:ditto-originator,'ne','integration:some:excluded')",
+                "_/_/things/live/events?fn-filter=fn:filter(header:ditto-originator,'nope','integration:some:excluded')");
 
         // THEN the connection is created
         final String connectionId = parseIdFromResponse(connectionsClient()
@@ -487,13 +492,16 @@ public final class RestConnectionsIT extends IntegrationTest {
                     .expectingHttpStatus(HttpStatus.OK)
                     .expectingBody(satisfies(jsonString -> {
                         assertThat(String.valueOf(jsonString))
-                                .contains("twin/events?filter=fn:filter(header:ditto-originator,'ne'," +
+                                .contains("twin/events?fn-filter=fn:filter(header:ditto-originator,'ne'," +
+                                        "'integration:some:excluded')");
+                        assertThat(String.valueOf(jsonString))
+                                .contains("twin/events?fn-filter=header:ditto-originator|fn:filter('ne'," +
                                         "'integration:some:excluded')");
                         assertThat(String.valueOf(jsonString))
                                 .contains("fn:filter(header:ditto-origin,'ne','chained-excluded-connection')" +
                                         "|fn:filter(header:ditto-originator,'exists')");
                         assertThat(String.valueOf(jsonString))
-                                .contains("gt(attributes/counter,42)&filter=fn:filter(header:ditto-originator,'ne'");
+                                .contains("gt(attributes/counter,42)&fn-filter=fn:filter(header:ditto-originator,'ne'");
                         assertThat(String.valueOf(jsonString))
                                 .contains("fn:filter(header:ditto-originator,'nope'");
                     }))
@@ -518,11 +526,11 @@ public final class RestConnectionsIT extends IntegrationTest {
                 .getBody()
                 .asString());
 
-        // WHEN it is modified with a target topic filter referencing an unknown pipeline function
+        // WHEN it is modified with a target topic 'fn-filter' referencing an unknown pipeline function
         // THEN the modification is rejected exactly like creation (modify runs the same ConnectionValidator)
         connectionsClient()
                 .putConnection(defaultConnectionId.toString(), withTargetTopics(existingConnection,
-                        "_/_/things/twin/events?filter=fn:unknownfn('x')"))
+                        "_/_/things/twin/events?fn-filter=fn:unknownfn('x')"))
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.BAD_REQUEST)
                 .expectingErrorCode("connectivity:connection.configuration.invalid")
@@ -533,7 +541,7 @@ public final class RestConnectionsIT extends IntegrationTest {
         connectionsClient()
                 .putConnection(defaultConnectionId.toString(), withTargetTopics(existingConnection,
                         "_/_/things/twin/events" +
-                                "?filter=fn:filter(header:ditto-originator,'ne','integration:some:excluded')"))
+                                "?fn-filter=fn:filter(header:ditto-originator,'ne','integration:some:excluded')"))
                 .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();

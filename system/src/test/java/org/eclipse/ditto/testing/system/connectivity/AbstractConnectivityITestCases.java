@@ -1674,6 +1674,66 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
     @Test
     @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION_WITH_PIPELINE_FILTER_MATRIX})
+    public void suppressLiveMessagesWithAbsentOriginHeaderForTwoParamExistsPipelineFilter() {
+
+        // Given
+        // the live-messages topic of connectionNameWithPipelineFilterMatrix is:
+        //   ?fn-filter=fn:filter(header:ditto-origin,'exists')
+        // docs absent-header table: the 2-param 'exists' form DROPS a signal whose header is absent
+        // (HTTP-sent messages carry no ditto-origin) and publishes one that carries it (sent via a connection)
+        final ThingId thingId = generateThingId();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithPipelineFilterMatrix))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final C messagesConsumer = initTargetsConsumer(cf.connectionNameWithPipelineFilterMatrix);
+
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // When: live message via HTTP -> ditto-origin ABSENT -> 'exists' drops -> suppressed
+        final String suppressedSubject = "subject-via-http-without-origin";
+        postMessage(2, thingId, MessageDirection.TO, suppressedSubject, ContentType.JSON,
+                "\"message via HTTP\"", "0")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken(), true)
+                .expectingHttpStatus(HttpStatus.ACCEPTED)
+                .fire();
+        waitMillis(500);
+
+        // live message via connection1 -> ditto-origin present -> 'exists' matches -> PUBLISHED
+        final String deliveredSubject = "subject-via-connection-with-origin";
+        sendSignal(cf.connectionName1, liveMessageTo(thingId, deliveredSubject, "message via connection1"));
+
+        // Then
+        final M received = consumeFromTarget(cf.connectionNameWithPipelineFilterMatrix, messagesConsumer);
+        assertThat(received).describedAs("live message with ditto-origin header").isNotNull();
+        assertThat(textFrom(received)).contains(deliveredSubject);
+        assertThat(textFrom(received)).doesNotContain(suppressedSubject);
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithPipelineFilterMatrix, messagesConsumer);
+        assertThat(unexpected)
+                .describedAs("live message without ditto-origin must be dropped by the 2-param 'exists' filter")
+                .isNull();
+    }
+
+    @Test
+    @Category(RequireSource.class)
     @Connections({CONNECTION_WITH_ENFORCEMENT_ENABLED})
     public void sendMessageAndExpectRejectedBecauseEnforcementFailed() {
         final ThingId thingId = generateThingId();

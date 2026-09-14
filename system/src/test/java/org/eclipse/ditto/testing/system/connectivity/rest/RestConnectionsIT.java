@@ -432,6 +432,55 @@ public final class RestConnectionsIT extends IntegrationTest {
     }
 
     @Test
+    public void createConnectionWithElevenPipelineStagesInFnFilterFails() {
+        // WHEN an fn-filter chains more than the maximum of 10 fn: stages
+        final String elevenStages = String.join("|", Collections.nCopies(11,
+                "fn:filter(header:x,'exists')"));
+        final JsonObject connection = connectionWithTargetTopics(
+                "_/_/things/twin/events?fn-filter=" + elevenStages);
+
+        connectionsClient()
+                .postConnection(connection)
+                .withDevopsAuth()
+                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
+                .expectingErrorCode("connectivity:connection.configuration.invalid")
+                .fire();
+    }
+
+    @Test
+    public void createConnectionWithTenPipelineStagesInFnFilterSucceeds() {
+        // the documented maximum is accepted
+        final String tenStages = String.join("|", Collections.nCopies(10,
+                "fn:filter(header:x,'exists')"));
+        final JsonObject connection = connectionWithTargetTopics(
+                "_/_/things/twin/events?fn-filter=" + tenStages);
+
+        final String connectionId = parseIdFromResponse(connectionsClient()
+                .postConnection(connection)
+                .withDevopsAuth()
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire());
+        connectionsClient().deleteConnection(connectionId)
+                .withDevopsAuth()
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+    }
+
+    @Test
+    public void createConnectionWithRqlExpressionInFnFilterFails() {
+        // WHEN an RQL expression is placed into 'fn-filter' (which only accepts a placeholder pipeline)
+        final JsonObject connection = connectionWithTargetTopics(
+                "_/_/things/twin/events?fn-filter=gt(attributes/counter,42)");
+
+        connectionsClient()
+                .postConnection(connection)
+                .withDevopsAuth()
+                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
+                .expectingErrorCode("connectivity:connection.configuration.invalid")
+                .fire();
+    }
+
+    @Test
     public void createConnectionWithLegacyCombinedFilterSyntaxFails() {
         // WHEN a single filter param uses the retired combined "<rql>|fn:..." syntax
         // THEN it is routed whole into the RQL parser (it does not start with "fn:") and fails loudly -
@@ -476,7 +525,11 @@ public final class RestConnectionsIT extends IntegrationTest {
                         "|fn:filter(header:ditto-originator,'exists')",
                 "_/_/things/live/messages?filter=gt(attributes/counter,42)" +
                         "&fn-filter=fn:filter(header:ditto-originator,'ne','integration:some:excluded')",
-                "_/_/things/live/events?fn-filter=fn:filter(header:ditto-originator,'nope','integration:some:excluded')");
+                "_/_/things/live/events?fn-filter=fn:filter(header:ditto-originator,'nope','integration:some:excluded')",
+                "_/_/things/live/commands?fn-filter=fn:filter(header:ditto-originator,'ne','integration:some:excluded')",
+                "_/_/things/live/events?namespaces=org.eclipse.ditto&fn-filter=fn:filter(header:ditto-origin,'exists')",
+                "_/_/things/twin/events?fn-filter=fn:filter(header:ditto-originator,'eq','a%7Cb')",
+                "_/_/policies/announcements?fn-filter=fn:filter(header:ditto-originator,'exists')");
 
         // THEN the connection is created
         final String connectionId = parseIdFromResponse(connectionsClient()
@@ -504,6 +557,23 @@ public final class RestConnectionsIT extends IntegrationTest {
                                 .contains("gt(attributes/counter,42)&fn-filter=fn:filter(header:ditto-originator,'ne'");
                         assertThat(String.valueOf(jsonString))
                                 .contains("fn:filter(header:ditto-originator,'nope'");
+                        // fn-filter works on live/commands, where an RQL filter is not supported
+                        assertThat(String.valueOf(jsonString))
+                                .contains("live/commands?fn-filter=fn:filter(header:ditto-originator,'ne'");
+                        // namespaces and fn-filter combine on one topic (serialized namespaces-first)
+                        assertThat(String.valueOf(jsonString))
+                                .contains("live/events?namespaces=org.eclipse.ditto&fn-filter=fn:filter(header:ditto-origin,'exists')");
+                        // %-encoded compared value is stored decoded ('|' literal inside the quoted constant
+                        // survives the quote-aware stage split). A '+' cannot be round-tripped this way: topic
+                        // strings are URL-decoded on every parse and never re-encoded on serialization
+                        // (pre-existing behavior of FilteredTopic parsing), so an encoded '+' degrades to a
+                        // space after the first persistence cycle.
+                        assertThat(String.valueOf(jsonString))
+                                .contains("fn:filter(header:ditto-originator,'eq','a|b')");
+                        // fn-filter on an announcements topic is silently dropped
+                        assertThat(String.valueOf(jsonString))
+                                .contains("\"_/_/policies/announcements\"")
+                                .doesNotContain("policies/announcements?");
                     }))
                     .fire();
         } finally {

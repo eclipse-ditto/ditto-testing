@@ -1616,6 +1616,64 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
     @Test
     @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION_WITH_PIPELINE_FILTER_MATRIX})
+    public void consumeOnlyModifiedTwinEventsForTopicActionPipelineFilter() {
+
+        // Given
+        // the twin-events topic of connectionNameWithPipelineFilterMatrix is:
+        //   ?fn-filter=topic:action|fn:filter('eq','modified')
+        // a placeholder-first pipeline on a NON-header placeholder: the topic placeholder resolves against the
+        // signal's Ditto Protocol topic path, so only events whose action is 'modified' are published
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithPipelineFilterMatrix))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final ThingId thingId = generateThingId();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+        final C eventConsumer = initTargetsConsumer(cf.connectionNameWithPipelineFilterMatrix);
+
+        // When: ThingCreated (action 'created') -> suppressed
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // first write of the attribute -> AttributeCreated (action 'created') -> suppressed
+        sendSignal(cf.connectionName1, ModifyAttribute.of(thingId, JsonPointer.of("counter"), JsonValue.of(1),
+                createDittoHeaders(correlationId)));
+        waitMillis(500);
+
+        // second write -> AttributeModified (action 'modified') -> PUBLISHED
+        sendSignal(cf.connectionName1, ModifyAttribute.of(thingId, JsonPointer.of("counter"), JsonValue.of(2),
+                createDittoHeaders(correlationId)));
+
+        // Then
+        consumeAndAssertEvents(cf.connectionNameWithPipelineFilterMatrix, eventConsumer, Collections.singletonList(
+                e -> {
+                    final AttributeModified am =
+                            thingEventForJson(e, AttributeModified.class, correlationId, thingId);
+                    assertThat(am.getAttributeValue()).isEqualTo(JsonValue.of(2));
+                }
+        ), "AttributeModified via connection1");
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithPipelineFilterMatrix, eventConsumer);
+        assertThat(unexpected)
+                .describedAs("ThingCreated and AttributeCreated (topic action 'created') must be suppressed")
+                .isNull();
+    }
+
+    @Test
+    @Category(RequireSource.class)
     @Connections({CONNECTION_WITH_ENFORCEMENT_ENABLED})
     public void sendMessageAndExpectRejectedBecauseEnforcementFailed() {
         final ThingId thingId = generateThingId();

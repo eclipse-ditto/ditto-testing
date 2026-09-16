@@ -422,6 +422,52 @@ public final class RestConnectionsIT extends IntegrationTest {
     }
 
     @Test
+    public void createConnectionWithFnFilterStageWithoutPlaceholderFails() {
+        // WHEN an fn:filter stage of the target topic 'fn-filter' references no placeholder at all: it compares
+        // constants (or, in the 2-parameter form while the pipeline still carries the internal seed, that seed), so
+        // the topic would publish always or never - fn:filter('ne','x') is the typo of a forgotten header:... param
+        // THEN connection creation is rejected as invalid connection configuration
+        assertFnFilterIsRejectedOnCreate(
+                "_/_/things/twin/events?fn-filter=fn:filter('ne','integration:some:excluded')");
+        assertFnFilterIsRejectedOnCreate(
+                "_/_/things/twin/events?fn-filter=fn:filter('a','eq','b')");
+        assertFnFilterIsRejectedOnCreate(
+                "_/_/things/twin/events?fn-filter=fn:filter(header:ditto-origin,'exists')|fn:filter('x','exists')");
+    }
+
+    @Test
+    public void createConnectionWithDeleteStageAnywhereInFnFilterFails() {
+        // WHEN the target topic 'fn-filter' contains fn:delete() mid-pipeline - no later stage can resolve a deleted
+        // pipeline again, so the topic would never publish wherever the stage sits
+        // THEN connection creation is rejected as invalid connection configuration
+        assertFnFilterIsRejectedOnCreate(
+                "_/_/things/twin/events?fn-filter=fn:filter(header:ditto-originator,'ne','integration:some:excluded')" +
+                        "|fn:delete()|fn:filter(header:ditto-origin,'exists')");
+    }
+
+    @Test
+    public void createConnectionWithDefaultStageAfterFilterStageInFnFilterFails() {
+        // WHEN the target topic 'fn-filter' has fn:default(...) after an fn:filter stage (not only as the last
+        // stage): it resolves the pipeline whenever that filter suppressed it, i.e. discards the filter's decision
+        // THEN connection creation is rejected as invalid connection configuration
+        assertFnFilterIsRejectedOnCreate(
+                "_/_/things/twin/events?fn-filter=fn:filter(header:ditto-originator,'ne','integration:some:excluded')" +
+                        "|fn:default('x')|fn:filter(header:ditto-origin,'exists')");
+    }
+
+    @Test
+    public void createConnectionWithFnFilterNotEndingWithFilterStageFails() {
+        // WHEN the target topic 'fn-filter' does not end with an fn:filter stage: a bare placeholder does not filter
+        // anything (the explicit form is fn:filter(header:ditto-originator,'exists')), and a trailing
+        // value-producing stage cannot change the preceding decision
+        // THEN connection creation is rejected as invalid connection configuration
+        assertFnFilterIsRejectedOnCreate("_/_/things/twin/events?fn-filter=header:ditto-originator");
+        assertFnFilterIsRejectedOnCreate(
+                "_/_/things/twin/events?fn-filter=fn:filter(header:ditto-originator,'ne','integration:some:excluded')" +
+                        "|fn:upper()");
+    }
+
+    @Test
     public void createConnectionWithRepeatedTargetTopicQueryParameterFails() {
         // WHEN a target topic repeats a query parameter ('filter', 'fn-filter' or 'namespaces' - none is repeatable)
         // THEN the topic is rejected as unparseable with a 400 (not a bare 500) naming the duplicated parameter

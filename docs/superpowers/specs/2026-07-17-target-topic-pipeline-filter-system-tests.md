@@ -1,5 +1,19 @@
 # Target Topic Pipeline Filter — System Tests (ditto-testing)
 
+> **VALIDATION TIGHTENED 2026-09-15 (rev 4, PR #2511 review findings 1 + 3, main repo uncommitted on top of
+> `d30decf79b`):** `validateFnFilter` now REJECTS (400 `connectivity:connection.configuration.invalid`) an
+> unknown literal `rqlFunction` name (`'nope'`, `'NE'`), `eq`/`ne`/`like` in the 2-parameter form with a leading
+> placeholder (no compared value), and a trailing `fn:default(...)`/`fn:delete()` stage; a repeated `filter` /
+> `fn-filter` / `namespaces` query parameter is now a defined 400 `connectivity:topic.invalid` ("must not be given
+> more than once") instead of the empty-body 500 described below. `RestConnectionsIT` changes: the `'nope'` topic
+> left the valid round-trip test; NEW `createConnectionWithUnknownRqlFunctionNameInFnFilterFails`,
+> `createConnectionWithRqlFunctionWithoutComparedValueInFnFilterFails`,
+> `createConnectionWithTrailingDefaultStageInFnFilterFails`, `createConnectionWithTrailingDeleteStageInFnFilterFails`,
+> `createConnectionWithRepeatedTargetTopicQueryParameterFails` (16 pipeline tests). RED verified 2026-09-15 against
+> the still-running rev-3 stack (4× 201 instead of 400, duplicate param → empty 500); GREEN verified 2026-09-15
+> against the restarted host-run stack: the 6 touched tests 6/6 (40 s), then the whole `RestConnectionsIT` class
+> 26/26 (181 s). Older statements below about `'nope'` → 201 and "generic duplicate-key rejection" are rev-3 history.
+
 > **SYNTAX CHANGE 2026-09-14 (rev 3, separate `fn-filter` parameter):** main-repo commit `8d06aa9f89`
 > ("fn-filter and filter as separate connection topic parameters", 2026-07-31, replacing the vanished
 > `9ad6669a1c`) splits the two filter kinds by NAME: `filter` is RQL-only, `fn-filter` holds the (optionally

@@ -705,7 +705,7 @@ public final class ConnectivityFactory {
                 "Ditto Connectivity", connectionType, connectionId, getConnectionUri());
 
         final String pipelineFilter =
-                "fn:filter(header:ditto-originator,'ne','" + excludedOriginatorSubject + "')";
+                "header:ditto-originator|fn:filter('ne','" + excludedOriginatorSubject + "')";
         return modelBuilder.buildConnectionModelWithTargetTopics(
                 solutionSupplier.getSolution().getUsername(),
                 connectionId,
@@ -737,7 +737,7 @@ public final class ConnectivityFactory {
                 defaultTargetAddress(connectionId),
                 Collections.singletonList(
                         "_/_/things/twin/events?filter=gt(attributes/counter,42)" +
-                                "&fn-filter=fn:filter(header:ditto-originator,'ne','" + excludedOriginatorSubject + "')"
+                                "&fn-filter=header:ditto-originator|fn:filter('ne','" + excludedOriginatorSubject + "')"
                 )
         );
     }
@@ -758,7 +758,7 @@ public final class ConnectivityFactory {
                 defaultTargetAddress(connectionId),
                 Collections.singletonList(
                         "_/_/things/twin/events?extraFields=attributes/counter" +
-                                "&fn-filter=fn:filter(header:ditto-originator,'ne','" + excludedOriginatorSubject + "')"
+                                "&fn-filter=header:ditto-originator|fn:filter('ne','" + excludedOriginatorSubject + "')"
                 )
         );
     }
@@ -780,11 +780,12 @@ public final class ConnectivityFactory {
                 Arrays.asList(
                         // 'eq': only events CAUSED via the given connection are published;
                         //       ditto-origin is ABSENT for HTTP/WS-triggered changes -> suppressed
-                        "_/_/things/twin/events?fn-filter=fn:filter(header:ditto-origin,'eq','" +
+                        "_/_/things/twin/events?fn-filter=header:ditto-origin|fn:filter('eq','" +
                                 causingConnectionId + "')",
-                        // 'ne' ("ne trap"): an ABSENT ditto-origin resolves -> HTTP-sent live messages are published
-                        "_/_/things/live/messages?fn-filter=fn:filter(header:ditto-origin,'ne','" +
-                                causingConnectionId + "')"
+                        // 'ne' with the explicit opt-in for an ABSENT ditto-origin: fn:default supplies a value,
+                        //       so HTTP-sent live messages are published
+                        "_/_/things/live/messages?fn-filter=header:ditto-origin|fn:default('none')" +
+                                "|fn:filter('ne','" + causingConnectionId + "')"
                 )
         );
     }
@@ -804,9 +805,9 @@ public final class ConnectivityFactory {
                 defaultSourceAddress(connectionId),
                 defaultTargetAddress(connectionId),
                 Collections.singletonList(
-                        // placeholder-first form: the leading placeholder feeds the pipeline, so an ABSENT
-                        // ditto-origin never resolves -> HTTP-sent live messages are SUPPRESSED even with 'ne'
-                        // (the opposite of the function-first "ne trap" in setupSingleConnectionWithOriginPipelineFilter)
+                        // the leading placeholder feeds the pipeline, so an ABSENT ditto-origin never resolves
+                        // -> HTTP-sent live messages are SUPPRESSED even with 'ne' (without the fn:default opt-in
+                        // of setupSingleConnectionWithOriginPipelineFilter)
                         "_/_/things/live/messages?fn-filter=header:ditto-origin|fn:filter('ne','" +
                                 causingConnectionId + "')"
                 )
@@ -829,14 +830,14 @@ public final class ConnectivityFactory {
                 defaultTargetAddress(connectionId),
                 Arrays.asList(
                         // one topic per signal type, so the target's topic-OR never mixes the scenarios:
-                        // live commands: chained AND of a 'like' stage and an origin 'ne' stage
+                        // live commands: AND of two fn-filter params - an originator 'like' and an origin 'ne'
                         //   (fn-filter is the only filter kind live/commands supports - RQL cannot match there)
-                        "_/_/things/live/commands?fn-filter=fn:filter(header:ditto-originator,'like','integration:*')" +
-                                "|fn:filter(header:ditto-origin,'ne','" + excludedOriginConnectionId + "')",
-                        // twin events: placeholder-first pipeline on the TOPIC placeholder (not a header)
+                        "_/_/things/live/commands?fn-filter=header:ditto-originator|fn:filter('like','integration:*')" +
+                                "&fn-filter=header:ditto-origin|fn:filter('ne','" + excludedOriginConnectionId + "')",
+                        // twin events: pipeline on the TOPIC placeholder (not a header)
                         "_/_/things/twin/events?fn-filter=topic:action|fn:filter('eq','modified')",
-                        // live messages: 2-param 'exists' -> an ABSENT ditto-origin is dropped
-                        "_/_/things/live/messages?fn-filter=fn:filter(header:ditto-origin,'exists')"
+                        // live messages: 'exists' -> an ABSENT ditto-origin is dropped
+                        "_/_/things/live/messages?fn-filter=header:ditto-origin|fn:filter('exists','true')"
                 )
         );
     }

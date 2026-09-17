@@ -1008,7 +1008,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Given
         // the twin-events topic filter of connectionNameWithPipelineFilter is:
-        //   ?fn-filter=fn:filter(header:ditto-originator,'ne','integration:<username>:<connectionName1>')
+        //   ?fn-filter=header:ditto-originator|fn:filter('ne','integration:<username>:<connectionName1>')
         // i.e. events caused by connection1's authorization subject are suppressed for THIS target,
         // events of any other originator are published.
         // (Ditto's built-in "Was sent by myself" drop in OutboundDispatchingActor only prevents
@@ -1081,7 +1081,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Given
         // the twin-events topic filters of connectionNameWithCombinedRqlAndPipelineFilter are:
-        //   ?filter=gt(attributes/counter,42)&fn-filter=fn:filter(header:ditto-originator,'ne','<subject-of-connection1>')
+        //   ?filter=gt(attributes/counter,42)&fn-filter=header:ditto-originator|fn:filter('ne','<subject-of-connection1>')
         // combined with AND semantics: counter > 42 AND not caused via connection1
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
@@ -1156,7 +1156,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         // Given
         // the twin-events topic of connectionNameWithExtraFieldsAndPipelineFilter is:
         //   _/_/things/twin/events?extraFields=attributes/counter
-        //       &fn-filter=fn:filter(header:ditto-originator,'ne','<subject-of-connection1>')
+        //       &fn-filter=header:ditto-originator|fn:filter('ne','<subject-of-connection1>')
         // extraFields force the post-enrichment re-evaluation in OutboundMappingProcessorActor -
         // the pipeline outcome must be identical to the pre-enrichment gate
         final Policy policy = Policy.newBuilder()
@@ -1243,7 +1243,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Given
         // the live-messages topic of connectionNameWithPipelineFilter is:
-        //   _/_/things/live/messages?fn-filter=fn:filter(header:ditto-originator,'ne','<subject-of-connection1>')
+        //   _/_/things/live/messages?fn-filter=header:ditto-originator|fn:filter('ne','<subject-of-connection1>')
         // a thing-state RQL filter can never distinguish message originators - the pipeline filter can
         final Policy policy = Policy.newBuilder()
                 .forLabel("DEFAULT")
@@ -1318,9 +1318,9 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Given
         // the twin-events topic of connectionNameWithOriginPipelineFilter is:
-        //   _/_/things/twin/events?fn-filter=fn:filter(header:ditto-origin,'eq','<connection-id-of-connection1>')
+        //   _/_/things/twin/events?fn-filter=header:ditto-origin|fn:filter('eq','<connection-id-of-connection1>')
         // ditto-origin is ONLY set for signals caused via a connection; it is ABSENT for HTTP-triggered
-        // changes - an absent header with 'eq' does not resolve -> suppressed
+        // changes - an absent header does not resolve -> suppressed
         final ThingId thingId = generateThingId();
         final JsonPointer counterPointer = JsonPointer.of("counter");
         final Thing thing = Thing.newBuilder()
@@ -1383,9 +1383,10 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Given
         // the live-messages topic of connectionNameWithOriginPipelineFilter is:
-        //   _/_/things/live/messages?fn-filter=fn:filter(header:ditto-origin,'ne','<connection-id-of-connection1>')
-        // the "ne trap": for HTTP-sent messages ditto-origin is ABSENT and an absent header with 'ne'
-        // RESOLVES -> the message is published
+        //   _/_/things/live/messages
+        //       ?fn-filter=header:ditto-origin|fn:default('none')|fn:filter('ne','<connection-id-of-connection1>')
+        // the explicit opt-in for absent headers: for HTTP-sent messages ditto-origin is ABSENT, fn:default
+        // supplies 'none' for it and 'none' is 'ne' connection1 -> the message is published
         final ThingId thingId = generateThingId();
         final Thing thing = Thing.newBuilder().setId(thingId).build();
         final Policy policy = Policy.newBuilder()
@@ -1429,7 +1430,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         sendSignal(cf.connectionName1, suppressedSend);
         waitMillis(500);
 
-        // live message via HTTP -> ditto-origin ABSENT -> 'ne' resolves -> PUBLISHED (the "ne trap")
+        // live message via HTTP -> ditto-origin ABSENT -> fn:default('none') -> 'ne' matches -> PUBLISHED
         final String deliveredSubject = "subject-via-http-without-origin";
         postMessage(2, thingId, MessageDirection.TO, deliveredSubject, ContentType.JSON,
                 "\"message via HTTP\"", "0")
@@ -1457,9 +1458,9 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         // Given
         // the live-messages topic of connectionNameWithPlaceholderFirstOriginPipelineFilter is:
         //   _/_/things/live/messages?fn-filter=header:ditto-origin|fn:filter('ne','<connection-id-of-connection1>')
-        // placeholder-first form: the leading placeholder must RESOLVE before fn:filter runs, so an ABSENT
-        // ditto-origin (HTTP-sent message) is SUPPRESSED - the documented difference to the function-first
-        // "ne trap" proven in deliverLiveMessagesWithAbsentOriginHeaderForNeOriginPipelineFilter
+        // the leading placeholder must RESOLVE before fn:filter runs, so an ABSENT ditto-origin (HTTP-sent
+        // message) is SUPPRESSED even for 'ne' - unless opted in with fn:default, as proven in
+        // deliverLiveMessagesWithAbsentOriginHeaderForNeOriginPipelineFilter
         final ThingId thingId = generateThingId();
         final Thing thing = Thing.newBuilder().setId(thingId).build();
         final Policy policy = Policy.newBuilder()
@@ -1542,10 +1543,10 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Given
         // the live-commands topic of connectionNameWithPipelineFilterMatrix is:
-        //   ?fn-filter=fn:filter(header:ditto-originator,'like','integration:*')
-        //             |fn:filter(header:ditto-origin,'ne','<connection-id-of-connection1>')
-        // chained stages are ANDed: the 'like' stage requires a connection originator, the 'ne' stage
-        // excludes connection1 -> only live commands caused via connection2 pass both stages.
+        //   ?fn-filter=header:ditto-originator|fn:filter('like','integration:*')
+        //   &fn-filter=header:ditto-origin|fn:filter('ne','<connection-id-of-connection1>')
+        // repeated fn-filter params are ANDed: the 'like' one requires a connection originator, the 'ne' one
+        // excludes connection1 -> only live commands caused via connection2 pass both.
         // (live/commands is the topic where an RQL 'filter' is not supported at all)
         final ThingId thingId = generateThingId();
         final Thing thing = Thing.newBuilder().setId(thingId).build();
@@ -1679,8 +1680,8 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         // Given
         // the live-messages topic of connectionNameWithPipelineFilterMatrix is:
-        //   ?fn-filter=fn:filter(header:ditto-origin,'exists')
-        // docs absent-header table: the 2-param 'exists' form DROPS a signal whose header is absent
+        //   ?fn-filter=header:ditto-origin|fn:filter('exists','true')
+        // docs absent header behavior: 'exists' DROPS a signal whose header is absent
         // (HTTP-sent messages carry no ditto-origin) and publishes one that carries it (sent via a connection)
         final ThingId thingId = generateThingId();
         final Thing thing = Thing.newBuilder().setId(thingId).build();
@@ -1728,7 +1729,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         final M unexpected = consumeFromTarget(cf.connectionNameWithPipelineFilterMatrix, messagesConsumer);
         assertThat(unexpected)
-                .describedAs("live message without ditto-origin must be dropped by the 2-param 'exists' filter")
+                .describedAs("live message without ditto-origin must be dropped by the 'exists' filter")
                 .isNull();
     }
 

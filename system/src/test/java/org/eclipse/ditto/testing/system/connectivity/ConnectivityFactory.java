@@ -116,6 +116,12 @@ public final class ConnectivityFactory {
     public final String connectionWithConnectionAnnouncements;
     public final String connectionWith2Sources;
     public final String connectionHonoName;
+    public final String connectionNameWithFnFilter;
+    public final String connectionNameWithRqlAndFnFilter;
+    public final String connectionNameWithExtraFieldsAndFnFilter;
+    public final String connectionNameWithOriginFnFilter;
+    public final String connectionNameWithOriginFnFilterWithoutDefault;
+    public final String connectionNameWithFnFilterMatrix;
 
     private ConnectivityFactory(
             final String connectionNamePrefix,
@@ -161,6 +167,12 @@ public final class ConnectivityFactory {
             connectionWithConnectionAnnouncements = disambiguateConnectionName(username, connectionNamePrefix + 13);
             connectionWith2Sources = disambiguateConnectionName(username, connectionNamePrefix + 14);
             connectionHonoName = disambiguateConnectionName(username, connectionNamePrefix + 15);
+            connectionNameWithFnFilter = disambiguateConnectionName(username, connectionNamePrefix + 16);
+            connectionNameWithRqlAndFnFilter = disambiguateConnectionName(username, connectionNamePrefix + 17);
+            connectionNameWithExtraFieldsAndFnFilter = disambiguateConnectionName(username, connectionNamePrefix + 18);
+            connectionNameWithOriginFnFilter = disambiguateConnectionName(username, connectionNamePrefix + 19);
+            connectionNameWithOriginFnFilterWithoutDefault = disambiguateConnectionName(username, connectionNamePrefix + 20);
+            connectionNameWithFnFilterMatrix = disambiguateConnectionName(username, connectionNamePrefix + 21);
         } else {
             connectionName1 = null;
             connectionName2 = null;
@@ -177,6 +189,12 @@ public final class ConnectivityFactory {
             connectionWithConnectionAnnouncements = null;
             connectionWith2Sources = null;
             connectionHonoName = null;
+            connectionNameWithFnFilter = null;
+            connectionNameWithRqlAndFnFilter = null;
+            connectionNameWithExtraFieldsAndFnFilter = null;
+            connectionNameWithOriginFnFilter = null;
+            connectionNameWithOriginFnFilterWithoutDefault = null;
+            connectionNameWithFnFilterMatrix = null;
         }
     }
 
@@ -227,6 +245,12 @@ public final class ConnectivityFactory {
             connectionWithConnectionAnnouncements = disambiguateConnectionName(username, connectionNamePrefix + 13);
             connectionWith2Sources = disambiguateConnectionName(username, connectionNamePrefix + 14);
             connectionHonoName = disambiguateConnectionName(username, connectionNamePrefix + 15);
+            connectionNameWithFnFilter = disambiguateConnectionName(username, connectionNamePrefix + 16);
+            connectionNameWithRqlAndFnFilter = disambiguateConnectionName(username, connectionNamePrefix + 17);
+            connectionNameWithExtraFieldsAndFnFilter = disambiguateConnectionName(username, connectionNamePrefix + 18);
+            connectionNameWithOriginFnFilter = disambiguateConnectionName(username, connectionNamePrefix + 19);
+            connectionNameWithOriginFnFilterWithoutDefault = disambiguateConnectionName(username, connectionNamePrefix + 20);
+            connectionNameWithFnFilterMatrix = disambiguateConnectionName(username, connectionNamePrefix + 21);
         } else {
             connectionName1 = cf.connectionName1;
             connectionName2 = cf.connectionName2;
@@ -243,6 +267,12 @@ public final class ConnectivityFactory {
             connectionWithConnectionAnnouncements = cf.connectionWithConnectionAnnouncements;
             connectionWith2Sources = cf.connectionWith2Sources;
             connectionHonoName = cf.connectionHonoName;
+            connectionNameWithFnFilter = cf.connectionNameWithFnFilter;
+            connectionNameWithRqlAndFnFilter = cf.connectionNameWithRqlAndFnFilter;
+            connectionNameWithExtraFieldsAndFnFilter = cf.connectionNameWithExtraFieldsAndFnFilter;
+            connectionNameWithOriginFnFilter = cf.connectionNameWithOriginFnFilter;
+            connectionNameWithOriginFnFilterWithoutDefault = cf.connectionNameWithOriginFnFilterWithoutDefault;
+            connectionNameWithFnFilterMatrix = cf.connectionNameWithFnFilterMatrix;
         }
         this.maxClientCount = maxClientCount;
     }
@@ -284,6 +314,12 @@ public final class ConnectivityFactory {
             case CONNECTION_WITH_CONNECTION_ANNOUNCEMENTS -> connectionWithConnectionAnnouncements;
             case CONNECTION_WITH_2_SOURCES -> connectionWith2Sources;
             case CONNECTION_HONO -> connectionHonoName;
+            case CONNECTION_WITH_FN_FILTER -> connectionNameWithFnFilter;
+            case CONNECTION_WITH_RQL_AND_FN_FILTER -> connectionNameWithRqlAndFnFilter;
+            case CONNECTION_WITH_EXTRA_FIELDS_AND_FN_FILTER -> connectionNameWithExtraFieldsAndFnFilter;
+            case CONNECTION_WITH_ORIGIN_FN_FILTER -> connectionNameWithOriginFnFilter;
+            case CONNECTION_WITH_ORIGIN_FN_FILTER_WITHOUT_DEFAULT -> connectionNameWithOriginFnFilterWithoutDefault;
+            case CONNECTION_WITH_FN_FILTER_MATRIX -> connectionNameWithFnFilterMatrix;
             case NONE -> "noname";
         };
     }
@@ -305,7 +341,13 @@ public final class ConnectivityFactory {
                                 connectionWithTunnel,
                                 connectionWithConnectionAnnouncements,
                                 connectionWith2Sources,
-                                connectionHonoName
+                                connectionHonoName,
+                                connectionNameWithFnFilter,
+                                connectionNameWithRqlAndFnFilter,
+                                connectionNameWithExtraFieldsAndFnFilter,
+                                connectionNameWithOriginFnFilter,
+                                connectionNameWithOriginFnFilterWithoutDefault,
+                                connectionNameWithFnFilterMatrix
                         },
                         extraNames)
                 .flatMap(Arrays::stream)
@@ -423,6 +465,29 @@ public final class ConnectivityFactory {
                                 getEnforcement.get(connectionNameWithEnforcementEnabled))),
                 entry(ConnectionCategory.CONNECTION_WITH_EXTRA_FIELDS,
                         () -> setupSingleConnectionWithExtraFields(connectionNameWithExtraFields)),
+                entry(ConnectionCategory.CONNECTION_WITH_FN_FILTER,
+                        () -> setupSingleConnectionWithFnFilter(connectionNameWithFnFilter,
+                                "integration:" + username + ":" + connectionName1)),
+                entry(ConnectionCategory.CONNECTION_WITH_RQL_AND_FN_FILTER,
+                        () -> setupSingleConnectionWithRqlAndFnFilter(
+                                connectionNameWithRqlAndFnFilter,
+                                "integration:" + username + ":" + connectionName1)),
+                entry(ConnectionCategory.CONNECTION_WITH_EXTRA_FIELDS_AND_FN_FILTER,
+                        () -> setupSingleConnectionWithExtraFieldsAndFnFilter(
+                                connectionNameWithExtraFieldsAndFnFilter,
+                                "integration:" + username + ":" + connectionName1)),
+                entry(ConnectionCategory.CONNECTION_WITH_ORIGIN_FN_FILTER,
+                        () -> setupSingleConnectionWithOriginFnFilter(connectionNameWithOriginFnFilter,
+                                // in these tests a connection's ID equals its name (see buildOpenedConnection)
+                                connectionName1)),
+                entry(ConnectionCategory.CONNECTION_WITH_ORIGIN_FN_FILTER_WITHOUT_DEFAULT,
+                        () -> setupSingleConnectionWithOriginFnFilterWithoutDefault(
+                                connectionNameWithOriginFnFilterWithoutDefault, connectionName1)),
+                entry(ConnectionCategory.CONNECTION_WITH_FN_FILTER_MATRIX,
+                        () -> setupSingleConnectionWithFnFilterMatrix(connectionNameWithFnFilterMatrix,
+                                "integration:" + username + ":" + connectionName1,
+                                // in these tests a connection's ID equals its name (see buildOpenedConnection)
+                                connectionName1)),
                 entry(ConnectionCategory.CONNECTION_WITH_HEADER_MAPPING,
                         () -> setupSingleConnectionWithHeaderMapping(connectionNameWithHeaderMapping)),
                 entry(ConnectionCategory.CONNECTION_WITH_RAW_MESSAGE_MAPPER_1,
@@ -629,6 +694,150 @@ public final class ConnectivityFactory {
                         "_/_/things/live/commands?extraFields=" + extraFields + "&filter=eq(attributes/counter,20)",
                         "_/_/things/live/events?extraFields=" + extraFields +
                                 "&filter=and(eq(attributes/counter,20),eq(attributes/filter,true))"
+                )
+        );
+    }
+
+    public Connection setupSingleConnectionWithFnFilter(final String connectionId,
+            final String excludedOriginatorSubject) {
+
+        LOGGER.info("Creating a connection of type <{}> with fn-filter target topics with ID <{}> to <{}> in " +
+                "Ditto Connectivity", connectionType, connectionId, getConnectionUri());
+
+        final String fnFilter =
+                "header:ditto-originator|fn:filter('ne','" + excludedOriginatorSubject + "')";
+        return modelBuilder.buildConnectionModelWithTargetTopics(
+                solutionSupplier.getSolution().getUsername(),
+                connectionId,
+                connectionType,
+                getConnectionUri(),
+                getSpecificConfig(),
+                defaultSourceAddress(connectionId),
+                defaultTargetAddress(connectionId),
+                Arrays.asList(
+                        "_/_/things/twin/events?fn-filter=" + fnFilter,
+                        "_/_/things/live/messages?fn-filter=" + fnFilter
+                )
+        );
+    }
+
+    public Connection setupSingleConnectionWithRqlAndFnFilter(final String connectionId,
+            final String excludedOriginatorSubject) {
+
+        LOGGER.info("Creating a connection of type <{}> with RQL 'filter' and 'fn-filter' target topic params with " +
+                "ID <{}> to <{}> in Ditto Connectivity", connectionType, connectionId, getConnectionUri());
+
+        return modelBuilder.buildConnectionModelWithTargetTopics(
+                solutionSupplier.getSolution().getUsername(),
+                connectionId,
+                connectionType,
+                getConnectionUri(),
+                getSpecificConfig(),
+                defaultSourceAddress(connectionId),
+                defaultTargetAddress(connectionId),
+                Collections.singletonList(
+                        "_/_/things/twin/events?filter=gt(attributes/counter,42)" +
+                                "&fn-filter=header:ditto-originator|fn:filter('ne','" + excludedOriginatorSubject + "')"
+                )
+        );
+    }
+
+    public Connection setupSingleConnectionWithExtraFieldsAndFnFilter(final String connectionId,
+            final String excludedOriginatorSubject) {
+
+        LOGGER.info("Creating a connection of type <{}> with extra fields and fn-filter target topic with " +
+                "ID <{}> to <{}> in Ditto Connectivity", connectionType, connectionId, getConnectionUri());
+
+        return modelBuilder.buildConnectionModelWithTargetTopics(
+                solutionSupplier.getSolution().getUsername(),
+                connectionId,
+                connectionType,
+                getConnectionUri(),
+                getSpecificConfig(),
+                defaultSourceAddress(connectionId),
+                defaultTargetAddress(connectionId),
+                Collections.singletonList(
+                        "_/_/things/twin/events?extraFields=attributes/counter" +
+                                "&fn-filter=header:ditto-originator|fn:filter('ne','" + excludedOriginatorSubject + "')"
+                )
+        );
+    }
+
+    public Connection setupSingleConnectionWithOriginFnFilter(final String connectionId,
+            final String causingConnectionId) {
+
+        LOGGER.info("Creating a connection of type <{}> with ditto-origin fn-filter target topics with " +
+                "ID <{}> to <{}> in Ditto Connectivity", connectionType, connectionId, getConnectionUri());
+
+        return modelBuilder.buildConnectionModelWithTargetTopics(
+                solutionSupplier.getSolution().getUsername(),
+                connectionId,
+                connectionType,
+                getConnectionUri(),
+                getSpecificConfig(),
+                defaultSourceAddress(connectionId),
+                defaultTargetAddress(connectionId),
+                Arrays.asList(
+                        // 'eq': only events caused via the given connection are published;
+                        //       ditto-origin is absent for HTTP/WS-triggered changes -> suppressed
+                        "_/_/things/twin/events?fn-filter=header:ditto-origin|fn:filter('eq','" +
+                                causingConnectionId + "')",
+                        // 'ne' with the explicit opt-in for an absent ditto-origin: fn:default supplies a value,
+                        //       so HTTP-sent live messages are published
+                        "_/_/things/live/messages?fn-filter=header:ditto-origin|fn:default('none')" +
+                                "|fn:filter('ne','" + causingConnectionId + "')"
+                )
+        );
+    }
+
+    public Connection setupSingleConnectionWithOriginFnFilterWithoutDefault(final String connectionId,
+            final String causingConnectionId) {
+
+        LOGGER.info("Creating a connection of type <{}> with ditto-origin fn-filter (without fn:default) target " +
+                "topic with ID <{}> to <{}> in Ditto Connectivity", connectionType, connectionId, getConnectionUri());
+
+        return modelBuilder.buildConnectionModelWithTargetTopics(
+                solutionSupplier.getSolution().getUsername(),
+                connectionId,
+                connectionType,
+                getConnectionUri(),
+                getSpecificConfig(),
+                defaultSourceAddress(connectionId),
+                defaultTargetAddress(connectionId),
+                Collections.singletonList(
+                        // the leading placeholder feeds the pipeline, so an absent ditto-origin never resolves
+                        // -> HTTP-sent live messages are suppressed even with 'ne' (without the fn:default opt-in
+                        // of setupSingleConnectionWithOriginFnFilter)
+                        "_/_/things/live/messages?fn-filter=header:ditto-origin|fn:filter('ne','" +
+                                causingConnectionId + "')"
+                )
+        );
+    }
+
+    public Connection setupSingleConnectionWithFnFilterMatrix(final String connectionId,
+            final String excludedOriginatorSubject, final String excludedOriginConnectionId) {
+
+        LOGGER.info("Creating a connection of type <{}> with a matrix of fn-filter target topics with ID <{}> " +
+                "to <{}> in Ditto Connectivity", connectionType, connectionId, getConnectionUri());
+
+        return modelBuilder.buildConnectionModelWithTargetTopics(
+                solutionSupplier.getSolution().getUsername(),
+                connectionId,
+                connectionType,
+                getConnectionUri(),
+                getSpecificConfig(),
+                defaultSourceAddress(connectionId),
+                defaultTargetAddress(connectionId),
+                Arrays.asList(
+                        // one topic per signal type, so the target's topic-OR never mixes the scenarios:
+                        // live commands: AND of two fn-filter params - an originator 'like' and an origin 'ne'
+                        //   (fn-filter is the only filter kind live/commands supports - RQL cannot match there)
+                        "_/_/things/live/commands?fn-filter=header:ditto-originator|fn:filter('like','integration:*')" +
+                                "&fn-filter=header:ditto-origin|fn:filter('ne','" + excludedOriginConnectionId + "')",
+                        // twin events: fn-filter on the topic placeholder (not a header)
+                        "_/_/things/twin/events?fn-filter=topic:action|fn:filter('eq','modified')",
+                        // live messages: 'exists' -> an absent ditto-origin is dropped
+                        "_/_/things/live/messages?fn-filter=header:ditto-origin|fn:filter('exists','true')"
                 )
         );
     }

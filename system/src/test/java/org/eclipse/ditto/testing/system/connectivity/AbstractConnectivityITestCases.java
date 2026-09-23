@@ -20,10 +20,16 @@ import static org.eclipse.ditto.policies.api.Permission.WRITE;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION1;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION2;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_2_SOURCES;
+import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_RQL_AND_FN_FILTER;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_CONNECTION_ANNOUNCEMENTS;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_ENFORCEMENT_ENABLED;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_EXTRA_FIELDS;
+import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_EXTRA_FIELDS_AND_FN_FILTER;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_NAMESPACE_AND_RQL_FILTER;
+import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_ORIGIN_FN_FILTER;
+import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_ORIGIN_FN_FILTER_WITHOUT_DEFAULT;
+import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_FN_FILTER_MATRIX;
+import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_FN_FILTER;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.NONE;
 import static org.hamcrest.CoreMatchers.anyOf;
 import static org.hamcrest.CoreMatchers.is;
@@ -169,6 +175,7 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 
 /**
@@ -992,6 +999,738 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                     assertThat(am.getAttributeValue()).isEqualTo(JsonValue.of(val3 * 2));
                 }
         ));
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION2, CONNECTION_WITH_FN_FILTER})
+    public void sendCommandsConsumeEventsFilteredByOriginatorFnFilter() {
+
+        // Given
+        // the twin-events topic filter of connectionNameWithFnFilter is:
+        //   ?fn-filter=header:ditto-originator|fn:filter('ne','integration:<username>:<connectionName1>')
+        // i.e. events caused by connection1's authorization subject are suppressed for this target,
+        // events of any other originator are published.
+        // (Ditto's built-in "Was sent by myself" drop in OutboundDispatchingActor only prevents
+        // publishing a signal back to the same connection that caused it - excluding a specific
+        // other originator from a target requires this filter)
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setSubject(connectionSubject(cf.connectionName2))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithFnFilter))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final ThingId thingId = generateThingId();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+
+        final C eventConsumer = initTargetsConsumer(cf.connectionNameWithFnFilter);
+
+        // When: creating the thing via HTTP (originator = oauth subject, not excluded) -> ThingCreated published
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // modifying via connection1 (the excluded originator) -> AttributeCreated suppressed
+        sendSignal(cf.connectionName1, ModifyAttribute.of(thingId, JsonPointer.of("counter"), JsonValue.of(11),
+                createDittoHeaders(correlationId)));
+        waitMillis(500);
+
+        // modifying via connection2 (another originator; distinct pointer keeps event classes deterministic)
+        // -> AttributeCreated published
+        sendSignal(cf.connectionName2, ModifyAttribute.of(thingId, JsonPointer.of("counter2"), JsonValue.of(22),
+                createDittoHeaders(correlationId)));
+
+        // Then: only the events of not-excluded originators are received
+        consumeAndAssertEvents(cf.connectionNameWithFnFilter, eventConsumer, Arrays.asList(
+                e -> {
+                    final ThingCreated tc = thingEventForJson(e, ThingCreated.class, correlationId, thingId);
+                    assertThat(tc.getRevision()).isEqualTo(1L);
+                },
+                e -> {
+                    final AttributeCreated ac =
+                            thingEventForJson(e, AttributeCreated.class, correlationId, thingId);
+                    assertThat((Iterable<? extends JsonKey>) ac.getAttributePointer())
+                            .isEqualTo(JsonPointer.of("counter2"));
+                    assertThat(ac.getAttributeValue()).isEqualTo(JsonValue.of(22));
+                }
+        ), "ThingCreated via HTTP", "AttributeCreated via connection2");
+
+        // and nothing else was published
+        final M unexpected = consumeFromTarget(cf.connectionNameWithFnFilter, eventConsumer);
+        assertThat(unexpected)
+                .describedAs("events caused by the excluded originator (connection1) must be suppressed")
+                .isNull();
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION2, CONNECTION_WITH_RQL_AND_FN_FILTER})
+    public void sendCommandsConsumeEventsFilteredByRqlAndFnFilter() {
+
+        // Given
+        // the twin-events topic filters of connectionNameWithRqlAndFnFilter are:
+        //   ?filter=gt(attributes/counter,42)&fn-filter=header:ditto-originator|fn:filter('ne','<subject-of-connection1>')
+        // combined with AND semantics: counter > 42 AND not caused via connection1
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setSubject(connectionSubject(cf.connectionName2))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithRqlAndFnFilter))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final ThingId thingId = generateThingId();
+        final JsonPointer counterPointer = JsonPointer.of("counter");
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setAttribute(counterPointer, JsonValue.of(100))
+                .build();
+
+        final C eventConsumer = initTargetsConsumer(cf.connectionNameWithRqlAndFnFilter);
+
+        // When: (counter=100 > 42, HTTP originator) -> ThingCreated published
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // (counter=77 > 42, but excluded originator connection1) -> suppressed by the fn-filter
+        sendSignal(cf.connectionName1, ModifyAttribute.of(thingId, counterPointer, JsonValue.of(77),
+                createDittoHeaders(correlationId)));
+        waitMillis(500);
+
+        // (counter=10 <= 42, other originator connection2) -> suppressed by the RQL filter param
+        sendSignal(cf.connectionName2, ModifyAttribute.of(thingId, counterPointer, JsonValue.of(10),
+                createDittoHeaders(correlationId)));
+        waitShort();
+
+        // (counter=100 > 42, other originator connection2) -> published
+        sendSignal(cf.connectionName2, ModifyAttribute.of(thingId, counterPointer, JsonValue.of(100),
+                createDittoHeaders(correlationId)));
+
+        // Then
+        consumeAndAssertEvents(cf.connectionNameWithRqlAndFnFilter, eventConsumer, Arrays.asList(
+                e -> {
+                    final ThingCreated tc = thingEventForJson(e, ThingCreated.class, correlationId, thingId);
+                    assertThat(tc.getRevision()).isEqualTo(1L);
+                },
+                e -> {
+                    final AttributeModified am =
+                            thingEventForJson(e, AttributeModified.class, correlationId, thingId);
+                    assertThat(am.getAttributeValue()).isEqualTo(JsonValue.of(100));
+                }
+        ), "ThingCreated with counter=100 via HTTP", "AttributeModified with counter=100 via connection2");
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithRqlAndFnFilter, eventConsumer);
+        assertThat(unexpected)
+                .describedAs("events failing the RQL filter or the fn-filter must be suppressed")
+                .isNull();
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION_WITH_EXTRA_FIELDS_AND_FN_FILTER})
+    public void publishEnrichedSignalsFilteredByOriginatorFnFilter() {
+
+        // Given
+        // the twin-events topic of connectionNameWithExtraFieldsAndFnFilter is:
+        //   _/_/things/twin/events?extraFields=attributes/counter
+        //       &fn-filter=header:ditto-originator|fn:filter('ne','<subject-of-connection1>')
+        // extraFields force the post-enrichment re-evaluation in OutboundMappingProcessorActor -
+        // the fn-filter outcome must be the same as before enrichment
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithExtraFieldsAndFnFilter))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final ThingId thingId = generateThingId();
+        final JsonPointer counterPointer = JsonPointer.of("counter");
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setAttribute(counterPointer, JsonValue.of(5))
+                .build();
+
+        final C eventConsumer = initTargetsConsumer(cf.connectionNameWithExtraFieldsAndFnFilter);
+
+        // When: ThingCreated via HTTP -> published, enriched with attributes/counter
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        final M thingCreatedMessage =
+                consumeFromTarget(cf.connectionNameWithExtraFieldsAndFnFilter, eventConsumer);
+        assertThat(thingCreatedMessage).describedAs("twinEvent (thingCreated)").isNotNull();
+        final Adaptable thingCreatedAdaptable = jsonifiableAdaptableFrom(thingCreatedMessage);
+        assertThat(thingCreatedAdaptable.getTopicPath().getAction()).describedAs("thingCreated/action")
+                .contains(TopicPath.Action.CREATED);
+        assertThat(thingCreatedAdaptable.getPayload().getExtra()).describedAs("thingCreated/extra")
+                .contains(JsonObject.newBuilder()
+                        .set(JsonPointer.of("attributes/counter"), 5)
+                        .build());
+
+        // AttributeCreated via the excluded connection1 -> suppressed at the pre-enrichment gate (SignalFilter
+        // decides an fn-filter non-match before enrichment) even though this topic carries extraFields;
+        // the delivered events in this test are what prove the post-enrichment re-evaluation reaches the
+        // same verdict
+        sendSignal(cf.connectionName1, ModifyAttribute.of(thingId, JsonPointer.of("other"), JsonValue.of(9),
+                createDittoHeaders(correlationId)));
+        waitMillis(500);
+
+        // AttributeModified via HTTP -> published with enrichment; also proves the previous
+        // event was dropped and not just delayed (per-thing event order is preserved)
+        putAttribute(2, thingId, "counter", "13")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        final M attributeModifiedMessage =
+                consumeFromTarget(cf.connectionNameWithExtraFieldsAndFnFilter, eventConsumer);
+        assertThat(attributeModifiedMessage).describedAs("twinEvent (attributeModified)").isNotNull();
+        final Adaptable attributeModifiedAdaptable = jsonifiableAdaptableFrom(attributeModifiedMessage);
+        assertThat(attributeModifiedAdaptable.getTopicPath().getAction()).describedAs("attributeModified/action")
+                .contains(TopicPath.Action.MODIFIED);
+        assertThat(attributeModifiedAdaptable.getPayload().getPath().toString())
+                .describedAs("attributeModified/path")
+                .isEqualTo(JsonPointer.of("attributes/counter").toString());
+        assertThat(attributeModifiedAdaptable.getPayload().getExtra()).describedAs("attributeModified/extra")
+                .contains(JsonObject.newBuilder()
+                        .set(JsonPointer.of("attributes/counter"), 13)
+                        .build());
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithExtraFieldsAndFnFilter, eventConsumer);
+        assertThat(unexpected)
+                .describedAs("enriched events of the excluded originator must still be suppressed")
+                .isNull();
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION_WITH_FN_FILTER})
+    public void filterLiveMessagesByOriginatorFnFilter() {
+
+        // Given
+        // the live-messages topic of connectionNameWithFnFilter is:
+        //   _/_/things/live/messages?fn-filter=header:ditto-originator|fn:filter('ne','<subject-of-connection1>')
+        // a thing-state RQL filter can never distinguish message originators - an fn-filter can
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithFnFilter))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final ThingId thingId = generateThingId();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+
+        final C messagesConsumer = initTargetsConsumer(cf.connectionNameWithFnFilter);
+
+        // thing created via HTTP -> ThingCreated is published by the twin-events topic of the same target
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+        final M thingCreatedMessage = consumeFromTarget(cf.connectionNameWithFnFilter, messagesConsumer);
+        assertThat(thingCreatedMessage).describedAs("twinEvent (thingCreated)").isNotNull();
+
+        // When: live message sent via the excluded connection1 -> suppressed
+        final String suppressedSubject = "subject-from-excluded-originator";
+        final Message<?> suppressedMessage = Message.newBuilder(
+                        MessageBuilder.newHeadersBuilder(MessageDirection.TO, thingId, suppressedSubject)
+                                .contentType("text/plain")
+                                .correlationId(createNewCorrelationId())
+                                .build())
+                .payload("message via excluded connection")
+                .build();
+        final SendThingMessage<?> suppressedSend = SendThingMessage.of(thingId, suppressedMessage,
+                DittoHeaders.newBuilder()
+                        .correlationId(suppressedMessage.getHeaders().getCorrelationId().orElseThrow())
+                        .responseRequired(false)
+                        .build());
+        sendSignal(cf.connectionName1, suppressedSend);
+        waitMillis(500);
+
+        // and a live message sent via HTTP (originator = oauth subject) -> published
+        final String deliveredSubject = "subject-from-http-originator";
+        postMessage(2, thingId, MessageDirection.TO, deliveredSubject, ContentType.JSON,
+                "\"message via HTTP\"", "0")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken(), true)
+                .expectingHttpStatus(HttpStatus.ACCEPTED)
+                .fire();
+
+        // Then
+        final M received = consumeFromTarget(cf.connectionNameWithFnFilter, messagesConsumer);
+        assertThat(received).describedAs("live message of a not-excluded originator").isNotNull();
+        assertThat(textFrom(received)).contains(deliveredSubject);
+        assertThat(textFrom(received)).doesNotContain(suppressedSubject);
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithFnFilter, messagesConsumer);
+        assertThat(unexpected)
+                .describedAs("live message of the excluded originator must be suppressed")
+                .isNull();
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION_WITH_ORIGIN_FN_FILTER})
+    public void consumeEventsFilteredByOriginFnFilter() {
+
+        // Given
+        // the twin-events topic of connectionNameWithOriginFnFilter is:
+        //   _/_/things/twin/events?fn-filter=header:ditto-origin|fn:filter('eq','<connection-id-of-connection1>')
+        // ditto-origin is only set for signals caused via a connection; it is absent for HTTP-triggered
+        // changes - an absent header does not resolve -> suppressed
+        final ThingId thingId = generateThingId();
+        final JsonPointer counterPointer = JsonPointer.of("counter");
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setAttribute(counterPointer, JsonValue.of(0))
+                .build();
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithOriginFnFilter))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final C eventConsumer = initTargetsConsumer(cf.connectionNameWithOriginFnFilter);
+
+        // When: HTTP-triggered ThingCreated -> ditto-origin absent -> suppressed
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // HTTP-triggered AttributeModified -> suppressed as well
+        putAttribute(2, thingId, "counter", "1")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        // AttributeModified caused via connection1: ditto-origin == connection1's connection id -> published
+        sendSignal(cf.connectionName1, ModifyAttribute.of(thingId, counterPointer, JsonValue.of(2),
+                createDittoHeaders(correlationId)));
+
+        // Then
+        consumeAndAssertEvents(cf.connectionNameWithOriginFnFilter, eventConsumer,
+                Collections.singletonList(
+                        e -> {
+                            final AttributeModified am =
+                                    thingEventForJson(e, AttributeModified.class, correlationId, thingId);
+                            assertThat(am.getAttributeValue()).isEqualTo(JsonValue.of(2));
+                        }), "AttributeModified caused via connection1");
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithOriginFnFilter, eventConsumer);
+        assertThat(unexpected)
+                .describedAs("HTTP-triggered events (absent ditto-origin) must be suppressed by the 'eq' filter")
+                .isNull();
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION_WITH_ORIGIN_FN_FILTER})
+    public void deliverLiveMessagesWithAbsentOriginHeaderForNeOriginFnFilterWithDefault() {
+
+        // Given
+        // the live-messages topic of connectionNameWithOriginFnFilter is:
+        //   _/_/things/live/messages
+        //       ?fn-filter=header:ditto-origin|fn:default('none')|fn:filter('ne','<connection-id-of-connection1>')
+        // the explicit opt-in for absent headers: for HTTP-sent messages ditto-origin is absent, fn:default
+        // supplies 'none' for it and 'none' is 'ne' connection1 -> the message is published
+        final ThingId thingId = generateThingId();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithOriginFnFilter))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final C messagesConsumer = initTargetsConsumer(cf.connectionNameWithOriginFnFilter);
+
+        // HTTP-triggered ThingCreated is suppressed by the 'eq' twin-events topic (ditto-origin absent)
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // When: live message via connection1 -> ditto-origin == connection1's id -> 'ne' unresolved -> suppressed
+        final String suppressedSubject = "subject-via-origin-connection";
+        final Message<?> suppressedMessage = Message.newBuilder(
+                        MessageBuilder.newHeadersBuilder(MessageDirection.TO, thingId, suppressedSubject)
+                                .contentType("text/plain")
+                                .correlationId(createNewCorrelationId())
+                                .build())
+                .payload("message via origin connection")
+                .build();
+        final SendThingMessage<?> suppressedSend = SendThingMessage.of(thingId, suppressedMessage,
+                DittoHeaders.newBuilder()
+                        .correlationId(suppressedMessage.getHeaders().getCorrelationId().orElseThrow())
+                        .responseRequired(false)
+                        .build());
+        sendSignal(cf.connectionName1, suppressedSend);
+        waitMillis(500);
+
+        // live message via HTTP -> ditto-origin absent -> fn:default('none') -> 'ne' matches -> published
+        final String deliveredSubject = "subject-via-http-without-origin";
+        postMessage(2, thingId, MessageDirection.TO, deliveredSubject, ContentType.JSON,
+                "\"message via HTTP\"", "0")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken(), true)
+                .expectingHttpStatus(HttpStatus.ACCEPTED)
+                .fire();
+
+        // Then
+        final M received = consumeFromTarget(cf.connectionNameWithOriginFnFilter, messagesConsumer);
+        assertThat(received).describedAs("live message without ditto-origin header").isNotNull();
+        assertThat(textFrom(received)).contains(deliveredSubject);
+        assertThat(textFrom(received)).doesNotContain(suppressedSubject);
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithOriginFnFilter, messagesConsumer);
+        assertThat(unexpected)
+                .describedAs("live message caused via connection1 must be suppressed by the 'ne' filter")
+                .isNull();
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION2, CONNECTION_WITH_ORIGIN_FN_FILTER_WITHOUT_DEFAULT})
+    public void suppressLiveMessagesWithAbsentOriginHeaderForNeOriginFnFilterWithoutDefault() {
+
+        // Given
+        // the live-messages topic of connectionNameWithOriginFnFilterWithoutDefault is:
+        //   _/_/things/live/messages?fn-filter=header:ditto-origin|fn:filter('ne','<connection-id-of-connection1>')
+        // the leading placeholder must resolve before fn:filter runs, so an absent ditto-origin (HTTP-sent
+        // message) is suppressed even for 'ne' - unless opted in with fn:default, as proven in
+        // deliverLiveMessagesWithAbsentOriginHeaderForNeOriginFnFilterWithDefault
+        final ThingId thingId = generateThingId();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setSubject(connectionSubject(cf.connectionName2))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithOriginFnFilterWithoutDefault))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final C messagesConsumer = initTargetsConsumer(cf.connectionNameWithOriginFnFilterWithoutDefault);
+
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // When: live message via HTTP -> ditto-origin absent -> leading placeholder unresolved -> suppressed
+        final String suppressedHttpSubject = "subject-via-http-without-origin";
+        postMessage(2, thingId, MessageDirection.TO, suppressedHttpSubject, ContentType.JSON,
+                "\"message via HTTP\"", "0")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken(), true)
+                .expectingHttpStatus(HttpStatus.ACCEPTED)
+                .fire();
+
+        // live message via connection1 -> ditto-origin == connection1's id -> 'ne' does not match -> suppressed
+        final String suppressedOriginSubject = "subject-via-excluded-origin-connection";
+        sendSignal(cf.connectionName1, liveMessageTo(thingId, suppressedOriginSubject, "message via connection1"));
+        waitMillis(500);
+
+        // live message via connection2 -> ditto-origin == connection2's id -> resolves, 'ne' matches -> published
+        final String deliveredSubject = "subject-via-other-origin-connection";
+        sendSignal(cf.connectionName2, liveMessageTo(thingId, deliveredSubject, "message via connection2"));
+
+        // Then
+        final M received = consumeFromTarget(cf.connectionNameWithOriginFnFilterWithoutDefault,
+                messagesConsumer);
+        assertThat(received).describedAs("live message caused via connection2 (ditto-origin present, ne matches)")
+                .isNotNull();
+        assertThat(textFrom(received)).contains(deliveredSubject);
+        assertThat(textFrom(received)).doesNotContain(suppressedHttpSubject);
+        assertThat(textFrom(received)).doesNotContain(suppressedOriginSubject);
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithOriginFnFilterWithoutDefault,
+                messagesConsumer);
+        assertThat(unexpected)
+                .describedAs("live messages without ditto-origin (HTTP) and via connection1 must both be " +
+                        "suppressed by the 'ne' fn-filter without fn:default")
+                .isNull();
+    }
+
+    private static SendThingMessage<?> liveMessageTo(final ThingId thingId, final String subject,
+            final String payload) {
+        final Message<?> message = Message.newBuilder(
+                        MessageBuilder.newHeadersBuilder(MessageDirection.TO, thingId, subject)
+                                .contentType("text/plain")
+                                .correlationId(createNewCorrelationId())
+                                .build())
+                .payload(payload)
+                .build();
+        return SendThingMessage.of(thingId, message, DittoHeaders.newBuilder()
+                .correlationId(message.getHeaders().getCorrelationId().orElseThrow())
+                .responseRequired(false)
+                .build());
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION2, CONNECTION_WITH_FN_FILTER_MATRIX})
+    public void publishLiveCommandsFilteredByLikeAndOriginFnFilters() {
+
+        // Given
+        // the live-commands topic of connectionNameWithFnFilterMatrix is:
+        //   ?fn-filter=header:ditto-originator|fn:filter('like','integration:*')
+        //   &fn-filter=header:ditto-origin|fn:filter('ne','<connection-id-of-connection1>')
+        // repeated fn-filter params are ANDed: the 'like' one requires a connection originator, the 'ne' one
+        // excludes connection1 -> only live commands caused via connection2 pass both.
+        // (live/commands is the topic where an RQL 'filter' is not supported at all)
+        final ThingId thingId = generateThingId();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setSubject(connectionSubject(cf.connectionName2))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithFnFilterMatrix))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final C consumer = initTargetsConsumer(cf.connectionNameWithFnFilterMatrix);
+
+        // the HTTP-created thing yields a ThingCreated (topic action 'created') on twin/events -> suppressed
+        // there by the twin-events topic's own filter ('modified'), so nothing leaks into this scenario
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // When: live command via HTTP -> originator is the OAuth subject: 'like integration:*' fails -> suppressed
+        putAttribute(2, thingId, "viaHttp", "1")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .withParam("channel", "live")
+                .withParam("timeout", "0")
+                .withCorrelationId(correlationId + "-live-http")
+                .expectingHttpStatus(HttpStatus.ACCEPTED)
+                .fire();
+
+        // live command via connection1 -> 'like' passes, origin == connection1 -> 'ne' fails -> suppressed
+        sendSignal(cf.connectionName1, ModifyAttribute.of(thingId, JsonPointer.of("viaConnection1"),
+                JsonValue.of(1), liveHeaders(correlationId + "-live-conn1")));
+        waitMillis(500);
+
+        // live command via connection2 -> both stages pass -> published
+        sendSignal(cf.connectionName2, ModifyAttribute.of(thingId, JsonPointer.of("viaConnection2"),
+                JsonValue.of(2), liveHeaders(correlationId + "-live-conn2")));
+
+        // Then
+        final M received = consumeFromTarget(cf.connectionNameWithFnFilterMatrix, consumer);
+        assertThat(received).describedAs("live command caused via connection2").isNotNull();
+        final Adaptable adaptable = jsonifiableAdaptableFrom(received);
+        assertThat(adaptable.getTopicPath().getChannel()).isEqualTo(TopicPath.Channel.LIVE);
+        assertThat(adaptable.getTopicPath().getAction()).contains(TopicPath.Action.MODIFY);
+        assertThat(adaptable.getPayload().getPath().toString()).isEqualTo("/attributes/viaConnection2");
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithFnFilterMatrix, consumer);
+        assertThat(unexpected)
+                .describedAs("live commands via HTTP (like fails) and via connection1 (ne fails) must be suppressed")
+                .isNull();
+    }
+
+    private static DittoHeaders liveHeaders(final String correlationId) {
+        return createDittoHeaders(correlationId).toBuilder()
+                .responseRequired(false)
+                .channel(TopicPath.Channel.LIVE.getName())
+                .build();
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION_WITH_FN_FILTER_MATRIX})
+    public void consumeOnlyModifiedTwinEventsForTopicActionFnFilter() {
+
+        // Given
+        // the twin-events topic of connectionNameWithFnFilterMatrix is:
+        //   ?fn-filter=topic:action|fn:filter('eq','modified')
+        // an fn-filter on a placeholder other than a header: the topic placeholder resolves against the
+        // signal's Ditto Protocol topic path, so only events whose action is 'modified' are published
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithFnFilterMatrix))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final ThingId thingId = generateThingId();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+        final C eventConsumer = initTargetsConsumer(cf.connectionNameWithFnFilterMatrix);
+
+        // When: ThingCreated (action 'created') -> suppressed
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // first write of the attribute -> AttributeCreated (action 'created') -> suppressed
+        sendSignal(cf.connectionName1, ModifyAttribute.of(thingId, JsonPointer.of("counter"), JsonValue.of(1),
+                createDittoHeaders(correlationId)));
+        waitMillis(500);
+
+        // second write -> AttributeModified (action 'modified') -> published
+        sendSignal(cf.connectionName1, ModifyAttribute.of(thingId, JsonPointer.of("counter"), JsonValue.of(2),
+                createDittoHeaders(correlationId)));
+
+        // Then
+        consumeAndAssertEvents(cf.connectionNameWithFnFilterMatrix, eventConsumer, Collections.singletonList(
+                e -> {
+                    final AttributeModified am =
+                            thingEventForJson(e, AttributeModified.class, correlationId, thingId);
+                    assertThat(am.getAttributeValue()).isEqualTo(JsonValue.of(2));
+                }
+        ), "AttributeModified via connection1");
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithFnFilterMatrix, eventConsumer);
+        assertThat(unexpected)
+                .describedAs("ThingCreated and AttributeCreated (topic action 'created') must be suppressed")
+                .isNull();
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @Connections({CONNECTION1, CONNECTION_WITH_FN_FILTER_MATRIX})
+    public void suppressLiveMessagesWithAbsentOriginHeaderForExistsFnFilter() {
+
+        // Given
+        // the live-messages topic of connectionNameWithFnFilterMatrix is:
+        //   ?fn-filter=header:ditto-origin|fn:filter('exists','true')
+        // docs absent header behavior: 'exists' drops a signal whose header is absent
+        // (HTTP-sent messages carry no ditto-origin) and publishes one that carries it (sent via a connection)
+        final ThingId thingId = generateThingId();
+        final Thing thing = Thing.newBuilder().setId(thingId).build();
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(cf.connectionName1))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .forLabel("RESTRICTED")
+                .setSubject(connectionSubject(cf.connectionNameWithFnFilterMatrix))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ)
+                .build();
+
+        final String correlationId = createNewCorrelationId();
+        final C messagesConsumer = initTargetsConsumer(cf.connectionNameWithFnFilterMatrix);
+
+        putThingWithPolicy(2, thing, policy, JsonSchemaVersion.V_2)
+                .withCorrelationId(correlationId)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        // When: live message via HTTP -> ditto-origin absent -> 'exists' drops -> suppressed
+        final String suppressedSubject = "subject-via-http-without-origin";
+        postMessage(2, thingId, MessageDirection.TO, suppressedSubject, ContentType.JSON,
+                "\"message via HTTP\"", "0")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken(), true)
+                .expectingHttpStatus(HttpStatus.ACCEPTED)
+                .fire();
+        waitMillis(500);
+
+        // live message via connection1 -> ditto-origin present -> 'exists' matches -> published
+        final String deliveredSubject = "subject-via-connection-with-origin";
+        sendSignal(cf.connectionName1, liveMessageTo(thingId, deliveredSubject, "message via connection1"));
+
+        // Then
+        final M received = consumeFromTarget(cf.connectionNameWithFnFilterMatrix, messagesConsumer);
+        assertThat(received).describedAs("live message with ditto-origin header").isNotNull();
+        assertThat(textFrom(received)).contains(deliveredSubject);
+        assertThat(textFrom(received)).doesNotContain(suppressedSubject);
+
+        final M unexpected = consumeFromTarget(cf.connectionNameWithFnFilterMatrix, messagesConsumer);
+        assertThat(unexpected)
+                .describedAs("live message without ditto-origin must be dropped by the 'exists' filter")
+                .isNull();
     }
 
     @Test

@@ -122,6 +122,8 @@ public final class ConnectivityFactory {
     public final String connectionNameWithOriginFnFilter;
     public final String connectionNameWithOriginFnFilterWithoutDefault;
     public final String connectionNameWithFnFilterMatrix;
+    public final String connectionNameWithChangeFilter;
+    public final String connectionNameWithChangeAndRqlFilter;
 
     private ConnectivityFactory(
             final String connectionNamePrefix,
@@ -173,6 +175,8 @@ public final class ConnectivityFactory {
             connectionNameWithOriginFnFilter = disambiguateConnectionName(username, connectionNamePrefix + 19);
             connectionNameWithOriginFnFilterWithoutDefault = disambiguateConnectionName(username, connectionNamePrefix + 20);
             connectionNameWithFnFilterMatrix = disambiguateConnectionName(username, connectionNamePrefix + 21);
+            connectionNameWithChangeFilter = disambiguateConnectionName(username, connectionNamePrefix + 22);
+            connectionNameWithChangeAndRqlFilter = disambiguateConnectionName(username, connectionNamePrefix + 23);
         } else {
             connectionName1 = null;
             connectionName2 = null;
@@ -195,6 +199,8 @@ public final class ConnectivityFactory {
             connectionNameWithOriginFnFilter = null;
             connectionNameWithOriginFnFilterWithoutDefault = null;
             connectionNameWithFnFilterMatrix = null;
+            connectionNameWithChangeFilter = null;
+            connectionNameWithChangeAndRqlFilter = null;
         }
     }
 
@@ -251,6 +257,8 @@ public final class ConnectivityFactory {
             connectionNameWithOriginFnFilter = disambiguateConnectionName(username, connectionNamePrefix + 19);
             connectionNameWithOriginFnFilterWithoutDefault = disambiguateConnectionName(username, connectionNamePrefix + 20);
             connectionNameWithFnFilterMatrix = disambiguateConnectionName(username, connectionNamePrefix + 21);
+            connectionNameWithChangeFilter = disambiguateConnectionName(username, connectionNamePrefix + 22);
+            connectionNameWithChangeAndRqlFilter = disambiguateConnectionName(username, connectionNamePrefix + 23);
         } else {
             connectionName1 = cf.connectionName1;
             connectionName2 = cf.connectionName2;
@@ -273,6 +281,8 @@ public final class ConnectivityFactory {
             connectionNameWithOriginFnFilter = cf.connectionNameWithOriginFnFilter;
             connectionNameWithOriginFnFilterWithoutDefault = cf.connectionNameWithOriginFnFilterWithoutDefault;
             connectionNameWithFnFilterMatrix = cf.connectionNameWithFnFilterMatrix;
+            connectionNameWithChangeFilter = cf.connectionNameWithChangeFilter;
+            connectionNameWithChangeAndRqlFilter = cf.connectionNameWithChangeAndRqlFilter;
         }
         this.maxClientCount = maxClientCount;
     }
@@ -320,6 +330,8 @@ public final class ConnectivityFactory {
             case CONNECTION_WITH_ORIGIN_FN_FILTER -> connectionNameWithOriginFnFilter;
             case CONNECTION_WITH_ORIGIN_FN_FILTER_WITHOUT_DEFAULT -> connectionNameWithOriginFnFilterWithoutDefault;
             case CONNECTION_WITH_FN_FILTER_MATRIX -> connectionNameWithFnFilterMatrix;
+            case CONNECTION_WITH_CHANGE_FILTER -> connectionNameWithChangeFilter;
+            case CONNECTION_WITH_CHANGE_AND_RQL_FILTER -> connectionNameWithChangeAndRqlFilter;
             case NONE -> "noname";
         };
     }
@@ -347,7 +359,9 @@ public final class ConnectivityFactory {
                                 connectionNameWithExtraFieldsAndFnFilter,
                                 connectionNameWithOriginFnFilter,
                                 connectionNameWithOriginFnFilterWithoutDefault,
-                                connectionNameWithFnFilterMatrix
+                                connectionNameWithFnFilterMatrix,
+                                connectionNameWithChangeFilter,
+                                connectionNameWithChangeAndRqlFilter
                         },
                         extraNames)
                 .flatMap(Arrays::stream)
@@ -488,6 +502,10 @@ public final class ConnectivityFactory {
                                 "integration:" + username + ":" + connectionName1,
                                 // in these tests a connection's ID equals its name (see buildOpenedConnection)
                                 connectionName1)),
+                entry(ConnectionCategory.CONNECTION_WITH_CHANGE_FILTER,
+                        () -> setupSingleConnectionWithChangeFilter(connectionNameWithChangeFilter)),
+                entry(ConnectionCategory.CONNECTION_WITH_CHANGE_AND_RQL_FILTER,
+                        () -> setupSingleConnectionWithChangeAndRqlFilter(connectionNameWithChangeAndRqlFilter)),
                 entry(ConnectionCategory.CONNECTION_WITH_HEADER_MAPPING,
                         () -> setupSingleConnectionWithHeaderMapping(connectionNameWithHeaderMapping)),
                 entry(ConnectionCategory.CONNECTION_WITH_RAW_MESSAGE_MAPPER_1,
@@ -838,6 +856,47 @@ public final class ConnectivityFactory {
                         "_/_/things/twin/events?fn-filter=topic:action|fn:filter('eq','modified')",
                         // live messages: 'exists' -> an absent ditto-origin is dropped
                         "_/_/things/live/messages?fn-filter=header:ditto-origin|fn:filter('exists','true')"
+                )
+        );
+    }
+
+    public Connection setupSingleConnectionWithChangeFilter(final String connectionId) {
+
+        LOGGER.info("Creating a connection of type <{}> with a change-filter target topic with ID <{}> to <{}> in " +
+                "Ditto Connectivity", connectionType, connectionId, getConnectionUri());
+
+        return modelBuilder.buildConnectionModelWithTargetTopics(
+                solutionSupplier.getSolution().getUsername(),
+                connectionId,
+                connectionType,
+                getConnectionUri(),
+                getSpecificConfig(),
+                defaultSourceAddress(connectionId),
+                defaultTargetAddress(connectionId),
+                Collections.singletonList(
+                        "_/_/things/twin/events?change-filter=exists(attributes/counter)" +
+                                "&extraFields=attributes/counter"
+                )
+        );
+    }
+
+    public Connection setupSingleConnectionWithChangeAndRqlFilter(final String connectionId) {
+
+        LOGGER.info("Creating a connection of type <{}> with 'change-filter' and RQL 'filter' target topic params " +
+                "with ID <{}> to <{}> in Ditto Connectivity", connectionType, connectionId, getConnectionUri());
+
+        return modelBuilder.buildConnectionModelWithTargetTopics(
+                solutionSupplier.getSolution().getUsername(),
+                connectionId,
+                connectionType,
+                getConnectionUri(),
+                getSpecificConfig(),
+                defaultSourceAddress(connectionId),
+                defaultTargetAddress(connectionId),
+                Collections.singletonList(
+                        "_/_/things/twin/events?change-filter=exists(attributes/counter)" +
+                                "&filter=eq(attributes/location,'Kitchen')" +
+                                "&extraFields=attributes/location"
                 )
         );
     }

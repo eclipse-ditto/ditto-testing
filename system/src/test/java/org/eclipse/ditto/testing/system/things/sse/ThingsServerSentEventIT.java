@@ -372,6 +372,68 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
     }
 
     @Test
+    public void openingSseFailsWithMalformedChangeFilter() {
+        final var path = getDefaultPath("change-filter=ge(features/foo/properties/matching/num,20");
+        final SseTestDriver driver = createTestDriver(0, path);
+        assertThatExceptionOfType(CompletionException.class)
+                .isThrownBy(driver::connect)
+                .withCauseInstanceOf(IllegalStateException.class);
+        assertThatExceptionOfType(Exception.class).isThrownBy(driver::getMessages);
+    }
+
+    @Test
+    public void featurePropertyModificationWithExtraFieldsAndChangeFilter() {
+        final String featureId = "foo";
+
+        final ThingId thingId1 = ThingId.of(idGenerator(interestingNamespace).withRandomName());
+        final Thing thing1 = Thing.newBuilder()
+                .setId(thingId1)
+                .setFeature(featureId)
+                .build();
+
+        putThing(TestConstants.API_V_2, thing1, JsonSchemaVersion.V_2)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        final int expectedMessagesCount = 2;
+        final String matchingPath = "features/" + featureId + "/properties/matching";
+        final var path = getDefaultPath(String.format("change-filter=exists(%s)&extraFields=%s", matchingPath,
+                matchingPath));
+        final SseTestDriver driver = createTestDriver(expectedMessagesCount, path);
+        driver.connect();
+
+        // Included: the change contains the matching property.
+        putProperty(TestConstants.API_V_2, thingId1, featureId, "matching/num", "10")
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+        // Excluded: the change does not contain it - the enriched extra fields do not count.
+        putProperty(TestConstants.API_V_2, thingId1, featureId, "non-matching/num", "20")
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+        // Included: the change contains the matching property.
+        putProperty(TestConstants.API_V_2, thingId1, featureId, "matching/num", "30")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        // Excluded: unlike with 'filter', the extra fields do not make this change match.
+        putProperty(TestConstants.API_V_2, thingId1, featureId, "non-matching/num", "40")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        final List<SseTestHandler.Message> actualMessages = driver.getMessages();
+        assertThat(actualMessages).hasSize(expectedMessagesCount);
+        final AtomicInteger index = new AtomicInteger();
+        final List<Integer> expectedValues = List.of(10, 30);
+        actualMessages.stream()
+                .map(SseTestHandler.Message::getData)
+                .map(ThingsModelFactory::newThing)
+                .forEach(thing -> assertThat(thing.getFeatures()
+                        .flatMap(features -> features.getFeature(featureId))
+                        .flatMap(feature -> feature.getProperty("matching/num"))
+                        .map(JsonValue::asInt))
+                        .contains(expectedValues.get(index.getAndIncrement())));
+    }
+
+    @Test
     public void attributeModificationWithExtraFieldsContainingSameAttribute() {
         final ThingId thingId1 = ThingId.of(idGenerator(interestingNamespace).withRandomName());
         final String counterKey = "counter";

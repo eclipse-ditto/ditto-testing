@@ -1355,6 +1355,111 @@ public final class WebsocketIT extends IntegrationTest {
     }
 
     @Test
+    public void subscribeForEventsWithChangeFilter() throws Exception {
+        final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+        final Policy policy = newPolicy(PolicyId.of(thingId), user1OAuthClient, user2OAuthClient);
+        final JsonPointer counterPointer = JsonPointer.of("counter");
+        final Thing thing = Thing.newBuilder()
+                .setId(thingId)
+                .setAttribute(counterPointer, JsonValue.of(1))
+                .setAttribute(JsonPointer.of("other"), JsonValue.of(1))
+                .build();
+
+        final BlockingQueue<Adaptable> incomingMessages = new LinkedBlockingQueue<>();
+        clientUser2.onAdaptable(incomingMessages::add);
+
+        // GIVEN: clientUser2 subscribes for the changes of attributes/counter, enriched with it
+        clientUser2.sendProtocolCommand(
+                "START-SEND-EVENTS?change-filter=exists(attributes/counter)&extraFields=attributes/counter",
+                "START-SEND-EVENTS:ACK").join();
+
+        // WHEN: the thing is created with the counter
+        // THEN: clientUser2 receives the creation
+        clientUser1.send(CreateThing.of(thing, policy.toJson(), COMMAND_HEADERS_V2));
+        assertThat(incomingMessages.poll(10, TimeUnit.SECONDS))
+                .extracting(adaptable -> adaptable.getTopicPath().getAction())
+                .isEqualTo(Optional.of(TopicPath.Action.CREATED));
+
+        // WHEN: clientUser1 changes another attribute, as modify and as merge at the thing root
+        clientUser1.send(ModifyAttribute.of(thingId, JsonPointer.of("other"), JsonValue.of(2),
+                COMMAND_HEADERS_V2.toBuilder().randomCorrelationId().build()));
+        clientUser1.send(MergeThing.of(thingId, JsonPointer.empty(), JsonObject.of("{\"attributes\":{\"other\":3}}"),
+                COMMAND_HEADERS_V2.toBuilder().randomCorrelationId().build()));
+
+        // AND WHEN: clientUser1 merges the counter at the thing root, where resource:path is "/"
+        clientUser1.send(MergeThing.of(thingId, JsonPointer.empty(), JsonObject.of("{\"attributes\":{\"counter\":2}}"),
+                COMMAND_HEADERS_V2.toBuilder().randomCorrelationId().build()));
+
+        // THEN: the next event clientUser2 receives is the counter merge, enriched with the counter -
+        // the changes of the other attribute were dropped (per-thing event order is preserved)
+        final Adaptable counterMerged = incomingMessages.poll(10, TimeUnit.SECONDS);
+        assertThat(counterMerged).isNotNull();
+        assertThat(counterMerged.getTopicPath().getAction()).contains(TopicPath.Action.MERGED);
+        assertThat(counterMerged.getPayload().getExtra()).contains(JsonObject.newBuilder()
+                .set(JsonPointer.of("attributes").append(counterPointer), 2)
+                .build());
+        assertThat(incomingMessages.poll(2, TimeUnit.SECONDS)).isNull();
+    }
+
+    @Test
+    public void subscribeForMessagesOrLiveCommandsWithChangeFilterIsRejected() throws Exception {
+        final BlockingQueue<Adaptable> incomingMessages = new LinkedBlockingQueue<>();
+        clientUser2.onAdaptable(incomingMessages::add);
+
+        for (final String protocolCommand : List.of("START-SEND-MESSAGES", "START-SEND-LIVE-COMMANDS")) {
+            clientUser2.sendWithoutResponse(protocolCommand + "?change-filter=exists(attributes/counter)");
+
+            final Adaptable error = incomingMessages.poll(10, TimeUnit.SECONDS);
+            assertThat(error).describedAs(protocolCommand).isNotNull();
+            assertThat(error.getTopicPath().getCriterion()).isEqualTo(TopicPath.Criterion.ERRORS);
+            assertThat(error.getPayload().getHttpStatus()).contains(HttpStatus.BAD_REQUEST);
+            assertThat(error.getPayload().getValue().map(JsonValue::toString).orElse(""))
+                    .contains("change-filter");
+        }
+    }
+
+    @Test
+    @Category(Acceptance.class)
+    public void weakAcksAreIssuedForEventsDroppedByChangeFilter() {
+
+        final AcknowledgementRequest acknowledgementRequest2 =
+                AcknowledgementRequest.of(AcknowledgementLabel.of(requestedAckClient2));
+
+        // a change-filter which definitely does not match the created thing
+        clientUser2.sendProtocolCommand("START-SEND-EVENTS?change-filter=exists(attributes/counter)",
+                "START-SEND-EVENTS:ACK").join();
+
+        final ThingId thingId = ThingId.of(idGenerator(testingContext1.getSolution().getDefaultNamespace()).withRandomName());
+        final BasicAuth basicAuth = serviceEnv.getDefaultTestingContext().getBasicAuth();
+        final DittoHeaders dittoHeaders = COMMAND_HEADERS_V2.toBuilder()
+                .acknowledgementRequest(AcknowledgementRequest.of(DittoAcknowledgementLabel.TWIN_PERSISTED),
+                        acknowledgementRequest2)
+                .timeout(Duration.ofSeconds(5))
+                .build();
+        final CreateThing createThing = CreateThing.of(Thing.newBuilder().setId(thingId).build(),
+                getPolicyJsonForAuth(PolicyId.of(thingId), basicAuth), dittoHeaders);
+
+        clientUser1.send(createThing).handle((commandResponse, throwable) -> {
+            assertThat(throwable).isNull();
+            assertThat(commandResponse).isInstanceOf(Acknowledgements.class);
+            final Acknowledgements acks = (Acknowledgements) commandResponse;
+            assertThat(acks.getHttpStatus()).isEqualTo(HttpStatus.OK);
+            assertThat(acks.getSuccessfulAcknowledgements().stream()
+                    .map(Acknowledgement::getLabel)
+            ).containsExactlyInAnyOrder(DittoAcknowledgementLabel.TWIN_PERSISTED, acknowledgementRequest2.getLabel());
+            assertThat(filterByLabel(acks.getSuccessfulAcknowledgements(), acknowledgementRequest2.getLabel())
+                    .map(Acknowledgement::isWeak)
+                    .findAny()
+            ).contains(true);
+
+            clientUser1.send(DeleteThing.of(thingId, dittoHeaders));
+            clientUser1.send(DeletePolicy.of(PolicyId.of(thingId), dittoHeaders));
+
+            return commandResponse;
+        }).join();
+    }
+
+    @Test
     @Category(Acceptance.class)
     public void weakAcksAreIssuedForUnauthorizedSubscribers() {
         final AcknowledgementRequest requestUnauthorizedSubscriber =

@@ -266,18 +266,20 @@ public final class HandleFeatureMessagesIT extends AbstractClientIT {
                 .fire();
         rememberForCleanUp(deleteThing(2, thingId));
 
-        // not authorized = forbidden
+        // READ but no WRITE access = forbidden
         postMessage(2, thingId, FEATURE_ID_1, FROM, "subject", "text/plain",
                 "test message", TIMEOUT)
                 .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(HttpStatus.FORBIDDEN)
+                .expectingErrorCode("messages:send.notallowed")
                 .fire();
 
-        // no WRITE access = forbidden
+        // no permission at all = not found, as the existence of the thing must not be revealed
         postMessage(2, thingId, FEATURE_ID_1, FROM, "subject", "text/plain",
                 "test message", TIMEOUT)
                 .withConfiguredAuth(serviceEnv.getTestingContext3())
-                .expectingHttpStatus(HttpStatus.FORBIDDEN)
+                .expectingHttpStatus(HttpStatus.NOT_FOUND)
+                .expectingErrorCode("things:thing.notfound")
                 .fire();
 
         // nonexistent thing = not found

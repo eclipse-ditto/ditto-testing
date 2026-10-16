@@ -362,9 +362,18 @@ public final class PolicyEnforcementIT extends IntegrationTest {
                 createPolicyRootAndAdditionalAccess(policyId, defaultClientSubjectId, client3SubjectId, "WRITE",
                         ATTRIBUTE_A);
 
+        // user3 has no permission at all on the thing, so the thing's existence must not be revealed:
         putAttribute(API_V_2, testThingId, ATTRIBUTE_A, "false")
                 .withConfiguredAuth(serviceEnv.getTestingContext3())
+                .expectingHttpStatus(HttpStatus.NOT_FOUND)
+                .expectingErrorCode("things:thing.notfound")
+                .fire();
+
+        // user2 has READ permission on the attribute, so it knows the thing exists and gets the specific error:
+        putAttribute(API_V_2, testThingId, ATTRIBUTE_A, "false")
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
                 .expectingHttpStatus(FORBIDDEN)
+                .expectingErrorCode("things:attribute.notmodifiable")
                 .fire();
 
         // alter policy
@@ -687,9 +696,11 @@ public final class PolicyEnforcementIT extends IntegrationTest {
 
         final Thing theThing = Thing.newBuilder().setId(thingId).build();
 
-        // modifying the Thing should no longer work
+        // modifying the Thing should no longer work - as without a policy no one has any permission on the thing,
+        // its existence must not be revealed:
         putThing(API_V_2, theThing, JsonSchemaVersion.V_2)
-                .expectingHttpStatus(FORBIDDEN)
+                .expectingHttpStatus(HttpStatus.NOT_FOUND)
+                .expectingErrorCode("things:thing.notfound")
                 .fire();
 
         // adding the Policy again

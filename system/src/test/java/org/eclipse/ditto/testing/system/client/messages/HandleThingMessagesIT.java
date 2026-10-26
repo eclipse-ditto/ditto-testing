@@ -329,10 +329,11 @@ public final class HandleThingMessagesIT extends AbstractClientIT {
                 .fire();
         rememberForCleanUp(deleteThing(2, thingId));
 
-        // not authorized = forbidden
+        // no permission at all = not found, as the existence of the thing must not be revealed
         postMessage(2, thingId, FROM, "subject", "text/plain", "", TIMEOUT)
                 .withJWT(serviceEnv.getTestingContext2().getOAuthClient().getAccessToken())
-                .expectingHttpStatus(HttpStatus.FORBIDDEN)
+                .expectingHttpStatus(HttpStatus.NOT_FOUND)
+                .expectingErrorCode("things:thing.notfound")
                 .fire();
 
         // nonexistent = not found

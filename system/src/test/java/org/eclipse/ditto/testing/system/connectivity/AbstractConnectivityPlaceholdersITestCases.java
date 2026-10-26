@@ -301,13 +301,14 @@ public abstract class AbstractConnectivityPlaceholdersITestCases<C, M>
                     DittoJsonAssertions.assertThat(ac.getAttributeValue()).isEqualTo(modAttrValue);
                 });
 
-        // verify forbiddenModifyAttribute was rejected
+        // verify forbiddenModifyAttribute was rejected - as its authorization subject has no permission at all on the
+        // thing, the existence of the thing must not be revealed:
         final M response = consumeResponse(forbiddenCorrelationId, responseConsumer);
         final Signal<?> signal = PROTOCOL_ADAPTER.fromAdaptable(jsonifiableAdaptableFrom(response));
         assertThat(signal).isInstanceOf(ErrorResponse.class);
         final ErrorResponse errorResponse = (ErrorResponse) signal;
-        assertThat(errorResponse.getDittoRuntimeException().getHttpStatus()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(errorResponse.getDittoRuntimeException().getErrorCode()).isEqualTo("things:attribute.notmodifiable");
+        assertThat(errorResponse.getDittoRuntimeException().getHttpStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(errorResponse.getDittoRuntimeException().getErrorCode()).isEqualTo("things:thing.notfound");
     }
 
 }

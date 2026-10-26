@@ -12,6 +12,8 @@
  */
 package org.eclipse.ditto.testing.system.things.rest.smartchannel;
 
+import static org.hamcrest.Matchers.equalTo;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -155,7 +157,9 @@ public final class SmartChannelViaHttpToWsWithPermissionCheckIT {
                 .then()
                 .header(HttpHeader.CONTENT_TYPE.getName(), "application/json")
                 .header(DittoHeaderDefinition.CORRELATION_ID.getKey(), correlationId.toString())
-                .statusCode(HttpStatus.SC_PRECONDITION_FAILED);
+                // without any permission on the thing, its existence must not be revealed by evaluating the condition
+                .statusCode(HttpStatus.SC_NOT_FOUND)
+                .body("error", equalTo("things:thing.notfound"));
 
         assertDeviceDidNotHandleMessage(handledByDevice);
         softly.assertAll();

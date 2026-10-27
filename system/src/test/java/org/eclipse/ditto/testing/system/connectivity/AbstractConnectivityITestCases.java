@@ -21,6 +21,8 @@ import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.C
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION2;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_2_SOURCES;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_RQL_AND_FN_FILTER;
+import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_CHANGE_AND_RQL_FILTER;
+import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_CHANGE_FILTER;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_CONNECTION_ANNOUNCEMENTS;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_ENFORCEMENT_ENABLED;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_EXTRA_FIELDS;
@@ -1234,6 +1236,143 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         assertThat(unexpected)
                 .describedAs("enriched events of the excluded originator must still be suppressed")
                 .isNull();
+    }
+
+    @Test
+    @Connections(CONNECTION_WITH_CHANGE_FILTER)
+    public void publishOnlyChangesMatchingChangeFilterWithExtraFields() {
+
+        // Given
+        // the twin-events topic of connectionNameWithChangeFilter is:
+        //   _/_/things/twin/events?change-filter=exists(attributes/counter)&extraFields=attributes/counter
+        // the enriched attributes/counter must not make every event of the thing match
+        final ThingId thingId = generateThingId();
+        final C eventConsumer = initTargetsConsumer(cf.connectionNameWithChangeFilter);
+        putThingWithPolicy(2, Thing.newBuilder()
+                        .setId(thingId)
+                        .setAttribute(JsonPointer.of("counter"), JsonValue.of(5))
+                        .setAttribute(JsonPointer.of("other"), JsonValue.of(1))
+                        .build(), changeFilterPolicy(cf.connectionNameWithChangeFilter), JsonSchemaVersion.V_2)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+
+        assertChangeFilterEvent(consumeFromTarget(cf.connectionNameWithChangeFilter, eventConsumer),
+                TopicPath.Action.CREATED, JsonPointer.of("attributes/counter"), JsonValue.of(5));
+
+        // When: changes not touching attributes/counter -> suppressed, as modified and as merged event
+        putAttribute(2, thingId, "other", "2")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        patchThing(thingId, JsonPointer.empty(), JsonObject.of("{\"attributes\":{\"other\":3}}"))
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        // When: changes of attributes/counter -> published, also for a merge at the thing root where
+        // resource:path is "/"; their order also proves the previous events were dropped and not delayed
+        patchThing(thingId, JsonPointer.empty(), JsonObject.of("{\"attributes\":{\"counter\":14}}"))
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        assertChangeFilterEvent(consumeFromTarget(cf.connectionNameWithChangeFilter, eventConsumer),
+                TopicPath.Action.MERGED, JsonPointer.of("attributes/counter"), JsonValue.of(14));
+
+        putAttribute(2, thingId, "counter", "15")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        assertChangeFilterEvent(consumeFromTarget(cf.connectionNameWithChangeFilter, eventConsumer),
+                TopicPath.Action.MODIFIED, JsonPointer.of("attributes/counter"), JsonValue.of(15));
+
+        assertThat(consumeFromTarget(cf.connectionNameWithChangeFilter, eventConsumer))
+                .describedAs("changes not matching the change-filter must be suppressed")
+                .isNull();
+    }
+
+    @Test
+    @Connections(CONNECTION_WITH_CHANGE_AND_RQL_FILTER)
+    public void publishOnlyChangesMatchingChangeFilterAndRqlFilter() {
+
+        // Given
+        // the twin-events topic of connectionNameWithChangeAndRqlFilter is:
+        //   _/_/things/twin/events?change-filter=exists(attributes/counter)
+        //       &filter=eq(attributes/location,'Kitchen')&extraFields=attributes/location
+        // the change must touch attributes/counter AND the (enriched) thing must currently be in the kitchen
+        final ThingId thingId = generateThingId();
+        final C eventConsumer = initTargetsConsumer(cf.connectionNameWithChangeAndRqlFilter);
+        putThingWithPolicy(2, Thing.newBuilder()
+                        .setId(thingId)
+                        .setAttribute(JsonPointer.of("counter"), JsonValue.of(5))
+                        .setAttribute(JsonPointer.of("location"), JsonValue.of("Kitchen"))
+                        .build(), changeFilterPolicy(cf.connectionNameWithChangeAndRqlFilter), JsonSchemaVersion.V_2)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+        assertChangeFilterEvent(consumeFromTarget(cf.connectionNameWithChangeAndRqlFilter, eventConsumer),
+                TopicPath.Action.CREATED, JsonPointer.of("attributes/location"),
+                JsonValue.of("Kitchen"));
+
+        putCounterAttribute(thingId, 6);
+        assertChangeFilterEvent(consumeFromTarget(cf.connectionNameWithChangeAndRqlFilter, eventConsumer),
+                TopicPath.Action.MODIFIED, JsonPointer.of("attributes/location"),
+                JsonValue.of("Kitchen"));
+
+        // When: the location changes (no counter change), the counter changes outside the kitchen and the
+        // location changes back -> all suppressed
+        putAttribute(2, thingId, "location", "\"Garage\"")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putCounterAttribute(thingId, 7);
+        putAttribute(2, thingId, "location", "\"Kitchen\"")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+
+        // When: the counter changes in the kitchen again -> published
+        putCounterAttribute(thingId, 8);
+        final M published = consumeFromTarget(cf.connectionNameWithChangeAndRqlFilter, eventConsumer);
+        assertChangeFilterEvent(published, TopicPath.Action.MODIFIED, JsonPointer.of("attributes/location"),
+                JsonValue.of("Kitchen"));
+        assertThat(jsonifiableAdaptableFrom(published).getPayload().getValue())
+                .describedAs("the counter change published after the suppressed ones")
+                .contains(JsonValue.of(8));
+
+        assertThat(consumeFromTarget(cf.connectionNameWithChangeAndRqlFilter, eventConsumer))
+                .describedAs("changes failing the change-filter or the RQL filter must be suppressed")
+                .isNull();
+    }
+
+    private Policy changeFilterPolicy(final String connectionName) {
+        return Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .forLabel("CONNECTION")
+                .setSubject(connectionSubject(connectionName))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ)
+                .build();
+    }
+
+    private void putCounterAttribute(final ThingId thingId, final int counter) {
+        putAttribute(2, thingId, "counter", String.valueOf(counter))
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+    }
+
+    private void assertChangeFilterEvent(final M message, final TopicPath.Action expectedAction,
+            final JsonPointer expectedExtraField, final JsonValue expectedExtraValue) {
+        assertThat(message).describedAs("event " + expectedAction).isNotNull();
+        final Adaptable adaptable = jsonifiableAdaptableFrom(message);
+        assertThat(adaptable.getTopicPath().getAction()).describedAs("action").contains(expectedAction);
+        assertThat(adaptable.getPayload().getExtra()).describedAs("extra")
+                .contains(JsonObject.newBuilder()
+                        .set(expectedExtraField, expectedExtraValue)
+                        .build());
     }
 
     @Test

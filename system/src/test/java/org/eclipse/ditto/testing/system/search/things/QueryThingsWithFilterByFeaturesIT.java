@@ -22,8 +22,11 @@ import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.and;
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.not;
 import static org.eclipse.ditto.thingsearch.model.SearchModelFactory.newSortOption;
 
+import java.util.List;
+
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
 import org.eclipse.ditto.json.JsonFactory;
+import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.testing.common.VersionedSearchIntegrationTest;
 import org.eclipse.ditto.testing.common.matcher.search.SearchMatcher;
 import org.eclipse.ditto.testing.common.matcher.search.SearchProperties;
@@ -33,6 +36,7 @@ import org.eclipse.ditto.things.model.FeatureProperties;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.thingsearch.model.SearchFilter;
+import org.eclipse.ditto.thingsearch.model.SearchProperty;
 import org.eclipse.ditto.thingsearch.model.SortOptionEntry;
 import org.junit.Test;
 
@@ -74,6 +78,13 @@ public class QueryThingsWithFilterByFeaturesIT extends VersionedSearchIntegratio
     private static final String FEATURE_ID1 = "testFeature";
     private static final String ANOTHER_FEATURE_ID = "anotherFeature";
     private static final String NOT_SEARCHED_FEATURE_ID = "notSearchedFeature";
+
+    private static final SearchFilter THING_ID_FILTER =
+            SearchProperties.thingId().like("*QueryThingsWithFilterByFeaturesIT*");
+    // in() operands of the null-operand tests; "non-null" is thing2's NULL_PROPERTY value (see createThing2)
+    private static final List<JsonValue> NON_NULL_OR_NULL =
+            List.of(JsonFactory.newValue("non-null"), JsonFactory.nullLiteral());
+    private static final List<JsonValue> ONLY_NULL = List.of(JsonFactory.nullLiteral());
 
     private static ThingId thing1Id;
     private static ThingId thing2Id;
@@ -649,13 +660,290 @@ public class QueryThingsWithFilterByFeaturesIT extends VersionedSearchIntegratio
         }
     }
 
+    /*
+     * Null operands of in()/ge/gt/le/lt. The search contract: a null operand of in(), ge and le matches a null value
+     * and a missing property; gt and lt with a null operand match nothing; only eq(null) and ne require the property
+     * to exist. On the feature wildcard a feature that lacks the property matches the null-or-missing operators.
+     * This is the behaviour of the MongoDB-backed search the contract comes from. Fixture: thing1 nullProperty =
+     * null, thing2 "non-null" (on both features), thing3/thing4 features without nullProperty.
+     */
+
+    @Test
+    public void queryByInStringAndNull() {
+        search(featureProperty(NULL_PROPERTY).in(NON_NULL_OR_NULL))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(featureDesiredProperty(NULL_PROPERTY).in(NON_NULL_OR_NULL))
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByInStringAndNullOnCertainFeature() {
+        search(featureProperty(FEATURE_ID1, NULL_PROPERTY).in(NON_NULL_OR_NULL))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(featureDesiredProperty(FEATURE_ID1, NULL_PROPERTY).in(NON_NULL_OR_NULL))
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByInNull() {
+        search(featureProperty(NULL_PROPERTY).in(ONLY_NULL))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(featureDesiredProperty(NULL_PROPERTY).in(ONLY_NULL))
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByInNullOnCertainFeature() {
+        search(featureProperty(FEATURE_ID1, NULL_PROPERTY).in(ONLY_NULL))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(featureDesiredProperty(FEATURE_ID1, NULL_PROPERTY).in(ONLY_NULL))
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                    .fire();
+        }
+    }
+
+    /**
+     * The null-or-missing leg of in() combined with a point predicate on another property of the same feature.
+     */
+    @Test
+    public void queryByInStringAndNullCombinedWithEqString() {
+        search(and(featureProperty(NULL_PROPERTY).in(NON_NULL_OR_NULL), featureProperty(STRING_PROPERTY).eq("c")))
+                .expectingBody(isEqualTo(toThingResult(thing3Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(and(featureDesiredProperty(NULL_PROPERTY).in(NON_NULL_OR_NULL),
+                    featureDesiredProperty(STRING_PROPERTY).eq("c")))
+                    .expectingBody(isEqualTo(toThingResult(thing3Id)))
+                    .fire();
+        }
+    }
+
+    /**
+     * Negated in() with a value and a null operand: every thing holds the value, null or no such property at all, so
+     * nothing is left.
+     */
+    @Test
+    public void queryByNotInStringAndNull() {
+        search(not(featureProperty(NULL_PROPERTY).in(NON_NULL_OR_NULL)))
+                .expectingBody(isEmpty())
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(not(featureDesiredProperty(NULL_PROPERTY).in(NON_NULL_OR_NULL)))
+                    .expectingBody(isEmpty())
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByNotInStringAndNullOnCertainFeature() {
+        search(not(featureProperty(FEATURE_ID1, NULL_PROPERTY).in(NON_NULL_OR_NULL)))
+                .expectingBody(isEmpty())
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(not(featureDesiredProperty(FEATURE_ID1, NULL_PROPERTY).in(NON_NULL_OR_NULL)))
+                    .expectingBody(isEmpty())
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByGeNull() {
+        search(nullComparison("ge", featureProperty(NULL_PROPERTY)))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(nullComparison("ge", featureDesiredProperty(NULL_PROPERTY)))
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByGeNullOnCertainFeature() {
+        search(nullComparison("ge", featureProperty(FEATURE_ID1, NULL_PROPERTY)))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(nullComparison("ge", featureDesiredProperty(FEATURE_ID1, NULL_PROPERTY)))
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByLeNull() {
+        search(nullComparison("le", featureProperty(NULL_PROPERTY)))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(nullComparison("le", featureDesiredProperty(NULL_PROPERTY)))
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByLeNullOnCertainFeature() {
+        search(nullComparison("le", featureProperty(FEATURE_ID1, NULL_PROPERTY)))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(nullComparison("le", featureDesiredProperty(FEATURE_ID1, NULL_PROPERTY)))
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing3Id, thing4Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByGtNull() {
+        search(nullComparison("gt", featureProperty(NULL_PROPERTY)))
+                .expectingBody(isEmpty())
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(nullComparison("gt", featureDesiredProperty(NULL_PROPERTY)))
+                    .expectingBody(isEmpty())
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByGtNullOnCertainFeature() {
+        search(nullComparison("gt", featureProperty(FEATURE_ID1, NULL_PROPERTY)))
+                .expectingBody(isEmpty())
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(nullComparison("gt", featureDesiredProperty(FEATURE_ID1, NULL_PROPERTY)))
+                    .expectingBody(isEmpty())
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByLtNull() {
+        search(nullComparison("lt", featureProperty(NULL_PROPERTY)))
+                .expectingBody(isEmpty())
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(nullComparison("lt", featureDesiredProperty(NULL_PROPERTY)))
+                    .expectingBody(isEmpty())
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByLtNullOnCertainFeature() {
+        search(nullComparison("lt", featureProperty(FEATURE_ID1, NULL_PROPERTY)))
+                .expectingBody(isEmpty())
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(nullComparison("lt", featureDesiredProperty(FEATURE_ID1, NULL_PROPERTY)))
+                    .expectingBody(isEmpty())
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByNotGtNull() {
+        search("not(" + nullComparison("gt", featureProperty(NULL_PROPERTY)) + ")")
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search("not(" + nullComparison("gt", featureDesiredProperty(NULL_PROPERTY)) + ")")
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByNotGtNullOnCertainFeature() {
+        search("not(" + nullComparison("gt", featureProperty(FEATURE_ID1, NULL_PROPERTY)) + ")")
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search("not(" + nullComparison("gt", featureDesiredProperty(FEATURE_ID1, NULL_PROPERTY)) + ")")
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByNotLtNull() {
+        search("not(" + nullComparison("lt", featureProperty(NULL_PROPERTY)) + ")")
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search("not(" + nullComparison("lt", featureDesiredProperty(NULL_PROPERTY)) + ")")
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByNotLtNullOnCertainFeature() {
+        search("not(" + nullComparison("lt", featureProperty(FEATURE_ID1, NULL_PROPERTY)) + ")")
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                .fire();
+
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search("not(" + nullComparison("lt", featureDesiredProperty(FEATURE_ID1, NULL_PROPERTY)) + ")")
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id)))
+                    .fire();
+        }
+    }
+
+    /**
+     * Renders {@code <operator>(<path>,null)} as raw RQL: {@link SearchProperty#ge(String)}, {@code gt}, {@code le}
+     * and {@code lt} reject a {@code null} value, so the filter cannot be built with the search model.
+     */
+    private static String nullComparison(final String operator, final SearchProperty property) {
+        return operator + "(" + property.getPath() + ",null)";
+    }
+
     private SearchMatcher search(final SearchFilter searchFilter) {
         return search(searchFilter, apiVersion);
     }
 
+    private SearchMatcher search(final String rqlFilter) {
+        return searchThings(apiVersion)
+                .filter("and(" + rqlFilter + "," + THING_ID_FILTER + ")")
+                .option(newSortOption(SortProperties.thingId(), SortOptionEntry.SortOrder.ASC));
+    }
+
     private static SearchMatcher search(final SearchFilter searchFilter, final JsonSchemaVersion apiVersion) {
         return searchThings(apiVersion)
-                .filter(and(searchFilter, SearchProperties.thingId().like("*QueryThingsWithFilterByFeaturesIT*")))
+                .filter(and(searchFilter, THING_ID_FILTER))
                 .option(newSortOption(SortProperties.thingId(), SortOptionEntry.SortOrder.ASC));
     }
 

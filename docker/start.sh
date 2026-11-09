@@ -26,6 +26,9 @@
 #                    baked in (`BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh` in DITTO_REPO_DIR) before
 #                    starting. Off by default: CI builds the images before calling this script.
 #   DITTO_REPO_DIR   ditto worktree used by BUILD_IMAGES=1 (default: ./../../ditto).
+#   DITTO_START_GRACE_SECONDS
+#                    seconds (default 10) the Ditto services get after `up` before every Ditto container must be
+#                    `running`; one that exited meanwhile aborts the start with its last log lines.
 
 set -e
 
@@ -122,9 +125,11 @@ function build_images {
     printf "DITTO_REPO_DIR=<%s> does not point at a ditto worktree with the Postgres extensions; point it at the feat/postgres-persistance-search worktree.\n" "$ditto_repo_dir" >&2
     return 1
   fi
-  # build-images.sh only wraps already-built JARs into images: require a built worktree.
+  # build-images.sh only wraps already-built JARs into images: require a built worktree. It then refuses to bake
+  # a shaded extension JAR whose classes differ from its module JAR (stale after an incremental build), so this
+  # path inherits that guard; the fix it names is the same `clean install`.
   if [ ! -f "$marker_dir/target/ditto-postgres-persistence-extension-0-SNAPSHOT.jar" ]; then
-    printf "ERROR: no built extension JAR in <%s/target>; run (cd %s && mvn install -DskipTests) first.\n" "$marker_dir" "$ditto_repo_dir" >&2
+    printf "ERROR: no built extension JAR in <%s/target>; run (cd %s && mvn clean install -DskipTests -DskipITs) first.\n" "$marker_dir" "$ditto_repo_dir" >&2
     return 1
   fi
   printf "\nBuilding Ditto service images with baked Postgres extensions from <%s> ...\n\n" "$ditto_repo_dir"
@@ -144,6 +149,51 @@ function wait_for_postgres {
   done
   echo "PostgreSQL did not become healthy in time." >&2
   return 1
+}
+
+# The Ditto services `compose up` starts below, in start order.
+DITTO_SERVICES=(policies things things-search connectivity gateway)
+
+# A Ditto service that dies right after `up` (a config or extension error at boot) leaves the stack looking
+# started: the container check at the end only proves that a container exists at that instant, and the
+# `read -t` waits return at once without a TTY (CI, scripted runs). Observed on stale extension JARs:
+# connectivity exited six seconds after start and the run went on. So give the JVMs DITTO_START_GRACE_SECONDS
+# (default 10) to fail, then require every Ditto container to be `running`; a dead one is reported with its
+# last 40 log lines and the caller downs the stack (assert_success). `ps -a` also lists exited containers.
+function check_ditto_services_running {
+  local svc id status
+  local dead=()
+  local grace="${DITTO_START_GRACE_SECONDS:-10}"
+  sleep "$grace"
+  for svc in "${DITTO_SERVICES[@]}"; do
+    id="$(compose ps -q -a "$svc" 2>/dev/null | head -n 1)"
+    if [ -z "$id" ]; then
+      status="no container"
+    else
+      status="$(docker inspect -f '{{.State.Status}} (exit code {{.State.ExitCode}})' "$id" 2>/dev/null || echo "unknown")"
+    fi
+    case "$status" in
+      running*)
+        printf "%s is running.\n" "$svc"
+        ;;
+      *)
+        dead+=("$svc")
+        {
+          printf "\nERROR: Ditto service <%s> is not running %s s after start: %s. Last 40 log lines:\n" \
+            "$svc" "$grace" "$status"
+          if [ -n "$id" ]; then
+            docker logs --tail 40 "$id" 2>&1 | sed 's/^/  | /'
+          fi
+        } >&2
+        ;;
+    esac
+  done
+  if [ "${#dead[@]}" -gt 0 ]; then
+    printf "\nERROR: Ditto service(s) died right after start: %s. Full logs: <service>-%s.log in docker/.\n" \
+      "${dead[*]}" "$TAG" >&2
+    return 1
+  fi
+  return 0
 }
 
 # Postgres mode needs service images built with BAKE_POSTGRES_EXTENSIONS=true (the two extension JARs live in
@@ -194,8 +244,8 @@ function check_service_images {
     printf "     (or any branch containing internal/utils/postgres-persistence-extension):\n"
     printf "\n"
     printf "       cd /path/to/ditto\n"
-    printf "       mvn install -DskipTests                       # skip if the JARs are already built\n"
-    printf "       BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh\n"
+    printf "       mvn clean install -DskipTests -DskipITs       # 'clean' matters: an incremental install can leave\n"
+    printf "       BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh  # the shaded extension JARs stale (the script refuses them)\n"
     printf "\n"
     printf "     Prefix IMAGE_VERSION=%s if you overrode DITTO_VERSION.\n" "$DITTO_VERSION"
     printf "\n"
@@ -291,6 +341,13 @@ function check_service_images {
   compose logs -f things-search &> "things-search-$TAG.log" &
   compose logs -f connectivity &> "connectivity-$TAG.log" &
   compose logs -f gateway &> "gateway-$TAG.log" &
+
+  if [ "$DITTO_DB" = "postgres" ]; then
+    printf "\nWaiting %s seconds, then checking that every Ditto service is still running ...\n\n" \
+      "${DITTO_START_GRACE_SECONDS:-10}"
+    (check_ditto_services_running)
+    assert_success $?
+  fi
 
   printf "\n"
   read -r -p "Waiting for 20 seconds ..." -t 20

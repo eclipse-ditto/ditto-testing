@@ -58,10 +58,16 @@ The Postgres backend is activated per service by
    `feat/postgres-persistance-search` branch (it contains the marker module
    `internal/utils/postgres-persistence-extension`):
    ```bash
-   cd /path/to/ditto && mvn install -DskipTests && BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh
+   cd /path/to/ditto && mvn clean install -DskipTests -DskipITs && BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh
    ```
    (prefix `IMAGE_VERSION=<tag>` if you override `DITTO_VERSION`), or let `start.sh` do the image step for you
-   with `BUILD_IMAGES=1` (see below).
+   with `BUILD_IMAGES=1` (see below). **`clean` matters:** on a tree with earlier build output, `mvn install`
+   without it can leave the shaded extension JARs stale while every build step reports success (the extension
+   module's own sources are unchanged, so the previous shaded JAR is kept and re-shaded over the fresh module
+   classes) — the images then run the previous build's code. The extension poms now force that thin JAR to be
+   rebuilt, and `build-images.sh` refuses to bake a shaded extension JAR whose classes differ from its module
+   JAR (partial `-pl` builds, older ditto trees), naming the `clean install` fix;
+   `BAKE_POSTGRES_EXTENSIONS=true CHECK_ONLY=1 ./build-images.sh` runs only that check.
 2. Docker + a `docker-compose` binary on the PATH (the Compose v2 standalone build is fine), Maven, JDK — the
    same toolchain as for the MongoDB run. The scripts call `docker-compose` by that name (CI rewrites them to
    `docker compose` with `sed`); if you only have the `docker compose` plugin, put a two-line shim named
@@ -84,8 +90,16 @@ In postgres mode the script assembles the compose stack explicitly (`docker-comp
 waits for the Postgres healthcheck, then starts the Ditto services in the usual order. `postgres` is included in the log tailing
 (`postgres-<TAG>.log`) and in the container check. With `BUILD_IMAGES=1` it first fails fast if
 `DITTO_REPO_DIR` is not a worktree with the marker module or if the extension JAR has not been built, then
-runs `IMAGE_VERSION="$DITTO_VERSION" BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh` there. `BUILD_IMAGES` is
-ignored in mongodb mode.
+runs `IMAGE_VERSION="$DITTO_VERSION" BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh` there — which inherits
+`build-images.sh`'s stale-JAR guard: a shaded extension JAR whose classes differ from its module JAR aborts the
+image build with the `mvn clean install -DskipTests -DskipITs` fix. `BUILD_IMAGES` is ignored in mongodb mode.
+
+Once the Ditto services are up, postgres mode gives them a few seconds (`DITTO_START_GRACE_SECONDS`, default
+10) and then requires every Ditto container (`policies`, `things`, `things-search`, `connectivity`, `gateway`)
+to be `running`: a service that died right after `up` (a config or extension error at boot — connectivity has
+exited six seconds after start while the stack still "started") is reported with its last 40 log lines, and the
+stack is downed. The upstream container check alone only proves that a container exists at that instant, and
+its `read -t` waits return at once without a TTY (CI, scripted runs).
 
 Because the local `docker-compose.override.yml` stays in the stack, the gateway is published on
 `localhost:8080` as usual and Postgres on `localhost:5432` (`POSTGRES_PORT_TCP` to change it) for debugging;

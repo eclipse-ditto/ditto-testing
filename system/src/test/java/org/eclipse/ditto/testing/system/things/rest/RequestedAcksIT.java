@@ -16,6 +16,7 @@ import static org.eclipse.ditto.base.model.common.HttpStatus.ACCEPTED;
 import static org.eclipse.ditto.base.model.common.HttpStatus.BAD_REQUEST;
 import static org.eclipse.ditto.base.model.common.HttpStatus.CREATED;
 import static org.eclipse.ditto.base.model.common.HttpStatus.FAILED_DEPENDENCY;
+import static org.eclipse.ditto.base.model.common.HttpStatus.NOT_FOUND;
 import static org.eclipse.ditto.base.model.common.HttpStatus.NO_CONTENT;
 import static org.eclipse.ditto.base.model.common.HttpStatus.OK;
 import static org.eclipse.ditto.base.model.common.HttpStatus.REQUEST_TIMEOUT;
@@ -27,6 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.eclipse.ditto.base.model.acks.AcknowledgementLabel;
 import org.eclipse.ditto.base.model.acks.AcknowledgementRequest;
@@ -41,6 +43,7 @@ import org.eclipse.ditto.json.JsonKey;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
+import org.eclipse.ditto.messages.model.MessageDirection;
 import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.IntegrationTest;
 import org.eclipse.ditto.testing.common.ServiceEnvironment;
@@ -68,6 +71,9 @@ import io.restassured.response.Response;
  * /things HTTP operations.
  */
 public final class RequestedAcksIT extends IntegrationTest {
+
+    // well below the default fire-and-forget-enforcement-timeout of 3s, after which the gateway answers 202 anyway
+    private static final long MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS = 2_000L;
 
     private static ThingsWebsocketClient websocketClient1;
     private static ThingsWebsocketClient websocketClient2;
@@ -165,11 +171,42 @@ public final class RequestedAcksIT extends IntegrationTest {
 
     @Test
     public void createThingRequestingEmptyAcknowledgementsAndResponseRequiredFalse() {
-        postThing(TestConstants.API_V_2, JsonFactory.newObject())
+        final Response response = postThing(TestConstants.API_V_2, JsonFactory.newObject())
                 .withConfiguredAuth(testingContext)
                 .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(), "")
                 .withHeader(DittoHeaderDefinition.RESPONSE_REQUIRED.getKey(), false)
                 .expectingHttpStatus(ACCEPTED)
+                .fire();
+
+        assertThat(response.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS);
+    }
+
+    @Test
+    public void sendMessageWithTimeoutZeroIsAcceptedWithoutWaitingForEnforcementTimeout() {
+        final String thingId = createThing();
+
+        final Response response = postMessage(TestConstants.API_V_2, thingId, MessageDirection.TO, "ping",
+                "application/json", "{}", "0")
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(ACCEPTED)
+                .fire();
+
+        assertThat(response.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS);
+    }
+
+    @Test
+    public void modifyAttributeWithTimeoutZeroWithoutPermissionIsRejected() {
+        final String thingId = createThing();
+
+        putAttribute(TestConstants.API_V_2, thingId, "counter", "42")
+                .withParam(DittoHeaderDefinition.TIMEOUT.getKey(), "0")
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(NOT_FOUND)
+                .fire();
+
+        getAttribute(TestConstants.API_V_2, thingId, "counter")
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(NOT_FOUND)
                 .fire();
     }
 
@@ -370,6 +407,14 @@ public final class RequestedAcksIT extends IntegrationTest {
                 .withConfiguredAuth(testingContext)
                 .expectingHttpStatus(NO_CONTENT)
                 .fire();
+    }
+
+    private static String createThing() {
+        final Response response = postThing(TestConstants.API_V_2, JsonFactory.newObject())
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(CREATED)
+                .fire();
+        return parseIdFromLocation(response.header("Location"));
     }
 
 }

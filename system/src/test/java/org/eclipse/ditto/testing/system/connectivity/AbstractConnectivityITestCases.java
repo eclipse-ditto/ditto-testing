@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.fail;
 import static org.eclipse.ditto.json.assertions.DittoJsonAssertions.assertThat;
 import static org.eclipse.ditto.policies.api.Permission.READ;
 import static org.eclipse.ditto.policies.api.Permission.WRITE;
+import static org.eclipse.ditto.testing.common.TestConstants.Policy.ARBITRARY_SUBJECT_TYPE;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION1;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION2;
 import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_2_SOURCES;
@@ -84,7 +85,9 @@ import org.eclipse.ditto.base.model.signals.events.streaming.StreamingSubscripti
 import org.eclipse.ditto.connectivity.model.Connection;
 import org.eclipse.ditto.connectivity.model.ConnectionType;
 import org.eclipse.ditto.connectivity.model.ConnectivityModelFactory;
+import org.eclipse.ditto.connectivity.model.Enforcement;
 import org.eclipse.ditto.connectivity.model.FilteredTopic;
+import org.eclipse.ditto.connectivity.model.Source;
 import org.eclipse.ditto.connectivity.model.Target;
 import org.eclipse.ditto.connectivity.model.Topic;
 import org.eclipse.ditto.things.model.ThingFieldSelector;
@@ -117,7 +120,6 @@ import org.eclipse.ditto.policies.model.SubjectAnnouncement;
 import org.eclipse.ditto.policies.model.SubjectExpiry;
 import org.eclipse.ditto.policies.model.SubjectId;
 import org.eclipse.ditto.policies.model.SubjectType;
-import static org.eclipse.ditto.testing.common.TestConstants.Policy.ARBITRARY_SUBJECT_TYPE;
 import org.eclipse.ditto.policies.model.signals.announcements.SubjectDeletionAnnouncement;
 import org.eclipse.ditto.policies.model.signals.commands.PolicyErrorResponse;
 import org.eclipse.ditto.policies.model.signals.commands.modify.CreatePolicy;
@@ -193,6 +195,11 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
     private static final String FILTER_FOR_LIFECYCLE_EVENTS_BY_RQL = "FILTER_FOR_LIFECYCLE_EVENTS_BY_RQL";
     private static final String FILTER_POLICY_ANNOUNCEMENTS_BY_NAMESPACE = "FILTER_BY_NAMESPACE";
     private static final String THING_DEFINITION_URL = "https://eclipse-ditto.github.io/ditto-examples/wot/models/dimmable-colored-lamp-1.0.0.tm.jsonld";
+    private static final String SOURCE_ADDRESS_ENFORCEMENT_MATCHING = "SOURCE_ADDRESS_ENFORCEMENT_MATCHING";
+    private static final String SOURCE_ADDRESS_ENFORCEMENT_NOT_MATCHING = "SOURCE_ADDRESS_ENFORCEMENT_NOT_MATCHING";
+    private static final String SOURCE_AND_HEADER_ADDRESS_ENFORCEMENT_MATCHING = "SOURCE_AND_HEADER_ADDRESS_ENFORCEMENT_MATCHING";
+    private static final String HEADER_DEVICE_ID_ENFORCEMENT_MATCHING = "HEADER_DEVICE_ID_ENFORCEMENT_MATCHING";
+    private static final String HEADER_FUNCTION_ENFORCEMENT = "HEADER_FUNCTION_ENFORCEMENT";
 
     static {
         // adds filtering for twin events - only "created" and "deleted" ones
@@ -243,6 +250,42 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 }
         );
         addMod(EMPTY_MOD, Function.identity());
+        addMod(SOURCE_ADDRESS_ENFORCEMENT_MATCHING, connection ->
+                withSourceEnforcement(connection, source ->
+                        ConnectivityModelFactory.newEnforcement("{{ source:address }}",
+                                source.getAddresses())));
+        addMod(SOURCE_ADDRESS_ENFORCEMENT_NOT_MATCHING, connection ->
+                withSourceEnforcement(connection, source ->
+                        ConnectivityModelFactory.newEnforcement("{{ source:address }}",
+                                source.getAddresses().stream()
+                                        .map(address -> "wrong-" + address)
+                                        .collect(Collectors.toSet()))));
+        addMod(SOURCE_AND_HEADER_ADDRESS_ENFORCEMENT_MATCHING, connection ->
+                withSourceEnforcement(connection, source ->
+                        ConnectivityModelFactory.newEnforcement("{{ source:address }}.{{ header:device_id }}",
+                                source.getAddresses().stream()
+                                        .map(address -> address + ".{{ thing:id }}")
+                                        .collect(Collectors.toSet()))));
+        addMod(HEADER_DEVICE_ID_ENFORCEMENT_MATCHING, connection ->
+                withSourceEnforcement(connection, source ->
+                        ConnectivityModelFactory.newEnforcement("{{ header:device_id }}",
+                                "{{ thing:id }}")));
+        addMod(HEADER_FUNCTION_ENFORCEMENT, connection ->
+                withSourceEnforcement(connection, source ->
+                        ConnectivityModelFactory.newEnforcement(
+                                "{{ header:device_id | fn:substring-after(':') }}",
+                                "{{ thing:name }}")));
+    }
+
+    protected static Connection withSourceEnforcement(final Connection connection,
+                                                    final Function<Source, Enforcement> enforcementForSource) {
+        return connection.toBuilder()
+                .setSources(connection.getSources().stream()
+                        .map(source -> ConnectivityModelFactory.newSourceBuilder(source)
+                                .enforcement(enforcementForSource.apply(source))
+                                .build())
+                        .collect(Collectors.toList()))
+                .build();
     }
 
     protected AbstractConnectivityITestCases(final ConnectivityFactory cf) {
@@ -1752,6 +1795,59 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
 
         sendCreateThingAndExpectError(thing, policy, cf.connectionNameWithEnforcementEnabled, HttpStatus.BAD_REQUEST,
                 entry(DEVICE_ID_HEADER, "wrong:thingId"));
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @OnlyForProtocols({ConnectionType.AMQP_091, ConnectionType.KAFKA, ConnectionType.AMQP_10})
+    @UseConnection(mod = SOURCE_ADDRESS_ENFORCEMENT_MATCHING, category = CONNECTION_WITH_ENFORCEMENT_ENABLED)
+    public void sendMessageWithSourceAddressEnforcementAndExpectSuccess() {
+        sendCreateThingAndEnsureResponseIsSentBack(cf.connectionNameWithEnforcementEnabled);
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @OnlyForProtocols({ConnectionType.AMQP_091, ConnectionType.KAFKA, ConnectionType.AMQP_10})
+    @UseConnection(mod = SOURCE_ADDRESS_ENFORCEMENT_NOT_MATCHING, category = CONNECTION_WITH_ENFORCEMENT_ENABLED)
+    public void sendMessageWithSourceAddressEnforcementAndExpectRejectBecauseNotMatchingFilter() {
+        final String connectionName = cf.connectionNameWithEnforcementEnabled;
+        final ThingId thingId = generateThingId();
+
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(connectionName))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .build();
+
+        sendCreateThingAndExpectError(Thing.newBuilder().setId(thingId).build(), policy, connectionName,
+                HttpStatus.BAD_REQUEST, entry(DEVICE_ID_HEADER, thingId.toString()));
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @OnlyForProtocols({ConnectionType.AMQP_091, ConnectionType.KAFKA, ConnectionType.MQTT_5, ConnectionType.AMQP_10})
+    @UseConnection(mod = HEADER_DEVICE_ID_ENFORCEMENT_MATCHING, category = CONNECTION_WITH_ENFORCEMENT_ENABLED)
+    public void sendMessageWithHeaderDeviceIdEnforcementAndExpectSuccess() {
+        sendCreateThingAndEnsureResponseIsSentBack(cf.connectionNameWithEnforcementEnabled);
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @OnlyForProtocols({ConnectionType.AMQP_091, ConnectionType.KAFKA, ConnectionType.AMQP_10})
+    @UseConnection(mod = SOURCE_AND_HEADER_ADDRESS_ENFORCEMENT_MATCHING, category = CONNECTION_WITH_ENFORCEMENT_ENABLED)
+    public void sendMessageWithSourceAddressAndHeaderEnforcementAndExpectSuccess() {
+        sendCreateThingAndEnsureResponseIsSentBack(cf.connectionNameWithEnforcementEnabled);
+    }
+
+    @Test
+    @Category(RequireSource.class)
+    @OnlyForProtocols({ConnectionType.AMQP_091, ConnectionType.KAFKA, ConnectionType.AMQP_10, ConnectionType.MQTT_5})
+    @UseConnection(mod = HEADER_FUNCTION_ENFORCEMENT, category = CONNECTION_WITH_ENFORCEMENT_ENABLED)
+    public void sendMessageWithHeaderFunctionEnforcementAndExpectSuccess() {
+        sendCreateThingAndEnsureResponseIsSentBack(cf.connectionNameWithEnforcementEnabled);
     }
 
     @Test

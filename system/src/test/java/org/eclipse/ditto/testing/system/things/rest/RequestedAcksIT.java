@@ -46,6 +46,7 @@ import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.messages.model.MessageDirection;
 import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.IntegrationTest;
+import org.eclipse.ditto.testing.common.ResourcePathBuilder;
 import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.Solution;
 import org.eclipse.ditto.testing.common.TestConstants;
@@ -208,6 +209,28 @@ public final class RequestedAcksIT extends IntegrationTest {
                 .withConfiguredAuth(testingContext)
                 .expectingHttpStatus(NOT_FOUND)
                 .fire();
+    }
+
+    @Test
+    public void fireAndForgetModifyEndingAsQueryResultIsAcceptedWithoutBlockingTheEntity() {
+        final String thingId = createThing();
+        // the policy created along with the thing has no allowedAdditions, so deleting them is a no-op
+        final String allowedAdditionsPath =
+                ResourcePathBuilder.forPolicy(thingId).policyEntry("DEFAULT").toString() + "/allowedAdditions";
+
+        final Response deleteResponse = delete(dittoUrl(TestConstants.API_V_2, allowedAdditionsPath))
+                .withParam(DittoHeaderDefinition.TIMEOUT.getKey(), "0")
+                .withParam(DittoHeaderDefinition.RESPONSE_REQUIRED.getKey(), "false")
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(ACCEPTED)
+                .fire();
+        final Response retrieveResponse = getPolicy(thingId)
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(OK)
+                .fire();
+
+        assertThat(deleteResponse.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS);
+        assertThat(retrieveResponse.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS);
     }
 
     @Test

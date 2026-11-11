@@ -59,6 +59,7 @@ import org.eclipse.ditto.testing.common.ws.ThingsWebsocketClient;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingBuilder;
 import org.eclipse.ditto.things.model.ThingId;
+import org.eclipse.ditto.things.model.signals.commands.modify.MigrateThingDefinition;
 import org.eclipse.ditto.things.model.signals.events.ThingModified;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -75,6 +76,10 @@ public final class RequestedAcksIT extends IntegrationTest {
 
     // well below the default fire-and-forget-enforcement-timeout of 3s, after which the gateway answers 202 anyway
     private static final long MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS = 2_000L;
+    // a supervisor still blocked by its 5s ask timeout would delay this retrieve by ~2s after the 3s fallback 202
+    private static final long MAX_FOLLOW_UP_RETRIEVE_TIME_MS = 1_000L;
+    private static final String THING_DEFINITION_URL =
+            "https://eclipse-ditto.github.io/ditto-examples/wot/models/dimmable-colored-lamp-1.0.0.tm.jsonld";
 
     private static ThingsWebsocketClient websocketClient1;
     private static ThingsWebsocketClient websocketClient2;
@@ -230,7 +235,30 @@ public final class RequestedAcksIT extends IntegrationTest {
                 .fire();
 
         assertThat(deleteResponse.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS);
-        assertThat(retrieveResponse.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS);
+        assertThat(retrieveResponse.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FOLLOW_UP_RETRIEVE_TIME_MS);
+    }
+
+    @Test
+    public void fireAndForgetMigrateDefinitionDryRunIsAcceptedWithoutBlockingTheThing() {
+        final String thingId = createThing();
+        final JsonObject migrationPayload = JsonObject.newBuilder()
+                .set(MigrateThingDefinition.JsonFields.JSON_THING_DEFINITION_URL, THING_DEFINITION_URL)
+                .set(MigrateThingDefinition.JsonFields.JSON_INITIALIZE_MISSING_PROPERTIES_FROM_DEFAULTS, true)
+                .build();
+
+        final Response migrateResponse = postMigrateDefinition(thingId, migrationPayload.toString(), true)
+                .withParam(DittoHeaderDefinition.TIMEOUT.getKey(), "0")
+                .withParam(DittoHeaderDefinition.RESPONSE_REQUIRED.getKey(), "false")
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(ACCEPTED)
+                .fire();
+        final Response retrieveResponse = getThing(TestConstants.API_V_2, thingId)
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(OK)
+                .fire();
+
+        assertThat(migrateResponse.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS);
+        assertThat(retrieveResponse.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FOLLOW_UP_RETRIEVE_TIME_MS);
     }
 
     @Test

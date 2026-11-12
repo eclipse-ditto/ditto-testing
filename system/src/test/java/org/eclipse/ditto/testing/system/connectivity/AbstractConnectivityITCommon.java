@@ -38,6 +38,7 @@ import org.eclipse.ditto.base.model.signals.Signal;
 import org.eclipse.ditto.base.model.signals.commands.Command;
 import org.eclipse.ditto.base.model.signals.commands.CommandResponse;
 import org.eclipse.ditto.base.model.signals.commands.ErrorResponse;
+import org.eclipse.ditto.connectivity.model.ConnectionType;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
@@ -61,9 +62,12 @@ import org.eclipse.ditto.things.model.signals.commands.modify.CreateThing;
 import org.eclipse.ditto.things.model.signals.commands.modify.CreateThingResponse;
 import org.eclipse.ditto.things.model.signals.commands.modify.ModifyAttribute;
 import org.eclipse.ditto.things.model.signals.events.ThingCreated;
+import org.junit.Assume;
 import org.junit.Rule;
+import org.junit.rules.MethodRule;
 import org.junit.rules.TestName;
 import org.junit.rules.TestWatcher;
+import org.junit.runners.model.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,6 +87,21 @@ public abstract class AbstractConnectivityITCommon<C, M> extends AbstractConnect
 
     @Rule
     public ConnectionsWatcher connectionsWatcher = new ConnectionsWatcher();
+
+    @Rule
+    public final MethodRule onlyForProtocols = (base, method, target) -> new Statement() {
+        @Override
+        public void evaluate() throws Throwable {
+            final OnlyForProtocols only = method.getAnnotation(OnlyForProtocols.class);
+            if (only != null) {
+                final List<ConnectionType> allowed = List.of(only.value());
+                final ConnectionType actual = cf.getConnectionType();
+                Assume.assumeTrue(String.format("%s runs only for %s , not %s", method.getName() , allowed , actual),
+                        allowed.contains(actual));
+            }
+            base.evaluate();
+        }
+    };
 
     protected AbstractConnectivityITCommon(final ConnectivityFactory cf) {
         super(cf);

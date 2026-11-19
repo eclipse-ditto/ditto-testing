@@ -36,9 +36,12 @@ import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
 import org.eclipse.ditto.base.model.signals.GlobalErrorRegistry;
 import org.eclipse.ditto.json.JsonFactory;
 import org.eclipse.ditto.json.JsonObject;
+import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.testing.common.VersionedSearchIntegrationTest;
 import org.eclipse.ditto.testing.common.matcher.search.SearchMatcher;
 import org.eclipse.ditto.things.model.Attributes;
+import org.eclipse.ditto.things.model.Feature;
+import org.eclipse.ditto.things.model.FeatureProperties;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingId;
 import org.eclipse.ditto.thingsearch.model.LimitOption;
@@ -64,6 +67,11 @@ public final class QueryThingsPagingIT extends VersionedSearchIntegrationTest {
     private static final String MULTI_THING_ATTR1_VALUE = "occurs50Times";
     private static final String COMMON_ATTR2_VALUE = "same4All";
 
+    private static final String OBJECT_SORT_FIXTURE_KEY = "objectSortFixture";
+    private static final String OBJECT_SORT_KEY = "objectSortKey";
+    private static final String OBJECT_SORT_FEATURE_ID = "objectSortFeature";
+    private static final int MAX_CURSOR_PAGES = 20;
+
     private static UUID thingIdSuffix;
 
     @Override
@@ -72,6 +80,54 @@ public final class QueryThingsPagingIT extends VersionedSearchIntegrationTest {
 
         persistThingAndWaitTillAvailable(createSingleThing());
         persistThingsAndWaitTillAvailable(i -> createMultiThing(1, i), 50);
+
+        persistThingAndWaitTillAvailable(createObjectSortThing("m1", null));
+        persistThingAndWaitTillAvailable(createObjectSortThing("m2", null));
+        persistThingAndWaitTillAvailable(createObjectSortThing("o1", rankObject("a")));
+        persistThingAndWaitTillAvailable(createObjectSortThing("o2", rankObject("b")));
+        persistThingAndWaitTillAvailable(createObjectSortThing("o3", rankObject("c")));
+        persistThingAndWaitTillAvailable(createObjectSortThing("o4", rankObject("d")));
+        persistThingAndWaitTillAvailable(createObjectSortThing("o5", rankObject("e")));
+    }
+
+    private static JsonObject rankObject(final String rank) {
+        return JsonObject.newBuilder().set("rank", rank).build();
+    }
+
+    private static Thing createObjectSortThing(final String name, @Nullable final JsonObject sortValue) {
+        final Attributes fixtureAttrs = Attributes.newBuilder()
+                .set(OBJECT_SORT_FIXTURE_KEY, thingIdSuffix.toString())
+                .build();
+        if (sortValue == null) {
+            return Thing.newBuilder().setId(objectSortThingId(name))
+                    .setAttributes(fixtureAttrs)
+                    .build();
+        }
+        final Feature feature = Feature.newBuilder()
+                .properties(FeatureProperties.newBuilder().set(OBJECT_SORT_KEY, sortValue).build())
+                .withId(OBJECT_SORT_FEATURE_ID)
+                .build();
+        return Thing.newBuilder().setId(objectSortThingId(name))
+                .setAttributes(fixtureAttrs.setValue(OBJECT_SORT_KEY, sortValue))
+                .setFeature(feature)
+                .build();
+    }
+
+    private static ThingId objectSortThingId(final String name) {
+        return ThingId.of(idGenerator().withName(QueryThingsPagingIT.class.getSimpleName(), "objsort", name,
+                thingIdSuffix.toString()));
+    }
+
+    private static List<ThingId> ids(final String... names) {
+        final List<ThingId> result = new ArrayList<>(names.length);
+        for (final String name : names) {
+            result.add(objectSortThingId(name));
+        }
+        return result;
+    }
+
+    private static SearchFilter objectSortFilter() {
+        return attribute(OBJECT_SORT_FIXTURE_KEY).eq(thingIdSuffix.toString());
     }
 
     private static Thing createSingleThing() {
@@ -171,6 +227,68 @@ public final class QueryThingsPagingIT extends VersionedSearchIntegrationTest {
         assertThat(result3.getItems()).hasSize(remainingCount);
         assertThat(result3.getItems()).contains(idItem(createThingId(50)));
         assertThat(result3.getItems()).doesNotContain(idItem(createThingId(1)));
+    }
+
+    /**
+     * Relies on the object values {"rank":"a"}..{"rank":"e"} being assigned in thing-ID order, so that PostgreSQL
+     * (objects tie, thing ID decides) and MongoDB (objects by content) share one order; missing keys sort first.
+     */
+    @Test
+    public void pageWithCursorThroughObjectSortValuesAscending() {
+        final String sort = "sort(+attributes/" + OBJECT_SORT_KEY + ",+thingId)";
+        final List<ThingId> expected = ids("m1", "m2", "o1", "o2", "o3", "o4", "o5");
+        assertThat(searchUnpaged(objectSortFilter(), sort)).containsExactlyElementsOf(expected);
+        final CursorWalk walk = walkWithCursor(objectSortFilter(), sort, 2);
+        assertThat(walk.thingIds).as("walk equals the unpaged order, no thing twice, none missing")
+                .containsExactlyElementsOf(expected);
+        assertThat(walk.pages).isEqualTo(4);
+    }
+
+    /**
+     * Relies on the descending thing-ID tiebreak: with {@code -thingId} the tied objects of PostgreSQL come out in
+     * the same order as MongoDB's descending object order; missing keys sort last.
+     */
+    @Test
+    public void pageWithCursorThroughObjectSortValuesDescending() {
+        final String sort = "sort(-attributes/" + OBJECT_SORT_KEY + ",-thingId)";
+        final List<ThingId> expected = ids("o5", "o4", "o3", "o2", "o1", "m2", "m1");
+        assertThat(searchUnpaged(objectSortFilter(), sort)).containsExactlyElementsOf(expected);
+        final CursorWalk walk = walkWithCursor(objectSortFilter(), sort, 2);
+        assertThat(walk.thingIds).as("walk equals the unpaged order, no thing twice, none missing")
+                .containsExactlyElementsOf(expected);
+        assertThat(walk.pages).isEqualTo(4);
+    }
+
+    /**
+     * Relies on the feature property holding the same objects as the attribute, aligned with thing-ID order; page
+     * size 1 puts every page boundary inside the object group on an object.
+     */
+    @Test
+    public void pageWithCursorThroughObjectFeaturePropertySortValues() {
+        final String sort =
+                "sort(+features/" + OBJECT_SORT_FEATURE_ID + "/properties/" + OBJECT_SORT_KEY + ",+thingId)";
+        final List<ThingId> expected = ids("m1", "m2", "o1", "o2", "o3", "o4", "o5");
+        assertThat(searchUnpaged(objectSortFilter(), sort)).containsExactlyElementsOf(expected);
+        final CursorWalk walk = walkWithCursor(objectSortFilter(), sort, 1);
+        assertThat(walk.thingIds).as("walk equals the unpaged order, no thing twice, none missing")
+                .containsExactlyElementsOf(expected);
+        assertThat(walk.pages).isEqualTo(7);
+    }
+
+    /**
+     * The backends order the objects differently under an ascending thing-ID tiebreak, so the walk is compared with
+     * this backend's own unpaged result; missing keys sort last descending on both, in thing-ID order.
+     */
+    @Test
+    public void pageWithCursorThroughObjectSortValuesDescendingWithAscendingThingIdTiebreak() {
+        final String sort = "sort(-attributes/" + OBJECT_SORT_KEY + ",+thingId)";
+        final List<ThingId> unpaged = searchUnpaged(objectSortFilter(), sort);
+        assertThat(unpaged).containsExactlyInAnyOrderElementsOf(ids("m1", "m2", "o1", "o2", "o3", "o4", "o5"));
+        assertThat(unpaged.subList(5, 7)).containsExactlyElementsOf(ids("m1", "m2"));
+        final CursorWalk walk = walkWithCursor(objectSortFilter(), sort, 2);
+        assertThat(walk.thingIds).as("walk equals the unpaged order, no thing twice, none missing")
+                .containsExactlyElementsOf(unpaged);
+        assertThat(walk.pages).isEqualTo(4);
     }
 
     /*
@@ -300,6 +418,69 @@ public final class QueryThingsPagingIT extends VersionedSearchIntegrationTest {
         }
 
         return matcher;
+    }
+
+    /**
+     * Pages with the cursor until Ditto returns none; fails after MAX_CURSOR_PAGES pages (a non-terminating walk).
+     */
+    private CursorWalk walkWithCursor(final SearchFilter filter, final String sortOption, final int pageSize) {
+        final List<ThingId> thingIds = new ArrayList<>();
+        int pages = 0;
+        String cursor = null;
+        do {
+            if (pages == MAX_CURSOR_PAGES) {
+                throw new AssertionError(
+                        "cursor walk did not end within " + MAX_CURSOR_PAGES + " pages; walked so far: " + thingIds);
+            }
+            final SearchMatcher matcher = search(filter, newSizeOption(pageSize));
+            if (cursor == null) {
+                matcher.option(sortOption);
+            } else {
+                matcher.option(newCursorOption(cursor));
+            }
+            final SearchResult result = SearchModelFactory.newSearchResult(matcher.returnIdsOnly(true)
+                    .expectingStatusCodeSuccessful()
+                    .fire()
+                    .getBody()
+                    .asString());
+            pages++;
+            thingIds.addAll(thingIdsOf(result));
+            cursor = result.getCursor().orElse(null);
+        } while (cursor != null);
+        return new CursorWalk(thingIds, pages);
+    }
+
+    private List<ThingId> searchUnpaged(final SearchFilter filter, final String sortOption) {
+        final SearchResult result = SearchModelFactory.newSearchResult(
+                search(filter, newSizeOption(20)).option(sortOption)
+                        .returnIdsOnly(true)
+                        .expectingStatusCodeSuccessful()
+                        .fire()
+                        .getBody()
+                        .asString());
+        return thingIdsOf(result);
+    }
+
+    private static List<ThingId> thingIdsOf(final SearchResult result) {
+        final List<ThingId> thingIds = new ArrayList<>();
+        for (final JsonValue item : result.getItems()) {
+            final JsonValue thingId = item.asObject().getValue("thingId")
+                    .orElseThrow(() -> new AssertionError("search result item without thingId: " + item));
+            thingIds.add(ThingId.of(thingId.asString()));
+        }
+        return thingIds;
+    }
+
+    private static final class CursorWalk {
+
+        private final List<ThingId> thingIds;
+        private final int pages;
+
+        private CursorWalk(final List<ThingId> thingIds, final int pages) {
+            this.thingIds = thingIds;
+            this.pages = pages;
+        }
+
     }
 
     private static JsonObject idItem(final ThingId thingId) {

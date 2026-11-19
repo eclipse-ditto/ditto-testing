@@ -41,6 +41,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.awaitility.Awaitility;
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.base.model.json.JsonSchemaVersion;
 import org.eclipse.ditto.base.model.signals.Signal;
@@ -118,6 +119,7 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
     private static final int KAFKA_SERVICE_PORT = CONFIG.getKafkaPort();
 
     private static final Duration KAFKA_POLL_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration LOG_ENTRY_TIMEOUT = Duration.ofSeconds(30);
 
     private static final String RESPONSES_ADDRESS = "_responses";
 
@@ -224,15 +226,12 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
                 KAFKA_TEST_USERNAME, KAFKA_TEST_PASSWORD, connectionName);
         topicPartition = new TopicPartition(createdConnectionId.toString(), 0);
         kafkaLogOutputConsumer.assign(List.of(topicPartition));
-        kafkaLogOutputConsumerSeekToEnd();
+        // the log topic is named after the connection created for this test, so it only contains log entries of this
+        // test - consuming it from the beginning includes the entries logged while the connection was opened above
+        kafkaLogOutputConsumer.seekToBeginning(List.of(topicPartition));
 
         kafkaProducer = KafkaConnectivityWorker.setupKafkaProducer(KAFKA_TEST_HOSTNAME, KAFKA_TEST_PORT,
                 KAFKA_TEST_USERNAME, KAFKA_TEST_PASSWORD, connectionName);
-    }
-
-    private void kafkaLogOutputConsumerSeekToEnd() {
-        kafkaLogOutputConsumer.seekToEnd(List.of(topicPartition));
-        kafkaLogOutputConsumer.position(topicPartition);
     }
 
     @After
@@ -248,16 +247,23 @@ public class ConnectivityLogPublishingIT extends IntegrationTest {
 
     @Test
     public void createKafkaConnectionAndCheckIfConnectionLogIsReceived() {
-        final List<TestLogEntry> consumedRecords = pollLogEntries().stream()
-                .filter(logEntry -> logEntry.connectionId.equals(createdConnectionId))
-                .collect(Collectors.toList());
+        final List<TestLogEntry> consumedRecords = new ArrayList<>();
+        // the log entry is published asynchronously, so it may not have arrived yet when polling the first time
+        Awaitility.await()
+                .pollInSameThread() // the KafkaConsumer must not be used by several threads
+                .atMost(LOG_ENTRY_TIMEOUT)
+                .untilAsserted(() -> {
+                    consumedRecords.addAll(pollLogEntries().stream()
+                            .filter(logEntry -> logEntry.connectionId.equals(createdConnectionId))
+                            .toList());
 
-        assertThat(consumedRecords)
-                .allMatch(logEntry ->
-                        logEntry.connectionId.equals(createdConnectionId)
-                )
-                .anyMatch(ensureLogEntry(LogLevel.SUCCESS, LogCategory.CONNECTION, LogType.OTHER,
-                        null, "Connection successful"));
+                    assertThat(consumedRecords)
+                            .allMatch(logEntry ->
+                                    logEntry.connectionId.equals(createdConnectionId)
+                            )
+                            .anyMatch(ensureLogEntry(LogLevel.SUCCESS, LogCategory.CONNECTION, LogType.OTHER,
+                                    null, "Connection successful"));
+                });
     }
 
     @Test

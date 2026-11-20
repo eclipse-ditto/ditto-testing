@@ -16,13 +16,17 @@
 #
 # See README-postgres.md.
 #
-# policies/things/connectivity persist journals + snapshots to PostgreSQL via two extension JARs that are
-# BAKED INTO the service images (ditto/build-images.sh with BAKE_POSTGRES_EXTENSIONS=true copies them to
-# /opt/ditto/extensions/, which is on the image's CLASSPATH=/opt/ditto/*:/opt/ditto/extensions/*): the shaded
-# base ditto-postgres-client-extension plus the thin ditto-postgres-persistence-extension. Nothing is
-# bind-mounted from a ditto checkout; the images must be local builds (eclipse/ditto-<svc>:0-SNAPSHOT,
-# DITTO_VERSION defaults to 0-SNAPSHOT in postgres mode). What this file adds is the overlay config
-# (HOSTING_ENVIRONMENT=filebased) and the POSTGRES_* connection environment.
+# policies/things/connectivity persist journals + snapshots to PostgreSQL. The service images ship both
+# persistence backends under /opt/ditto/backends/{mongodb,postgresql}/ and this file selects `postgresql` per
+# service with DITTO_PERSISTENCE_BACKEND (image default: mongodb). The image's java command puts exactly one
+# backend folder on the classpath (-cp /opt/ditto/*:/opt/ditto/backends/$DITTO_PERSISTENCE_BACKEND/*:
+# /opt/ditto/extensions/*; a CLASSPATH variable is ignored): here the shaded base ditto-postgres-client-extension
+# plus the thin ditto-postgres-persistence-extension. /opt/ditto/extensions/ ships empty and is reserved for
+# user JARs. The service's boot check refuses zero or two backends on the classpath. Nothing is bind-mounted
+# from a ditto checkout; the images must be local builds from a ditto tree with that layout
+# (eclipse/ditto-<svc>:0-SNAPSHOT, DITTO_VERSION defaults to 0-SNAPSHOT in postgres mode). What this file adds
+# is the backend selector, the overlay config (HOSTING_ENVIRONMENT=filebased) and the POSTGRES_* connection
+# environment.
 #
 # things-search's backend is SELECTABLE, not fixed: by default (SEARCH_BACKEND=postgres) it runs on
 # PostgreSQL via the docker-compose-postgres-search.yml overlay (layered after this file); with
@@ -70,6 +74,7 @@ services:
     volumes:
       - ./postgres/policies-postgres.conf:/opt/ditto/policies-postgres.conf:ro
     environment:
+      - DITTO_PERSISTENCE_BACKEND=postgresql
       - HOSTING_ENVIRONMENT=filebased
       - HOSTING_ENVIRONMENT_FILE_LOCATION=/opt/ditto/policies-postgres.conf
       - POSTGRES_URI=r2dbc:postgresql://postgres:5432/ditto
@@ -88,6 +93,7 @@ services:
     volumes:
       - ./postgres/things-postgres.conf:/opt/ditto/things-postgres.conf:ro
     environment:
+      - DITTO_PERSISTENCE_BACKEND=postgresql
       - HOSTING_ENVIRONMENT=filebased
       - HOSTING_ENVIRONMENT_FILE_LOCATION=/opt/ditto/things-postgres.conf
       - POSTGRES_URI=r2dbc:postgresql://postgres:5432/ditto
@@ -106,6 +112,7 @@ services:
     volumes:
       - ./postgres/connectivity-postgres.conf:/opt/ditto/connectivity-postgres.conf:ro
     environment:
+      - DITTO_PERSISTENCE_BACKEND=postgresql
       - HOSTING_ENVIRONMENT=filebased
       - HOSTING_ENVIRONMENT_FILE_LOCATION=/opt/ditto/connectivity-postgres.conf
       - POSTGRES_URI=r2dbc:postgresql://postgres:5432/ditto

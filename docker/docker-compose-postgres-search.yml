@@ -18,11 +18,12 @@
 # `DITTO_DB=postgres ./start.sh` appends this file automatically when SEARCH_BACKEND=postgres (its default);
 # with SEARCH_BACKEND=mongodb it is omitted and things-search keeps indexing in MongoDB.
 #
-# It touches ONLY the things-search service. The two extension JARs it needs (the shaded base
-# ditto-postgres-client-extension + the thin ditto-postgres-search-extension) are BAKED INTO the
-# things-search image by ditto/build-images.sh (BAKE_POSTGRES_EXTENSIONS=true) under /opt/ditto/extensions/;
-# this file only adds the search-postgres.conf overlay (HOSTING_ENVIRONMENT=filebased) and the POSTGRES_*
-# environment. things-search needs the DDL role to `CREATE EXTENSION IF NOT EXISTS pg_trgm` at boot —
+# It touches ONLY the things-search service. It selects the image's `postgresql` backend folder
+# (/opt/ditto/backends/postgresql/: the shaded base ditto-postgres-client-extension + the thin
+# ditto-postgres-search-extension) with DITTO_PERSISTENCE_BACKEND=postgresql, and adds the search-postgres.conf
+# overlay (HOSTING_ENVIRONMENT=filebased) and the POSTGRES_* environment. With SEARCH_BACKEND=mongodb this file
+# is omitted and things-search keeps the image default `mongodb` folder: nothing else is needed for that hybrid
+# mode. things-search needs the DDL role to `CREATE EXTENSION IF NOT EXISTS pg_trgm` at boot —
 # auto-satisfied by the local `ditto` superuser in postgres:16.
 
 version: "2.4"
@@ -42,6 +43,7 @@ services:
     volumes:
       - ./postgres/search-postgres.conf:/opt/ditto/search-postgres.conf:ro
     environment:
+      - DITTO_PERSISTENCE_BACKEND=postgresql
       - HOSTING_ENVIRONMENT=filebased
       - HOSTING_ENVIRONMENT_FILE_LOCATION=/opt/ditto/search-postgres.conf
       - POSTGRES_URI=r2dbc:postgresql://postgres:5432/ditto

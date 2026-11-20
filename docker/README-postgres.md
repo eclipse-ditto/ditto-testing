@@ -27,18 +27,26 @@ variables stay in `docker-compose.env`: do not remove either.
 > **Migration note.** `start-postgres.sh` / `stop-postgres.sh` are gone (use `DITTO_DB=postgres ./start.sh` /
 > `DITTO_DB=postgres ./stop.sh`), and so are the `docker-compose-postgres` / `local-postgres` test environments
 > (use the plain `docker-compose` / `local` environment plus `-Dpersistence.backend=postgres`). The Postgres
-> extension JARs are no longer bind-mounted from a ditto checkout; they are baked into the service images.
+> extension JARs are no longer bind-mounted from a ditto checkout: the service images ship them in their
+> PostgreSQL backend folder (older images used to bake them into `/opt/ditto/extensions/`; rebuild those).
 
-The Postgres backend is activated per service by
+The Ditto service images ship both persistence backends, `/opt/ditto/backends/mongodb/` and
+`/opt/ditto/backends/postgresql/`, and the image's java command puts exactly one of them on the classpath:
+`/opt/ditto/backends/$DITTO_PERSISTENCE_BACKEND/` (image default `mongodb`; a `CLASSPATH` variable is ignored).
+The PostgreSQL folder holds the shaded base `ditto-postgres-client-extension` plus a thin JAR per role:
+`ditto-postgres-persistence-extension` for policies/things/connectivity, `ditto-postgres-search-extension` for
+things-search. `/opt/ditto/extensions/` ships empty and stays on the classpath for your own JARs. A boot check
+refuses zero or two backends on the classpath, and on success each service logs `Persistence backend: postgresql`
+(or `mongodb`). The Postgres backend is activated per service by
 
-* **two extension JARs baked into the service image** under `/opt/ditto/extensions/` (on the images'
-  default classpath) — the shaded base `ditto-postgres-client-extension` plus a thin JAR per role:
-  `ditto-postgres-persistence-extension` for policies/things/connectivity, `ditto-postgres-search-extension`
-  for things-search. `ditto/build-images.sh` copies them in when run with `BAKE_POSTGRES_EXTENSIONS=true`
-  (companion ditto branch `feat/postgres-persistance-search`). All JARs **must come from the same build** as
-  the service — a boot self-check fails fast on mismatch,
+* **`DITTO_PERSISTENCE_BACKEND=postgresql`**, set by [`docker-compose-postgres.yml`](docker-compose-postgres.yml)
+  for policies/things/connectivity and by [`docker-compose-postgres-search.yml`](docker-compose-postgres-search.yml)
+  for things-search (with `SEARCH_BACKEND=mongodb` that file is omitted, so things-search keeps the image
+  default `mongodb`),
 * an overlay config from [`postgres/`](postgres/) mounted into `/opt/ditto/` and selected via
-  `HOSTING_ENVIRONMENT=filebased` + `HOSTING_ENVIRONMENT_FILE_LOCATION`,
+  `HOSTING_ENVIRONMENT=filebased` + `HOSTING_ENVIRONMENT_FILE_LOCATION`. It pins the PostgreSQL profile with
+  `include required(classpath("ditto-postgres-persistence"))` (`…-search` for things-search), so a container
+  started on the wrong backend folder fails at config load instead of running the tests against MongoDB,
 * `POSTGRES_*` connection environment variables (`POSTGRES_SSL_MODE=disable` is mandatory locally).
 
 > **pg_trgm:** things-search-on-PostgreSQL needs the DDL role to
@@ -48,26 +56,27 @@ The Postgres backend is activated per service by
 
 ## Prerequisites
 
-1. **Ditto service images with the Postgres extensions baked in**, tagged `eclipse/ditto-<svc>:$DITTO_VERSION`
+1. **Ditto service images with the PostgreSQL backend folder**, tagged `eclipse/ditto-<svc>:$DITTO_VERSION`
    (postgres mode defaults `DITTO_VERSION` to `0-SNAPSHOT` and `DOCKER_REGISTRY_NAMESPACE` to `eclipse`;
    `BUILD_IMAGES=1` tags what it builds with the same `DITTO_VERSION`). `start.sh` refuses to start when an
-   image is missing or was built without the JARs, and a service started from such an image by other means
-   dies at config load with `ConfigException$IO: … resource not found on classpath: ditto-postgres-persistence.conf`
+   image is missing or has no `/opt/ditto/backends/postgresql/` with the client JAR and the role's JAR
+   (`ditto-postgres-persistence-extension`, or `ditto-postgres-search-extension` for things-search), and a
+   service started without `DITTO_PERSISTENCE_BACKEND=postgresql` by other means dies at config load with
+   `ConfigException$IO: … resource not found on classpath: ditto-postgres-persistence.conf`
    (`…-search.conf` for things-search).
    CI builds them before calling `start.sh`. Locally, build them once from a ditto worktree on the
-   `feat/postgres-persistance-search` branch (it contains the marker module
-   `internal/utils/postgres-persistence-extension`):
+   `feat/mongodb-persistence-extension` branch (or any ditto tree whose `build-images.sh` stages
+   `/opt/ditto/backends/`; `stage-backends.sh` at its repository root is the marker):
    ```bash
-   cd /path/to/ditto && mvn clean install -DskipTests -DskipITs && BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh
+   cd /path/to/ditto && mvn clean install -DskipTests -DskipITs && ./build-images.sh
    ```
    (prefix `IMAGE_VERSION=<tag>` if you override `DITTO_VERSION`), or let `start.sh` do the image step for you
    with `BUILD_IMAGES=1` (see below). **`clean` matters:** on a tree with earlier build output, `mvn install`
    without it can leave the shaded extension JARs stale while every build step reports success (the extension
    module's own sources are unchanged, so the previous shaded JAR is kept and re-shaded over the fresh module
-   classes) — the images then run the previous build's code. The extension poms now force that thin JAR to be
-   rebuilt, and `build-images.sh` refuses to bake a shaded extension JAR whose classes differ from its module
-   JAR (partial `-pl` builds, older ditto trees), naming the `clean install` fix;
-   `BAKE_POSTGRES_EXTENSIONS=true CHECK_ONLY=1 ./build-images.sh` runs only that check.
+   classes) — the images then run the previous build's code. `build-images.sh` refuses a shaded backend
+   extension JAR whose classes differ from the module JAR it bundles, naming the `clean install` fix;
+   `CHECK_ONLY=1 ./build-images.sh` runs only that check and builds nothing.
 2. Docker + a `docker-compose` binary on the PATH (the Compose v2 standalone build is fine), Maven, JDK — the
    same toolchain as for the MongoDB run. The scripts call `docker-compose` by that name (CI rewrites them to
    `docker compose` with `sed`); if you only have the `docker compose` plugin, put a two-line shim named
@@ -88,11 +97,12 @@ In postgres mode the script assembles the compose stack explicitly (`docker-comp
 `docker-compose-postgres-search.yml` when `SEARCH_BACKEND=postgres`), pulls only the third-party images
 (the Ditto images are local builds), starts PostgreSQL (plus MongoDB only when `SEARCH_BACKEND=mongodb`),
 waits for the Postgres healthcheck, then starts the Ditto services in the usual order. `postgres` is included in the log tailing
-(`postgres-<TAG>.log`) and in the container check. With `BUILD_IMAGES=1` it first fails fast if
-`DITTO_REPO_DIR` is not a worktree with the marker module or if the extension JAR has not been built, then
-runs `IMAGE_VERSION="$DITTO_VERSION" BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh` there — which inherits
-`build-images.sh`'s stale-JAR guard: a shaded extension JAR whose classes differ from its module JAR aborts the
-image build with the `mvn clean install -DskipTests -DskipITs` fix. `BUILD_IMAGES` is ignored in mongodb mode.
+(`postgres-<TAG>.log`) and in the container check. Before starting anything it checks each persistence image
+for its PostgreSQL backend folder and aborts with a fix list if one is missing. With `BUILD_IMAGES=1` it first
+fails fast if `DITTO_REPO_DIR` has no `stage-backends.sh` at its root or if the extension JAR
+(`internal/utils/postgres-persistence-extension/target/…`) has not been built, then runs
+`IMAGE_VERSION="$DITTO_VERSION" ./build-images.sh` there — which inherits `build-images.sh`'s stale-JAR guard
+(the `mvn clean install -DskipTests -DskipITs` fix). `BUILD_IMAGES` is ignored in mongodb mode.
 
 Once the Ditto services are up, postgres mode gives them a few seconds (`DITTO_START_GRACE_SECONDS`, default
 10) and then requires every Ditto container (`policies`, `things`, `things-search`, `connectivity`, `gateway`)

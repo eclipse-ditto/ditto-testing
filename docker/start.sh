@@ -22,9 +22,10 @@
 #                      See README-postgres.md.
 # Postgres-mode environment:
 #   SEARCH_BACKEND   "postgres" (default) | "mongodb": backend of things-search.
-#   BUILD_IMAGES     set to 1 to (re)build the Ditto service images with the Postgres extension JARs
-#                    baked in (`BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh` in DITTO_REPO_DIR) before
-#                    starting. Off by default: CI builds the images before calling this script.
+#   BUILD_IMAGES     set to 1 to (re)build the Ditto service images (`IMAGE_VERSION=$DITTO_VERSION
+#                    ./build-images.sh` in DITTO_REPO_DIR; the images ship both persistence backends under
+#                    /opt/ditto/backends/) before starting. Off by default: CI builds the images before calling
+#                    this script.
 #   DITTO_REPO_DIR   ditto worktree used by BUILD_IMAGES=1 (default: ./../../ditto).
 #   DITTO_START_GRACE_SECONDS
 #                    seconds (default 10) the Ditto services get after `up` before every Ditto container must be
@@ -113,29 +114,29 @@ function cleanup() {
 }
 trap cleanup SIGHUP SIGINT SIGQUIT SIGABRT SIGALRM SIGTERM
 
-# Opt-in local convenience (BUILD_IMAGES=1, postgres mode only): bake the Postgres extension JARs into
-# the Ditto service images. CI compiles ditto and runs build-images.sh itself before calling this script.
+# Opt-in local convenience (BUILD_IMAGES=1, postgres mode only): build the Ditto service images, which ship both
+# persistence backends under /opt/ditto/backends/{mongodb,postgresql}/ (the compose files select postgresql via
+# DITTO_PERSISTENCE_BACKEND). CI compiles ditto and runs build-images.sh itself before calling this script.
 function build_images {
   local ditto_repo_dir="${DITTO_REPO_DIR:-./../../ditto}"
-  local marker_dir="$ditto_repo_dir/internal/utils/postgres-persistence-extension"
-  # Fail fast on a wrong ditto worktree: several ditto checkouts/worktrees exist side-by-side and a
-  # Mongo-era one lacks this marker directory, so it would silently build images without the extensions.
-  if [ ! -d "$marker_dir" ]; then
-    printf "ERROR: <%s> does not exist.\n" "$marker_dir" >&2
-    printf "DITTO_REPO_DIR=<%s> does not point at a ditto worktree with the Postgres extensions; point it at the feat/postgres-persistance-search worktree.\n" "$ditto_repo_dir" >&2
+  local marker_file="$ditto_repo_dir/stage-backends.sh"
+  local extension_dir="$ditto_repo_dir/internal/utils/postgres-persistence-extension"
+  # Fail fast on a wrong ditto worktree: several ditto checkouts/worktrees exist side-by-side and one without
+  # stage-backends.sh at its root builds images without the /opt/ditto/backends/ folders.
+  if [ ! -f "$marker_file" ]; then
+    printf "ERROR: <%s> does not exist.\n" "$marker_file" >&2
+    printf "DITTO_REPO_DIR=<%s> does not point at a ditto worktree whose images ship both persistence backends; point it at a feat/mongodb-persistence-extension worktree.\n" "$ditto_repo_dir" >&2
     return 1
   fi
-  # build-images.sh only wraps already-built JARs into images: require a built worktree. It then refuses to bake
-  # a shaded extension JAR whose classes differ from its module JAR (stale after an incremental build), so this
-  # path inherits that guard; the fix it names is the same `clean install`.
-  if [ ! -f "$marker_dir/target/ditto-postgres-persistence-extension-0-SNAPSHOT.jar" ]; then
-    printf "ERROR: no built extension JAR in <%s/target>; run (cd %s && mvn clean install -DskipTests -DskipITs) first.\n" "$marker_dir" "$ditto_repo_dir" >&2
+  # build-images.sh only stages already-built JARs into the images' backend folders: require a built worktree.
+  if [ ! -f "$extension_dir/target/ditto-postgres-persistence-extension-0-SNAPSHOT.jar" ]; then
+    printf "ERROR: no built extension JAR in <%s/target>; run (cd %s && mvn clean install -DskipTests -DskipITs) first.\n" "$extension_dir" "$ditto_repo_dir" >&2
     return 1
   fi
-  printf "\nBuilding Ditto service images with baked Postgres extensions from <%s> ...\n\n" "$ditto_repo_dir"
+  printf "\nBuilding Ditto service images from <%s> ...\n\n" "$ditto_repo_dir"
   # IMAGE_VERSION: tag the images with the version compose will look for (DITTO_VERSION, default 0-SNAPSHOT);
-  # build-images.sh would otherwise always tag 0-SNAPSHOT.
-  (cd "$ditto_repo_dir" && IMAGE_VERSION="$DITTO_VERSION" BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh)
+  # build-images.sh would otherwise always tag 0-SNAPSHOT. The images carry both backends; no extra flag.
+  (cd "$ditto_repo_dir" && IMAGE_VERSION="$DITTO_VERSION" ./build-images.sh)
 }
 
 function wait_for_postgres {
@@ -196,23 +197,29 @@ function check_ditto_services_running {
   return 0
 }
 
-# Postgres mode needs service images built with BAKE_POSTGRES_EXTENSIONS=true (the two extension JARs live in
-# /opt/ditto/extensions/ inside the image). Check that BEFORE starting anything: with an unbaked image the
-# overlays' `include required(classpath(...))` only surfaces in the container log once the stack is up.
+# Postgres mode needs service images that ship the PostgreSQL backend folder /opt/ditto/backends/postgresql/
+# (the shaded ditto-postgres-client-extension plus ditto-postgres-persistence-extension, or
+# ditto-postgres-search-extension for things-search); the compose files select it with
+# DITTO_PERSISTENCE_BACKEND=postgresql. Check that BEFORE starting anything: on an image without that folder
+# the overlays' `include required(classpath(...))` only surfaces in the container log once the stack is up.
 # Only `docker image` / `docker run` are used here (CI's sed rewrites the compose command name only).
 # On failure the full explanation is printed LAST (after the compose warnings, which cannot be silenced
 # from here) so it is the first thing the reader sees when scrolling up from the prompt.
 function check_service_images {
-  local svc image missing=() unbaked=()
+  local svc image role_jar missing=() no_postgresql_backend=()
   for svc in policies things things-search connectivity; do
     image="${DOCKER_REGISTRY:-docker.io}/${DOCKER_REGISTRY_NAMESPACE}/${DITTO_SERVICE_PREFIX-ditto-}${svc}:${DITTO_VERSION}"
+    case "$svc" in
+      things-search) role_jar="ditto-postgres-search-extension" ;;
+      *) role_jar="ditto-postgres-persistence-extension" ;;
+    esac
     if ! docker image inspect "$image" >/dev/null 2>&1; then
       missing+=("$image")
-    elif ! docker run --rm --entrypoint sh "$image" -c 'ls /opt/ditto/extensions/ditto-postgres-client-extension-*.jar >/dev/null 2>&1'; then
-      unbaked+=("$image")
+    elif ! docker run --rm --entrypoint sh "$image" -c "ls /opt/ditto/backends/postgresql/ditto-postgres-client-extension-*.jar /opt/ditto/backends/postgresql/${role_jar}-*.jar >/dev/null 2>&1"; then
+      no_postgresql_backend+=("$image")
     fi
   done
-  if [ "${#missing[@]}" -eq 0 ] && [ "${#unbaked[@]}" -eq 0 ]; then
+  if [ "${#missing[@]}" -eq 0 ] && [ "${#no_postgresql_backend[@]}" -eq 0 ]; then
     return 0
   fi
 
@@ -223,8 +230,9 @@ function check_service_images {
     printf "=====================================================================================\n"
     printf "\n"
     printf "In postgres mode the Ditto service images are NEVER pulled from a registry: they must be\n"
-    printf "built locally from a ditto worktree that contains the PostgreSQL extensions, with the\n"
-    printf "extension JARs baked into /opt/ditto/extensions/ (BAKE_POSTGRES_EXTENSIONS=true).\n"
+    printf "built locally from a ditto tree that ships the PostgreSQL backend folder\n"
+    printf "/opt/ditto/backends/postgresql/ (selected at runtime via DITTO_PERSISTENCE_BACKEND, which\n"
+    printf "the compose files set). Older images baked the JARs into /opt/ditto/extensions/ instead; rebuild them.\n"
     printf "Only the third-party images (postgres, mongodb, brokers, ...) are pulled.\n"
     printf "\n"
     printf "Expected image names (DOCKER_REGISTRY=%s, DOCKER_REGISTRY_NAMESPACE=%s, DITTO_VERSION=%s):\n" \
@@ -233,19 +241,19 @@ function check_service_images {
       printf "\n  NOT FOUND locally (was it never built, or removed by a docker prune / cleanup?):\n"
       printf "    - %s\n" "${missing[@]}"
     fi
-    if [ "${#unbaked[@]}" -gt 0 ]; then
-      printf "\n  FOUND, but built WITHOUT the Postgres extension JARs (no /opt/ditto/extensions/*.jar):\n"
-      printf "    - %s\n" "${unbaked[@]}"
+    if [ "${#no_postgresql_backend[@]}" -gt 0 ]; then
+      printf "\n  FOUND, but without the PostgreSQL backend folder (no /opt/ditto/backends/postgresql/ditto-postgres-*.jar):\n"
+      printf "    - %s\n" "${no_postgresql_backend[@]}"
     fi
     printf "\n"
     printf "How to fix (pick one):\n"
     printf "\n"
-    printf "  a) Build the images in a ditto worktree on the feat/postgres-persistance-search branch\n"
-    printf "     (or any branch containing internal/utils/postgres-persistence-extension):\n"
+    printf "  a) Build the images in a ditto worktree on the feat/mongodb-persistence-extension branch\n"
+    printf "     (or any whose repository root has stage-backends.sh):\n"
     printf "\n"
     printf "       cd /path/to/ditto\n"
-    printf "       mvn clean install -DskipTests -DskipITs       # 'clean' matters: an incremental install can leave\n"
-    printf "       BAKE_POSTGRES_EXTENSIONS=true ./build-images.sh  # the shaded extension JARs stale (the script refuses them)\n"
+    printf "       mvn clean install -DskipTests -DskipITs\n"
+    printf "       ./build-images.sh\n"
     printf "\n"
     printf "     Prefix IMAGE_VERSION=%s if you overrode DITTO_VERSION.\n" "$DITTO_VERSION"
     printf "\n"

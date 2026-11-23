@@ -393,8 +393,8 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         assertThat(commandResponse).isInstanceOf(MigrateThingDefinitionResponse.class);
         assertThat(commandResponse.getHttpStatus()).isEqualTo(HttpStatus.OK);
 
-        // Then wait for all events generated (order independent)
-        consumeAndAssertEvents(cf.connectionName2, eventConsumer, Arrays.asList(
+        // Then wait for both events in any order; the revision asserts pin the persistence order
+        consumeAndAssertEventsInAnyOrder(cf.connectionName2, eventConsumer, Arrays.asList(
                 e -> {
                     LOGGER.info("Received event: {}", e);
                     final ThingCreated tc = thingEventForJson(e, ThingCreated.class, correlationId, thingId);
@@ -404,7 +404,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                     LOGGER.info("Received event: {}", e);
                     final ThingDefinitionMigrated tm = thingEventForJson(e, ThingDefinitionMigrated.class, correlationId, thingId);
                     assertThat(tm.getRevision()).isEqualTo(2L);
-                }), "ThingCreated", "ThingModified");
+                }), "ThingCreated", "ThingDefinitionMigrated");
     }
 
     @Test
@@ -719,8 +719,8 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         sendSignal(cf.connectionName1, modifyAttribute);
         sendSignal(cf.connectionName1, modifyAttribute);
 
-        // Then wait for all events generated (order independent)
-        consumeAndAssertEvents(cf.connectionName2, eventConsumer, Arrays.asList(
+        // Then wait for both events in any order; the revision asserts pin the persistence order
+        consumeAndAssertEventsInAnyOrder(cf.connectionName2, eventConsumer, Arrays.asList(
                 e -> {
                     final AttributeCreated ac = thingEventForJson(e, AttributeCreated.class, correlationId, thingId);
                     assertThat(ac.getRevision()).isEqualTo(2L);
@@ -733,7 +733,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                     assertThat((Iterable<? extends JsonKey>) am.getAttributePointer()).isEqualTo(modAttrPointer);
                     assertThat(am.getAttributeValue()).isEqualTo(modAttrValue);
                 }
-        ));
+        ), "AttributeCreated", "AttributeModified");
     }
 
     @Test
@@ -976,10 +976,11 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         waitShort();
         sendSignal(cf.connectionName1, modifyAttribute3);
 
-        // Then wait for all events generated (order independent)
+        // Then wait for all events generated, in any order: they belong to three things and Ditto orders events per
+        // thing only
         // the used filter for twin events on connection5 is: ?namespaces=<DEFAULT_NAMESPACE_NAME>&filter=gt(attributes/counter,42)
         // the ThingCreated events must not be received - as the filter specifies that attributes/counter > 42
-        consumeAndAssertEvents(cf.connectionNameWithNamespaceAndRqlFilter, eventConsumer, Arrays.asList(
+        consumeAndAssertEventsInAnyOrder(cf.connectionNameWithNamespaceAndRqlFilter, eventConsumer, Arrays.asList(
                 e -> {
                     final AttributeCreated ac = thingEventForJson(e, AttributeCreated.class, correlationId, thingId3);
                     assertThat(ac.getRevision()).isEqualTo(2L);
@@ -998,7 +999,7 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                     assertThat((Iterable<? extends JsonKey>) am.getAttributePointer()).isEqualTo(modAttrPointer);
                     assertThat(am.getAttributeValue()).isEqualTo(JsonValue.of(val3 * 2));
                 }
-        ));
+        ), "AttributeCreated of thing3", "AttributeModified of thing1", "AttributeModified of thing3");
     }
 
     @Test

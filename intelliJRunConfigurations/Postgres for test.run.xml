@@ -1,0 +1,26 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Postgres for test" type="docker-deploy" factoryName="docker-image" server-name="Docker" folderName="Ditto testing :: Run configs">
+    <deployment type="docker-image">
+      <settings>
+        <option name="imageTag" value="postgres:16" />
+        <option name="containerName" value="localPostgres" />
+        <option name="envVars">
+          <list>
+            <EnvironmentVariable name="POSTGRES_DB" value="ditto" />
+            <EnvironmentVariable name="POSTGRES_USER" value="ditto" />
+            <EnvironmentVariable name="POSTGRES_PASSWORD" value="ditto" />
+          </list>
+        </option>
+        <option name="portBindings">
+          <list>
+            <DockerPortBindingImpl>
+              <option name="containerPort" value="5432" />
+              <option name="hostPort" value="5432" />
+            </DockerPortBindingImpl>
+          </list>
+        </option>
+      </settings>
+    </deployment>
+    <method v="2" />
+  </configuration>
+</component>

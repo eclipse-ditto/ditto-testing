@@ -1,0 +1,123 @@
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Eclipse Public License 2.0 which is available at
+# http://www.eclipse.org/legal/epl-2.0
+#
+# SPDX-License-Identifier: EPL-2.0
+
+# PostgreSQL persistence override for the system-test environment. Layered by `DITTO_DB=postgres ./start.sh`
+# AFTER docker-compose.yml (and docker-compose.override.yml when present):
+#
+#   docker-compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose-postgres.yml up -d
+#
+# See README-postgres.md.
+#
+# policies/things/connectivity persist journals + snapshots to PostgreSQL. The service images ship both
+# persistence backends under /opt/ditto/backends/{mongodb,postgresql}/ and this file selects `postgresql` per
+# service with DITTO_PERSISTENCE_BACKEND (image default: mongodb). The image's java command puts exactly one
+# backend folder on the classpath (-cp /opt/ditto/*:/opt/ditto/backends/$DITTO_PERSISTENCE_BACKEND/*:
+# /opt/ditto/extensions/*; a CLASSPATH variable is ignored): here the shaded base ditto-postgres-client-extension
+# plus the thin ditto-postgres-persistence-extension. /opt/ditto/extensions/ ships empty and is reserved for
+# user JARs. The service's boot check refuses zero or two backends on the classpath. Nothing is bind-mounted
+# from a ditto checkout; the images must be local builds from a ditto tree with that layout
+# (eclipse/ditto-<svc>:0-SNAPSHOT, DITTO_VERSION defaults to 0-SNAPSHOT in postgres mode). What this file adds
+# is the backend selector, the overlay config (HOSTING_ENVIRONMENT=filebased) and the POSTGRES_* connection
+# environment.
+#
+# things-search's backend is SELECTABLE, not fixed: by default (SEARCH_BACKEND=postgres) it runs on
+# PostgreSQL via the docker-compose-postgres-search.yml overlay (layered after this file); with
+# SEARCH_BACKEND=mongodb it keeps indexing in MongoDB and only this file is used. MongoDB stays defined
+# but is only started in that case (see the mongodb note below).
+#
+# The host port for psql debugging lives in docker-compose.override.yml (deleted by CI), so CI binds no
+# host port for postgres.
+
+version: "2.4"
+
+services:
+
+  postgres:
+    image: docker.io/postgres:16
+    networks:
+      - test
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_DB=ditto
+      - POSTGRES_USER=ditto
+      - POSTGRES_PASSWORD=ditto
+    # Deliberately NO named volume: CleanupIT is documented to require a fresh environment and a
+    # persistent volume would accumulate state across runs. Fresh container = fresh database.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ditto -d ditto"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # mongodb stays DEFINED exactly as in docker-compose.yml but is NOT STARTED in postgres mode unless
+  # SEARCH_BACKEND=mongodb (things-search indexes there; start.sh then adds it to the DB services).
+  # docker-compose.yml declares `depends_on: [mongodb]` on policies/things/connectivity, and compose MERGES
+  # depends_on across -f files, so a plain overlay would still drag the mongodb container up with every
+  # service. The `!override` tag below therefore REPLACES the dependency list of each Postgres-backed
+  # service (postgres healthy + the Ditto services it needs) instead of extending it. The shared
+  # docker-compose.env (MONGO_DB_HOSTNAME etc.) is intentionally still injected into the three services:
+  # harmless (their Mongo config resolves but the Postgres provider ignores it) — do NOT "clean it up".
+
+  policies:
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./postgres/policies-postgres.conf:/opt/ditto/policies-postgres.conf:ro
+    environment:
+      - DITTO_PERSISTENCE_BACKEND=postgresql
+      - HOSTING_ENVIRONMENT=filebased
+      - HOSTING_ENVIRONMENT_FILE_LOCATION=/opt/ditto/policies-postgres.conf
+      - POSTGRES_URI=r2dbc:postgresql://postgres:5432/ditto
+      - POSTGRES_USER=ditto
+      - POSTGRES_PASSWORD=ditto
+      - POSTGRES_DDL_USER=ditto
+      - POSTGRES_DDL_PASSWORD=ditto
+      - POSTGRES_SSL_MODE=disable
+
+  things:
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+      policies:
+        condition: service_started
+    volumes:
+      - ./postgres/things-postgres.conf:/opt/ditto/things-postgres.conf:ro
+    environment:
+      - DITTO_PERSISTENCE_BACKEND=postgresql
+      - HOSTING_ENVIRONMENT=filebased
+      - HOSTING_ENVIRONMENT_FILE_LOCATION=/opt/ditto/things-postgres.conf
+      - POSTGRES_URI=r2dbc:postgresql://postgres:5432/ditto
+      - POSTGRES_USER=ditto
+      - POSTGRES_PASSWORD=ditto
+      - POSTGRES_DDL_USER=ditto
+      - POSTGRES_DDL_PASSWORD=ditto
+      - POSTGRES_SSL_MODE=disable
+
+  connectivity:
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+      policies:
+        condition: service_started
+    volumes:
+      - ./postgres/connectivity-postgres.conf:/opt/ditto/connectivity-postgres.conf:ro
+    environment:
+      - DITTO_PERSISTENCE_BACKEND=postgresql
+      - HOSTING_ENVIRONMENT=filebased
+      - HOSTING_ENVIRONMENT_FILE_LOCATION=/opt/ditto/connectivity-postgres.conf
+      - POSTGRES_URI=r2dbc:postgresql://postgres:5432/ditto
+      - POSTGRES_USER=ditto
+      - POSTGRES_PASSWORD=ditto
+      - POSTGRES_DDL_USER=ditto
+      - POSTGRES_DDL_PASSWORD=ditto
+      - POSTGRES_SSL_MODE=disable

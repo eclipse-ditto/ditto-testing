@@ -1,0 +1,42 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Things for test (Postgres)" type="Application" factoryName="Application" folderName="Ditto testing :: Run configs">
+    <!-- Postgres twin of "Things for test": same test env vars + VM params, but the classpath module is
+         the ditto-ide-postgres-launcher and the Postgres dev profile is injected as the highest-priority
+         FILE_BASED config layer. Things joins the Policies-founded cluster at 2552. Requires a `postgres`
+         container on localhost:5432 (see intelliJRunConfigurations/Postgres for test.run.xml). -->
+    <option name="ALTERNATIVE_JRE_PATH" value="temurin-25" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
+    <envs>
+      <env name="INSTANCE_INDEX" value="1" />
+      <env name="LOG_LEVEL" value="INFO" />
+      <env name="LOG_LEVEL_APPLICATION" value="INFO" />
+      <env name="THING_SNAPSHOT_INTERVAL" value="1s" />
+      <env name="THING_SNAPSHOT_THRESHOLD" value="1" />
+      <env name="MONGO_DB_DATABASE" value="ditto-test" />
+      <env name="HOSTING_ENVIRONMENT" value="filebased" />
+      <env name="HOSTING_ENVIRONMENT_FILE_LOCATION" value="$PROJECT_DIR$/things/service/src/main/resources/things-pg-dev.conf" />
+      <env name="POSTGRES_URI" value="r2dbc:postgresql://localhost:5432/ditto" />
+      <env name="POSTGRES_USER" value="ditto" />
+      <env name="POSTGRES_PASSWORD" value="ditto" />
+      <env name="POSTGRES_DDL_USER" value="ditto" />
+      <env name="POSTGRES_DDL_PASSWORD" value="ditto" />
+      <env name="POSTGRES_SSL_MODE" value="disable" />
+    </envs>
+    <option name="MAIN_CLASS_NAME" value="org.eclipse.ditto.things.service.starter.ThingsService" />
+    <module name="ditto-ide-postgres-launcher" />
+    <option name="VM_PARAMETERS" value="-Xms1g -Xmx1g -Dpekko.cluster.failure-detector.acceptable-heartbeat-pause=20s" />
+    <extension name="net.ashald.envfile">
+      <option name="IS_ENABLED" value="false" />
+      <option name="IS_SUBST" value="false" />
+      <option name="IS_PATH_MACRO_SUPPORTED" value="false" />
+      <option name="IS_IGNORE_MISSING_FILES" value="false" />
+      <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="false" />
+      <ENTRIES>
+        <ENTRY IS_ENABLED="true" PARSER="runconfig" IS_EXECUTABLE="false" />
+      </ENTRIES>
+    </extension>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

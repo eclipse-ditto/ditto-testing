@@ -53,6 +53,7 @@
         <qpid-jms-client.version>1.14.0</qpid-jms-client.version>
         <jsonassert.version>1.5.3</jsonassert.version>
         <mongo-java-driver.version>5.2.0</mongo-java-driver.version>
+        <postgresql.version>42.7.7</postgresql.version>
 
         <scala.version>2.13</scala.version>
         <scala.version.full>2.13.18</scala.version.full>
@@ -361,6 +362,12 @@
                 <groupId>org.mongodb</groupId>
                 <artifactId>mongodb-driver-sync</artifactId>
                 <version>${mongo-java-driver.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.version}</version>
             </dependency>
 
             <dependency>

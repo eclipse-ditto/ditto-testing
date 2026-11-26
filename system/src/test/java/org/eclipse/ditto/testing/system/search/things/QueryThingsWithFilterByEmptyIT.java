@@ -13,6 +13,7 @@
 package org.eclipse.ditto.testing.system.search.things;
 
 import static org.eclipse.ditto.testing.common.matcher.search.SearchProperties.attribute;
+import static org.eclipse.ditto.testing.common.matcher.search.SearchProperties.feature;
 import static org.eclipse.ditto.testing.common.matcher.search.SearchProperties.featureDesiredProperty;
 import static org.eclipse.ditto.testing.common.matcher.search.SearchProperties.featureProperty;
 import static org.eclipse.ditto.testing.common.matcher.search.SearchResponseMatchers.isEmpty;
@@ -43,7 +44,8 @@ import org.junit.Test;
 /**
  * Integration tests for the {@code empty()} RQL function covering all 5 empty semantics
  * (absent, null, empty array, empty object, empty string), negation, combinations with other
- * operators, and different field types (attributes, feature properties, desired properties).
+ * operators, and different field types (attributes, feature properties, desired properties), on concrete
+ * feature paths as well as on the {@code features/*} wildcard (per-feature semantics).
  */
 public class QueryThingsWithFilterByEmptyIT extends VersionedSearchIntegrationTest {
 
@@ -51,9 +53,13 @@ public class QueryThingsWithFilterByEmptyIT extends VersionedSearchIntegrationTe
     private static final String LABEL_ATTR = "label";
     private static final String INFO_ATTR = "info";
     private static final String SENSOR_FEATURE = "sensor";
+    private static final String GAUGE_FEATURE = "gauge";
     private static final String VALUE_PROPERTY = "value";
+    private static final String STATUS_PROPERTY = "status";
+    private static final String CONFIG_PROPERTY = "config";
 
-    private static ThingId thing1Id;  // tags=["a","b"], feature with properties and desiredProperties
+    private static ThingId thing1Id;  // tags=["a","b"], feature with properties (incl. object-valued config)
+                                      // and desiredProperties
     private static ThingId thing2Id;  // tags=[] (empty array)
     private static ThingId thing3Id;  // tags={} (empty object)
     private static ThingId thing4Id;  // tags="" (empty string)
@@ -62,7 +68,7 @@ public class QueryThingsWithFilterByEmptyIT extends VersionedSearchIntegrationTe
     private static ThingId thing7Id;  // feature with empty properties {}
     private static ThingId thing8Id;  // feature with no properties
     private static ThingId thing9Id;  // no features at all, tags=["x"]
-    private static ThingId thing10Id; // feature with empty desiredProperties
+    private static ThingId thing10Id; // feature with empty desiredProperties + second feature without value
 
     @Override
     protected void createTestData() {
@@ -81,7 +87,8 @@ public class QueryThingsWithFilterByEmptyIT extends VersionedSearchIntegrationTe
     private Thing createThing1() {
         final FeatureProperties props = FeatureProperties.newBuilder()
                 .set(VALUE_PROPERTY, 42)
-                .set("status", "ok")
+                .set(STATUS_PROPERTY, "ok")
+                .set(CONFIG_PROPERTY, JsonObject.newBuilder().set("mode", "auto").build())
                 .build();
         final FeatureProperties desiredProps = FeatureProperties.newBuilder()
                 .set(VALUE_PROPERTY, 50)
@@ -201,6 +208,7 @@ public class QueryThingsWithFilterByEmptyIT extends VersionedSearchIntegrationTe
                         .desiredProperties(FeatureProperties.newBuilder().build())
                         .withId(SENSOR_FEATURE)
                         .build())
+                .setFeature(GAUGE_FEATURE, FeatureProperties.newBuilder().set(STATUS_PROPERTY, "idle").build())
                 .build();
     }
 
@@ -310,6 +318,122 @@ public class QueryThingsWithFilterByEmptyIT extends VersionedSearchIntegrationTe
                 featureProperty("nonexistent", VALUE_PROPERTY).empty()
         ))
                 .expectingBody(isEqualTo(toThingResult(thing1Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByEmptyFeaturePropertyValueOnAnyFeature() {
+        // thing7 (properties {}) and thing8 (no properties) lack the property on their only feature; thing10's
+        // "gauge" feature lacks it while its "sensor" feature has it; thing9 has no feature at all -> no match
+        search(featureProperty(VALUE_PROPERTY).empty())
+                .expectingBody(isEqualTo(toThingResult(thing10Id, thing7Id, thing8Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByNotEmptyFeaturePropertyValueOnAnyFeature() {
+        search(not(featureProperty(VALUE_PROPERTY).empty()))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing2Id, thing3Id, thing4Id, thing5Id, thing6Id,
+                        thing9Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByEmptyFeaturePropertyValueOnAnyFeatureMatchesThingWithOneFeatureLackingIt() {
+        search(and(
+                attribute(LABEL_ATTR).eq("desired-empty"),
+                featureProperty(VALUE_PROPERTY).empty()
+        ))
+                .expectingBody(isEqualTo(toThingResult(thing10Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByNotEmptyFeaturePropertyValueOnAnyFeatureExcludesThingWithOneFeatureLackingIt() {
+        search(and(
+                attribute(LABEL_ATTR).eq("desired-empty"),
+                not(featureProperty(VALUE_PROPERTY).empty())
+        ))
+                .expectingBody(isEmpty())
+                .fire();
+    }
+
+    @Test
+    public void queryByEmptyDesiredPropertyValueOnAnyFeature() {
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(featureDesiredProperty(VALUE_PROPERTY).empty())
+                    .expectingBody(isEqualTo(toThingResult(thing10Id, thing2Id, thing3Id, thing4Id, thing5Id,
+                            thing6Id, thing7Id, thing8Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByNotEmptyDesiredPropertyValueOnAnyFeature() {
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(not(featureDesiredProperty(VALUE_PROPERTY).empty()))
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing9Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByEmptyFeaturePropertiesOnAnyFeature() {
+        search(feature("*/properties").empty())
+                .expectingBody(isEqualTo(toThingResult(thing7Id, thing8Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByNotEmptyFeaturePropertiesOnAnyFeature() {
+        search(not(feature("*/properties").empty()))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing10Id, thing2Id, thing3Id, thing4Id, thing5Id,
+                        thing6Id, thing9Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByEmptyFeatureDesiredPropertiesOnAnyFeature() {
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(feature("*/desiredProperties").empty())
+                    .expectingBody(isEqualTo(toThingResult(thing10Id, thing2Id, thing3Id, thing4Id, thing5Id,
+                            thing6Id, thing7Id, thing8Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByNotEmptyFeatureDesiredPropertiesOnAnyFeature() {
+        if (apiVersion == JsonSchemaVersion.V_2) {
+            search(not(feature("*/desiredProperties").empty()))
+                    .expectingBody(isEqualTo(toThingResult(thing1Id, thing9Id)))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void queryByEmptyObjectValuedFeaturePropertyOnAnyFeature() {
+        // thing1's "config" is a NON-empty object -> not empty; every other feature-bearing thing lacks "config"
+        search(featureProperty(CONFIG_PROPERTY).empty())
+                .expectingBody(isEqualTo(toThingResult(thing10Id, thing2Id, thing3Id, thing4Id, thing5Id, thing6Id,
+                        thing7Id, thing8Id)))
+                .fire();
+    }
+
+    @Test
+    public void queryByEmptyObjectValuedFeaturePropertyOnAnyFeatureIsNotEmpty() {
+        search(and(
+                attribute(LABEL_ATTR).eq("full"),
+                featureProperty(CONFIG_PROPERTY).empty()
+        ))
+                .expectingBody(isEmpty())
+                .fire();
+    }
+
+    @Test
+    public void queryByNotEmptyObjectValuedFeaturePropertyOnAnyFeature() {
+        search(not(featureProperty(CONFIG_PROPERTY).empty()))
+                .expectingBody(isEqualTo(toThingResult(thing1Id, thing9Id)))
                 .fire();
     }
 

@@ -1,0 +1,49 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="ThingsSearch for test (Postgres)" type="Application" factoryName="Application" folderName="Ditto testing :: Run configs">
+    <!-- Based on ditto's own .run/SearchService (Postgres).run.xml (the generic "<svc>" template does not
+         expand for search: dir is `thingsearch`, file prefix is `search`). Kept verbatim from ditto: the
+         HOSTING_ENVIRONMENT_FILE_LOCATION path, the add-opens VM params, the ditto-ide-postgres-launcher
+         module and the search env vars. Adapted for this repo (4 changes only): name +
+         folderName (group/reference with the sibling "for test" configs), ALTERNATIVE_JRE_PATH=temurin-25
+         and INSTANCE_INDEX=1 (both are the testing-repo convention its cluster-mates use). Selecting the
+         search backend in IntelliJ mode = launching this vs the Mongo "ThingsSearch for test". Requires a
+         `postgres` container on localhost:5432 (see intelliJRunConfigurations/Postgres for test.run.xml). -->
+    <option name="ALTERNATIVE_JRE_PATH" value="temurin-25" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
+    <envs>
+      <env name="INSTANCE_INDEX" value="1" />
+      <env name="ACTIVITY_CHECK_INTERVAL" value="1h" />
+      <env name="BACKGROUND_SYNC_QUIET_PERIOD" value="1h" />
+      <env name="DITTO_TRACING_ENABLED" value="true" />
+      <env name="LOG_LEVEL_APPLICATION" value="INFO" />
+      <env name="THINGS_SEARCH_UPDATER_STREAM_PERSISTENCE_MAX_BULK_SIZE" value="8" />
+      <env name="THINGS_SEARCH_UPDATER_STREAM_PERSISTENCE_PARALLELISM" value="4" />
+      <env name="THINGS_SEARCH_UPDATER_STREAM_WRITE_INTERVAL" value="1s" />
+      <env name="DITTO_TRACING_SAMPLER" value="always" />
+      <env name="HOSTING_ENVIRONMENT" value="filebased" />
+      <env name="HOSTING_ENVIRONMENT_FILE_LOCATION" value="$PROJECT_DIR$/thingsearch/service/src/main/resources/search-pg-dev.conf" />
+      <env name="POSTGRES_SSL_MODE" value="disable" />
+      <env name="POSTGRES_URI" value="r2dbc:postgresql://localhost:5432/ditto" />
+      <env name="POSTGRES_USER" value="ditto" />
+      <env name="POSTGRES_PASSWORD" value="ditto" />
+      <env name="POSTGRES_DDL_USER" value="ditto" />
+      <env name="POSTGRES_DDL_PASSWORD" value="ditto" />
+    </envs>
+    <option name="MAIN_CLASS_NAME" value="org.eclipse.ditto.thingsearch.service.starter.SearchService" />
+    <module name="ditto-ide-postgres-launcher" />
+    <option name="VM_PARAMETERS" value="-Xms512m -Xmx512m --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/sun.security.util=ALL-UNNAMED" />
+    <extension name="net.ashald.envfile">
+      <option name="IS_ENABLED" value="false" />
+      <option name="IS_SUBST" value="false" />
+      <option name="IS_PATH_MACRO_SUPPORTED" value="false" />
+      <option name="IS_IGNORE_MISSING_FILES" value="false" />
+      <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="false" />
+      <ENTRIES>
+        <ENTRY IS_ENABLED="true" PARSER="runconfig" IS_EXECUTABLE="false" />
+      </ENTRIES>
+    </extension>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

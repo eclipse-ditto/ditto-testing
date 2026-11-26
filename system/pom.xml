@@ -266,6 +266,11 @@
             <artifactId>mongodb-driver-sync</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- include commons-logging to pacify netty -->
         <dependency>
             <groupId>commons-logging</groupId>

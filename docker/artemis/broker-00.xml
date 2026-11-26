@@ -5,5 +5,7 @@
         <!-- Disable security to allow anonymous connections -->
         <security-enabled>false</security-enabled>
         <persistence-enabled>false</persistence-enabled>
+        <!-- Effectively disable the disk-full block; OrbStack overlay can be full and we don't persist anyway -->
+        <max-disk-usage>100</max-disk-usage>
     </core>
 </configuration>

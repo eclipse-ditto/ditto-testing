@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.nio.ByteBuffer;
 import java.text.MessageFormat;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -483,12 +484,85 @@ public abstract class AbstractConnectivityITBase<C, M> extends IntegrationTest {
                             "Did not receive " + (i < eventDescriptions.length ? eventDescriptions[i] : "an Event"))
                     .isNotNull();
 
-            final JsonifiableAdaptable jsonifiableAdaptable = jsonifiableAdaptableFrom(eventMessage);
-            final Adaptable eventAdaptable1 = ProtocolFactory.newAdaptableBuilder(jsonifiableAdaptable).build();
-            final Jsonifiable<JsonObject> event = PROTOCOL_ADAPTER.fromAdaptable(eventAdaptable1);
+            final Jsonifiable<JsonObject> event = eventFrom(eventMessage);
             LOGGER.info("Received event, running its assertions: " + event);
             expectedMessageAssert.accept(event);
         }
+    }
+
+    /**
+     * Waits for exactly as many events as there are assertions and accepts them in any arrival order. Each received
+     * event is matched against the assertions that are still open, in list order, and consumes the first one it
+     * satisfies; an event that satisfies none of them fails the test at once with every open assertion's failure.
+     * <p>
+     * Use this when the expected events belong to several things (Ditto orders the events of one thing, not across
+     * things) or when their order is not part of what the test claims. Because a failing attempt is part of normal
+     * matching, the assertions must be free of side effects: no signals sent, no shared state written.
+     *
+     * @param connectionName the name of the connection whose target is consumed.
+     * @param eventConsumer the consumer of that target.
+     * @param expectedMessageAsserts one assertion per expected event.
+     * @param eventDescriptions optional descriptions of the expected events, aligned with the assertions by index.
+     * @see #consumeAndAssertEvents for sequences whose order is part of the claim.
+     */
+    void consumeAndAssertEventsInAnyOrder(final String connectionName, final C eventConsumer,
+            final List<Consumer<Jsonifiable<JsonObject>>> expectedMessageAsserts,
+            final String... eventDescriptions) {
+
+        final List<Integer> openIndices = new ArrayList<>();
+        for (int j = 0; j < expectedMessageAsserts.size(); ++j) {
+            openIndices.add(j);
+        }
+        for (int i = 0; i < expectedMessageAsserts.size(); ++i) {
+            final M eventMessage = consumeFromTarget(connectionName, eventConsumer);
+            // will break the loop in timeout case
+            assertThat(eventMessage)
+                    .withFailMessage("Did not receive the remaining expected event(s): " + openIndices.stream()
+                            .map(j -> eventDescription(j, eventDescriptions))
+                            .collect(Collectors.joining(", ")))
+                    .isNotNull();
+
+            final Jsonifiable<JsonObject> event = eventFrom(eventMessage);
+            LOGGER.info("Received event, matching it against the remaining expected events: " + event);
+            final Integer matchedIndex =
+                    firstOpenAssertionAccepting(event, openIndices, expectedMessageAsserts, eventDescriptions);
+            openIndices.remove(matchedIndex);
+            LOGGER.info("Received event matched the expected event: " +
+                    eventDescription(matchedIndex, eventDescriptions));
+        }
+        // each accepted event removed exactly one open index, so after N events none is left open
+    }
+
+    /**
+     * Tries the open assertions on the event in list order and returns the index of the first that accepts it; fails
+     * with every open assertion's failure when none does. Only an {@code AssertionError} counts as a mismatch.
+     */
+    private static Integer firstOpenAssertionAccepting(final Jsonifiable<JsonObject> event,
+            final List<Integer> openIndices,
+            final List<Consumer<Jsonifiable<JsonObject>>> expectedMessageAsserts,
+            final String... eventDescriptions) {
+
+        final List<String> mismatches = new ArrayList<>();
+        for (final Integer j : openIndices) {
+            try {
+                expectedMessageAsserts.get(j).accept(event);
+                return j;
+            } catch (final AssertionError e) {
+                mismatches.add(eventDescription(j, eventDescriptions) + ": " + e.getMessage());
+            }
+        }
+        throw new AssertionError("Received event <" + event + "> matches none of the remaining expected events:\n" +
+                String.join("\n", mismatches));
+    }
+
+    private static String eventDescription(final int index, final String... eventDescriptions) {
+        return index < eventDescriptions.length ? eventDescriptions[index] : "event #" + index;
+    }
+
+    private Jsonifiable<JsonObject> eventFrom(final M eventMessage) {
+        final JsonifiableAdaptable jsonifiableAdaptable = jsonifiableAdaptableFrom(eventMessage);
+        final Adaptable eventAdaptable1 = ProtocolFactory.newAdaptableBuilder(jsonifiableAdaptable).build();
+        return PROTOCOL_ADAPTER.fromAdaptable(eventAdaptable1);
     }
 
     @SuppressWarnings("unchecked")

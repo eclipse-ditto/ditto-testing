@@ -50,6 +50,14 @@ public class CommonTestConfig {
 
     private static final String PROPERTY_MONGODB_URI = MONGO_PREFIX + "uri";
 
+    private static final String PROPERTY_PERSISTENCE_BACKEND = "persistence.backend";
+    private static final String PERSISTENCE_BACKEND_MONGODB = "mongodb";
+
+    private static final String POSTGRES_PREFIX = "postgres.";
+    private static final String PROPERTY_POSTGRES_JDBC_URI = POSTGRES_PREFIX + "jdbc-uri";
+    private static final String PROPERTY_POSTGRES_USER = POSTGRES_PREFIX + "user";
+    private static final String PROPERTY_POSTGRES_PASSWORD = POSTGRES_PREFIX + "password";
+
     private static final String PROPERTY_GATEWAY_URL = GATEWAY_PREFIX + "url";
     private static final String PROPERTY_GATEWAY_WS_URL = GATEWAY_PREFIX + "ws-url";
     private static final String PROPERTY_GATEWAY_BASIC_AUTH_ENABLED = GATEWAY_PREFIX + "basic-auth.enabled";
@@ -109,7 +117,10 @@ public class CommonTestConfig {
         LOG.info("Running against test environment: {}", testEnvironment);
 
         final String envSpecificBaseTestConfigFile = String.format("test-common-%s.conf", testEnvironment);
-        final Config envSpecificBaseTestConfig = ConfigFactory.parseResourcesAnySyntax(envSpecificBaseTestConfigFile);
+        // required: an unknown environment name (e.g. the removed "docker-compose-postgres") must fail here with the
+        // file name instead of silently loading only test-common.conf — same as config.TestConfig does.
+        final Config envSpecificBaseTestConfig = ConfigFactory.parseResourcesAnySyntax(envSpecificBaseTestConfigFile,
+                ConfigParseOptions.defaults().setAllowMissing(false));
         LOG.debug("Environment specific base config: {}", envSpecificBaseTestConfig);
 
         final Config mergedBaseConfig = envSpecificBaseTestConfig.withFallback(baseConfig);
@@ -161,6 +172,30 @@ public class CommonTestConfig {
 
     public String getMongoDBUri() {
         return conf.getString(PROPERTY_MONGODB_URI);
+    }
+
+    /**
+     * Returns the persistence backend Ditto runs against in this test environment: {@code "mongodb"} (default, from
+     * {@code test-common.conf}) or {@code "postgres"}. Select it per run with the JVM system property
+     * {@code -Dpersistence.backend=postgres}, which overrides the conf value because the config is loaded via
+     * {@link ConfigFactory#load(Config)} (system properties are its top layer).
+     *
+     * @return the persistence backend.
+     */
+    public String getPersistenceBackend() {
+        return getStringOrDefault(PROPERTY_PERSISTENCE_BACKEND, PERSISTENCE_BACKEND_MONGODB);
+    }
+
+    public String getPostgresJdbcUri() {
+        return conf.getString(PROPERTY_POSTGRES_JDBC_URI);
+    }
+
+    public String getPostgresUser() {
+        return conf.getString(PROPERTY_POSTGRES_USER);
+    }
+
+    public String getPostgresPassword() {
+        return conf.getString(PROPERTY_POSTGRES_PASSWORD);
     }
 
     public String getGatewayUrl(final String subUrl) {

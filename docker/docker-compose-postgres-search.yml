@@ -1,0 +1,54 @@
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Eclipse Public License 2.0 which is available at
+# http://www.eclipse.org/legal/epl-2.0
+#
+# SPDX-License-Identifier: EPL-2.0
+
+# things-search-on-PostgreSQL override. Layer AFTER docker-compose-postgres.yml (which itself layers
+# after docker-compose.yml + docker-compose.override.yml), and ONLY when SEARCH_BACKEND=postgres:
+#
+#   docker-compose -f docker-compose.yml -f docker-compose.override.yml \
+#                  -f docker-compose-postgres.yml -f docker-compose-postgres-search.yml up -d
+#
+# `DITTO_DB=postgres ./start.sh` appends this file automatically when SEARCH_BACKEND=postgres (its default);
+# with SEARCH_BACKEND=mongodb it is omitted and things-search keeps indexing in MongoDB.
+#
+# It touches ONLY the things-search service. It selects the image's `postgresql` backend folder
+# (/opt/ditto/backends/postgresql/: the shaded base ditto-postgres-client-extension + the thin
+# ditto-postgres-search-extension) with DITTO_PERSISTENCE_BACKEND=postgresql, and adds the search-postgres.conf
+# overlay (HOSTING_ENVIRONMENT=filebased) and the POSTGRES_* environment. With SEARCH_BACKEND=mongodb this file
+# is omitted and things-search keeps the image default `mongodb` folder: nothing else is needed for that hybrid
+# mode. things-search needs the DDL role to `CREATE EXTENSION IF NOT EXISTS pg_trgm` at boot —
+# auto-satisfied by the local `ditto` superuser in postgres:16.
+
+version: "2.4"
+
+services:
+
+  things-search:
+    # `!override` REPLACES docker-compose.yml's `depends_on: [mongodb, policies, things]` (compose would
+    # otherwise merge the lists and still start mongodb): on PostgreSQL things-search needs no MongoDB.
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+      policies:
+        condition: service_started
+      things:
+        condition: service_started
+    volumes:
+      - ./postgres/search-postgres.conf:/opt/ditto/search-postgres.conf:ro
+    environment:
+      - DITTO_PERSISTENCE_BACKEND=postgresql
+      - HOSTING_ENVIRONMENT=filebased
+      - HOSTING_ENVIRONMENT_FILE_LOCATION=/opt/ditto/search-postgres.conf
+      - POSTGRES_URI=r2dbc:postgresql://postgres:5432/ditto
+      - POSTGRES_USER=ditto
+      - POSTGRES_PASSWORD=ditto
+      - POSTGRES_DDL_USER=ditto
+      - POSTGRES_DDL_PASSWORD=ditto
+      - POSTGRES_SSL_MODE=disable

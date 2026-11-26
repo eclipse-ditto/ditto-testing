@@ -24,14 +24,10 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.bson.BsonDocument;
 import org.eclipse.ditto.base.model.common.HttpStatus;
 import org.eclipse.ditto.connectivity.model.Connection;
-import org.eclipse.ditto.json.JsonArray;
-import org.eclipse.ditto.json.JsonCollectors;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonPointer;
-import org.eclipse.ditto.json.JsonValue;
 import org.eclipse.ditto.policies.model.EffectedPermissions;
 import org.eclipse.ditto.policies.model.PoliciesModelFactory;
 import org.eclipse.ditto.policies.model.Subject;
@@ -43,12 +39,10 @@ import org.eclipse.ditto.testing.common.conditions.DockerEnvironment;
 import org.eclipse.ditto.testing.common.conditions.RunIf;
 import org.eclipse.ditto.testing.common.matcher.PostMatcher;
 import org.eclipse.ditto.testing.common.matcher.StatusCodeSuccessfulMatcher;
+import org.eclipse.ditto.testing.system.persistence.PersistenceInspector;
+import org.eclipse.ditto.testing.system.persistence.PersistenceInspectorFactory;
 import org.junit.After;
 import org.junit.Test;
-
-import com.mongodb.ReadPreference;
-import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoClients;
 
 /**
  * Tests background deletion of events and snapshots.
@@ -62,9 +56,8 @@ public final class CleanupIT extends IntegrationTest {
      * Should be at least as large as the maximum snapshot threshold of things-, policies- and connectivity-service.
      */
     private static final int EXTRA_EVENTS = 10;
-    private static final Duration WAIT_FOR_MONGO_WRITES = Duration.ofSeconds(20L);
+    private static final Duration WAIT_FOR_PERSISTENCE_WRITES = Duration.ofSeconds(20L);
     private static final Duration WAIT_FOR_CLEANUP = Duration.ofMinutes(3L);
-    private static final String CONNECTION_PREFIX = "connection:";
 
     @After
     public void disableCleanUp() {
@@ -75,7 +68,7 @@ public final class CleanupIT extends IntegrationTest {
     public void staleEventsAndSnapshotsAreDeleted() throws Exception {
         // stop cleanup to avoid deletion of events during creation
         stopCleanup();
-        try (final MongoClient mongoClient = createMongoClient()) {
+        try (final PersistenceInspector inspector = PersistenceInspectorFactory.create(TEST_CONFIG)) {
             // create 5 things with snapshots whose default policies have snapshots
             final List<String> thingIds = IntStream.range(0, 5)
                     .mapToObj(i -> createThing())
@@ -93,33 +86,33 @@ public final class CleanupIT extends IntegrationTest {
             final int expectedThingAndPolicyEvents = thingIds.size() * (EXTRA_EVENTS + 1);
             final int expectedConnectionEvents = 2 * (EXTRA_EVENTS + 2);
 
-            // wait for MongoDB writes to be readable
-            LOGGER.info("Waiting <{}> until writes on MongoDB are readable.", WAIT_FOR_MONGO_WRITES);
-            TimeUnit.SECONDS.sleep(WAIT_FOR_MONGO_WRITES.getSeconds());
+            // wait for persistence writes to be readable
+            LOGGER.info("Waiting <{}> until persisted writes are readable.", WAIT_FOR_PERSISTENCE_WRITES);
+            TimeUnit.SECONDS.sleep(WAIT_FOR_PERSISTENCE_WRITES.getSeconds());
             LOGGER.info("Asserting the correct number of events and snapshots.");
 
-            assertThat(countThingEvents(mongoClient, thingIds))
+            assertThat(inspector.countThingEvents(thingIds))
                     .as("thing events")
                     .isEqualTo(expectedThingAndPolicyEvents);
-            assertThat(countPolicyEvents(mongoClient, thingIds))
+            assertThat(inspector.countPolicyEvents(thingIds))
                     .as("policy events")
                     .isEqualTo(expectedThingAndPolicyEvents);
-            assertThat(countConnectionEvents(mongoClient, List.of(closedConnectionId, openConnectionId), true))
+            assertThat(inspector.countConnectionEvents(List.of(closedConnectionId, openConnectionId), true))
                     .as("connection events")
                     .isEqualTo(expectedConnectionEvents);
             // check that snapshots are made
             for (final String thingId : thingIds) {
-                assertThat(countThingSnaps(mongoClient, List.of(thingId)))
+                assertThat(inspector.countThingSnaps(List.of(thingId)))
                         .as("thing snapshot")
                         .isNotZero();
-                assertThat(countPolicySnaps(mongoClient, List.of(thingId)))
+                assertThat(inspector.countPolicySnaps(List.of(thingId)))
                         .as("policy snapshot")
                         .isNotZero();
             }
-            assertThat(countConnectionSnaps(mongoClient, List.of(closedConnectionId)))
+            assertThat(inspector.countConnectionSnaps(List.of(closedConnectionId)))
                     .as("connection snapshot for closed connection")
                     .isNotZero();
-            assertThat(countConnectionSnaps(mongoClient, List.of(openConnectionId)))
+            assertThat(inspector.countConnectionSnaps(List.of(openConnectionId)))
                     .as("connection snapshot for open connection")
                     .isNotZero();
 
@@ -137,33 +130,33 @@ public final class CleanupIT extends IntegrationTest {
             final int expectedJournalEntriesAfterCleanup = thingIds.size();
 
             // check that things and closed connections have no events and open connection has 1 event
-            assertThat(countThingEvents(mongoClient, thingIds))
+            assertThat(inspector.countThingEvents(thingIds))
                     .as("thing events")
                     .isEqualTo(expectedJournalEntriesAfterCleanup);
-            assertThat(countPolicyEvents(mongoClient, thingIds))
+            assertThat(inspector.countPolicyEvents(thingIds))
                     .as("policy events")
                     .isEqualTo(expectedJournalEntriesAfterCleanup);
             // even closed connections have 1 journal entry retained on cleanup:
-            assertThat(countConnectionEvents(mongoClient, List.of(closedConnectionId), false))
+            assertThat(inspector.countConnectionEvents(List.of(closedConnectionId), false))
                     .as("closed connection events")
                     .isEqualTo(1);
-            assertThat(countConnectionEvents(mongoClient, List.of(openConnectionId), true))
+            assertThat(inspector.countConnectionEvents(List.of(openConnectionId), true))
                     .as("open connection events")
                     .isEqualTo(1);
 
             // check that all but 1 snapshots are cleaned up
             for (final String thingId : thingIds) {
-                assertThat(countThingSnaps(mongoClient, List.of(thingId)))
+                assertThat(inspector.countThingSnaps(List.of(thingId)))
                         .as("thing snapshots")
                         .isEqualTo(1);
-                assertThat(countPolicySnaps(mongoClient, List.of(thingId)))
+                assertThat(inspector.countPolicySnaps(List.of(thingId)))
                         .as("thing snapshots")
                         .isEqualTo(1);
             }
-            assertThat(countConnectionSnaps(mongoClient, List.of(closedConnectionId)))
+            assertThat(inspector.countConnectionSnaps(List.of(closedConnectionId)))
                     .as("connection snapshot for closed connection")
                     .isEqualTo(1);
-            assertThat(countConnectionSnaps(mongoClient, List.of(openConnectionId)))
+            assertThat(inspector.countConnectionSnaps(List.of(openConnectionId)))
                     .as("connection snapshot for closed connection")
                     .isEqualTo(1);
         }
@@ -242,97 +235,33 @@ public final class CleanupIT extends IntegrationTest {
     }
 
     private static String createConnectionWithAdditionalEvents(final boolean open, final int amountOfAdditionalEvents) {
-        final String username = serviceEnv.getDefaultAuthUsername();
-        final String secret = serviceEnv.getDefaultTestingContext()
-                .getSolution()
-                .getSecret();
         final JsonObject closedConnection = TestConstants.Connections.buildConnection();
         final JsonObject finalConnection = closedConnection.toBuilder()
                 .set(Connection.JsonFields.CONNECTION_STATUS, open ? "open" : "closed")
                 .build();
 
+        // /api/2/connections is devops-gated in the gateway (ConnectionsRoute), not solution-auth-gated;
+        // use devops auth like RestConnectionsIT does instead of the solution basic-auth credentials.
         final String connectionId = parseIdFromResponse(connectionsClient()
                 .postConnection(closedConnection)
                 .withHeader(HttpHeader.TIMEOUT, 60)
-                .withBasicAuth(username, secret, true)
+                .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.CREATED)
                 .fire());
 
         repeat(amountOfAdditionalEvents, i -> connectionsClient()
                 .putConnection(connectionId, closedConnection)
-                .withBasicAuth(username, secret, true)
+                .withDevopsAuth()
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire());
 
         connectionsClient()
                 .putConnection(connectionId, finalConnection)
-                .withBasicAuth(username, secret, true)
+                .withDevopsAuth()
                 .expectingHttpStatus(open ? HttpStatus.GATEWAY_TIMEOUT : HttpStatus.NO_CONTENT)
                 .fire();
 
         return connectionId;
-    }
-
-    private static MongoClient createMongoClient() {
-        return MongoClients.create(TEST_CONFIG.getMongoDBUri());
-    }
-
-    private static long countThingEvents(final MongoClient mongoClient, final List<? extends CharSequence> thingIds) {
-        return countDocuments(mongoClient, thingIds, "things", "things_journal", "thing:",
-                false);
-    }
-
-    private static long countThingSnaps(final MongoClient mongoClient, final List<? extends CharSequence> thingIds) {
-        return countDocuments(mongoClient, thingIds, "things", "things_snaps", "thing:",
-                false);
-    }
-
-    private static long countPolicyEvents(final MongoClient mongoClient, final List<? extends CharSequence> policyIds) {
-        return countDocuments(mongoClient, policyIds, "policies", "policies_journal", "policy:",
-                false);
-    }
-
-    private static long countPolicySnaps(final MongoClient mongoClient, final List<? extends CharSequence> policyIds) {
-        return countDocuments(mongoClient, policyIds, "policies", "policies_snaps", "policy:",
-                false);
-    }
-
-    private static long countConnectionEvents(final MongoClient mongoClient,
-            final List<? extends CharSequence> policyIds, final boolean filterConnectivityEvents) {
-        return countDocuments(mongoClient, policyIds, "connectivity", "connection_journal",
-                CONNECTION_PREFIX, filterConnectivityEvents);
-    }
-
-    private static long countConnectionSnaps(final MongoClient mongoClient,
-            final List<? extends CharSequence> policyIds) {
-        return countDocuments(mongoClient, policyIds, "connectivity", "connection_snaps",
-                CONNECTION_PREFIX, false);
-    }
-
-    private static long countDocuments(final MongoClient mongoClient,
-            final List<? extends CharSequence> ids,
-            final String database, final String collection,
-            final String prefix,
-            final boolean filterConnectivityEvents) {
-
-        final JsonArray idsJson = ids.stream()
-                .map(thingId -> prefix + thingId)
-                .map(JsonValue::of)
-                .collect(JsonCollectors.valuesToArray());
-
-        final BsonDocument bsonDocument;
-        if (CONNECTION_PREFIX.equals(prefix) && filterConnectivityEvents) {
-            // filter out empty-events
-            bsonDocument = BsonDocument.parse(String.format("{$and:[{\"pid\":{\"$in\":%s}}," +
-                    "{'events.p.type': { $regex: \"connectivity.events:\"}}]}", idsJson));
-        } else {
-            bsonDocument = BsonDocument.parse(String.format("{\"pid\":{\"$in\":%s}}", idsJson));
-        }
-
-        return mongoClient.getDatabase(database)
-                .getCollection(collection)
-                .withReadPreference(ReadPreference.primary())
-                .countDocuments(bsonDocument);
     }
 
 }

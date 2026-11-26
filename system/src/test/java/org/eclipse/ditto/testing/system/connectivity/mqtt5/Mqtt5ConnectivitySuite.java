@@ -15,6 +15,7 @@ package org.eclipse.ditto.testing.system.connectivity.mqtt5;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.eclipse.ditto.policies.api.Permission.READ;
 import static org.eclipse.ditto.policies.api.Permission.WRITE;
+import static org.eclipse.ditto.testing.system.connectivity.ConnectionCategory.CONNECTION_WITH_ENFORCEMENT_ENABLED;
 
 import java.net.InetSocketAddress;
 import java.text.MessageFormat;
@@ -57,6 +58,7 @@ import org.eclipse.ditto.policies.model.PoliciesResourceType;
 import org.eclipse.ditto.policies.model.Policy;
 import org.eclipse.ditto.protocol.JsonifiableAdaptable;
 import org.eclipse.ditto.testing.common.TestConstants;
+import org.eclipse.ditto.testing.common.categories.RequireSource;
 import org.eclipse.ditto.testing.common.client.ConnectionsClient;
 import org.eclipse.ditto.testing.common.matcher.StatusCodeSuccessfulMatcher;
 import org.eclipse.ditto.testing.system.connectivity.AbstractConnectivityResponseDiversionITestCases;
@@ -80,6 +82,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -107,6 +110,14 @@ public final class Mqtt5ConnectivitySuite
     private static final String MQTT_EXTERNAL_URI = getMqttUri(CONFIG);
     private static final String MQTT_INTERNAL_URI = getMqttInternalTcpUri(CONFIG);
     private static final String MQTT_TUNNEL_URI = getMqttTunnelUri(CONFIG);
+
+    private static final String THING_ID_TOPIC_SUFFIX = "{{ thing:namespace }}/{{ thing:name }}";
+
+    private static final String ADD_MQTT_5_SOURCE_ADDRESS_ENFORCEMENT = "ADD_MQTT_5_SOURCE_ADDRESS_ENFORCEMENT";
+    private static final String ADD_MQTT_5_SOURCE_ADDRESS_NOT_MATCHING_ENFORCEMENT =
+            "ADD_MQTT_5_SOURCE_ADDRESS_NOT_MATCHING_ENFORCEMENT";
+    private static final String ADD_MQTT_5_SOURCE_ADDRESS_HEADER_ENFORCEMENT =
+            "ADD_MQTT_5_SOURCE_ADDRESS_HEADER_ENFORCEMENT";
 
     private static final long WAIT_TIMEOUT_MS = 15_000L;
     // if after 10secs waiting time no message arrived, handle as "no message consumed"
@@ -166,8 +177,19 @@ public final class Mqtt5ConnectivitySuite
                         .map(TargetBuilder::build)
                         .collect(Collectors.toList())).build()
         );
+        addMod(ADD_MQTT_5_SOURCE_ADDRESS_ENFORCEMENT, connection ->
+                withSourceEnforcement(connection, source ->
+                        ConnectivityModelFactory.newEnforcement("{{ source:address }}",
+                                getThingSourceTopic(connection.getId().toString()))));
+        addMod(ADD_MQTT_5_SOURCE_ADDRESS_NOT_MATCHING_ENFORCEMENT, connection ->
+                withSourceEnforcement(connection, source ->
+                        ConnectivityModelFactory.newEnforcement("{{ source:address }}",
+                                "wrong-" + getThingSourceTopic(connection.getId().toString()))));
+        addMod(ADD_MQTT_5_SOURCE_ADDRESS_HEADER_ENFORCEMENT, connection ->
+                withSourceEnforcement(connection, source ->
+                        ConnectivityModelFactory.newEnforcement("{{ source:address }}.{{ header:device_id }}",
+                                getThingSourceTopic(connection.getId().toString()) + ".{{ thing:id }}")));
     }
-
 
     private String mqttCustomConnectionName;
     private Mqtt5ConnectivityWorker connectivityWorker;
@@ -406,6 +428,44 @@ public final class Mqtt5ConnectivitySuite
         websocketClient.disconnect();
     }
 
+    @Test
+    @Override
+    @Category(RequireSource.class)
+    @UseConnection(mod = ADD_MQTT_5_SOURCE_ADDRESS_ENFORCEMENT, category = CONNECTION_WITH_ENFORCEMENT_ENABLED)
+    public void sendMessageWithSourceAddressEnforcementAndExpectSuccess() {
+        sendCreateThingAndEnsureResponseIsSentBack(cf.connectionNameWithEnforcementEnabled);
+    }
+
+    @Test
+    @Override
+    @Category(RequireSource.class)
+    @UseConnection(mod = ADD_MQTT_5_SOURCE_ADDRESS_HEADER_ENFORCEMENT, category = CONNECTION_WITH_ENFORCEMENT_ENABLED)
+    public void sendMessageWithSourceAddressAndHeaderEnforcementAndExpectSuccess() {
+        sendCreateThingAndEnsureResponseIsSentBack(cf.connectionNameWithEnforcementEnabled);
+    }
+
+    @Test
+    @Override
+    @Category(RequireSource.class)
+    @UseConnection(mod = ADD_MQTT_5_SOURCE_ADDRESS_NOT_MATCHING_ENFORCEMENT,
+            category = CONNECTION_WITH_ENFORCEMENT_ENABLED)
+    public void sendMessageWithSourceAddressEnforcementAndExpectRejectBecauseNotMatchingFilter() {
+        final String connectionName = cf.connectionNameWithEnforcementEnabled;
+        final ThingId thingId = generateThingId();
+
+        final Policy policy = Policy.newBuilder()
+                .forLabel("DEFAULT")
+                .setSubject(testingContextWithRandomNs.getOAuthClient().getDefaultSubject())
+                .setSubject(connectionSubject(connectionName))
+                .setGrantedPermissions(PoliciesResourceType.thingResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.policyResource("/"), READ, WRITE)
+                .setGrantedPermissions(PoliciesResourceType.messageResource("/"), READ, WRITE)
+                .build();
+
+        sendCreateThingAndExpectError(Thing.newBuilder().setId(thingId).build(), policy, connectionName,
+                HttpStatus.BAD_REQUEST, entry(DEVICE_ID_HEADER, thingId.toString()));
+    }
+
     private void testSslFailure(@Nullable final String caCrt,
             @Nullable final String clientCrt,
             @Nullable final String clientKey) {
@@ -508,6 +568,9 @@ public final class Mqtt5ConnectivitySuite
         return connectionName + "/source/#";
     }
 
+    private static String getThingSourceTopic(final String connectionName) {
+        return connectionName + "/source/" + THING_ID_TOPIC_SUFFIX;
+    }
 
     private static String getTargetTopic(final String connectionName) {
         return connectionName + "/target";

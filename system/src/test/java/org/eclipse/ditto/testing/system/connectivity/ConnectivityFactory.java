@@ -1171,4 +1171,8 @@ public final class ConnectivityFactory {
         return String.format("%s_%s_%X", username, prefix, DISAMBIGUATION_COUNTER.getAndIncrement());
     }
 
+    public ConnectionType getConnectionType() {
+        return connectionType;
+    }
+
 }

@@ -926,7 +926,7 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
         final List<SseTestHandler.Message> user1Messages = user1Driver.getMessages();
         final List<SseTestHandler.Message> user2Messages = user2Driver.getMessages();
 
-        user1Messages.stream()
+        final List<JsonObject> user1Payloads = user1Messages.stream()
                 .map(SseTestHandler.Message::getData)
                 .filter(data -> data != null && !data.isEmpty())
                 .map(data -> {
@@ -939,16 +939,23 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
                 })
                 .filter(jsonValue -> jsonValue != null)
                 .map(JsonValue::asObject)
-                .forEach(payload -> {
-                    assertThat(payload.getValue(JsonPointer.of("/attributes/" + ATTR_HIDDEN))).isEmpty();
-                    if (payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).isPresent()) {
-                        final JsonValue complexValue = payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).get();
-                        if (complexValue.isObject()) {
-                            assertThat(complexValue.asObject().getValue(JsonPointer.of(COMPLEX_FIELD_SECRET))).isEmpty();
-                        }
-                    }
-                    assertThat(payload.getValue(JsonPointer.of("/features/" + FEATURE_OTHER))).isEmpty();
-                });
+                .toList();
+
+        user1Payloads.forEach(payload -> {
+            assertThat(payload.getValue(JsonPointer.of("/attributes/" + ATTR_HIDDEN))).isEmpty();
+            if (payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).isPresent()) {
+                final JsonValue complexValue = payload.getValue(JsonPointer.of("/attributes/" + ATTR_COMPLEX)).get();
+                if (complexValue.isObject()) {
+                    assertThat(complexValue.asObject().getValue(JsonPointer.of(COMPLEX_FIELD_SECRET))).isEmpty();
+                }
+            }
+        });
+        // user1 is also subject of the "owner" entry granting READ on thing:/, so only "hidden" and "complex/secret"
+        // are revoked for it - like a retrieve of the thing, its events must contain the readable "other" feature
+        assertThat(user1Payloads)
+                .anySatisfy(payload -> assertThat(payload.getValue(JsonPointer.of(
+                        "/features/" + FEATURE_OTHER + "/properties/" + PROP_PROPERTIES + "/" + PROP_PUBLIC)))
+                        .contains(JsonValue.of("updated public value")));
 
         user2Messages.stream()
                 .map(SseTestHandler.Message::getData)

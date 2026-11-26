@@ -16,6 +16,7 @@ import static org.eclipse.ditto.base.model.common.HttpStatus.ACCEPTED;
 import static org.eclipse.ditto.base.model.common.HttpStatus.BAD_REQUEST;
 import static org.eclipse.ditto.base.model.common.HttpStatus.CREATED;
 import static org.eclipse.ditto.base.model.common.HttpStatus.FAILED_DEPENDENCY;
+import static org.eclipse.ditto.base.model.common.HttpStatus.NOT_FOUND;
 import static org.eclipse.ditto.base.model.common.HttpStatus.NO_CONTENT;
 import static org.eclipse.ditto.base.model.common.HttpStatus.OK;
 import static org.eclipse.ditto.base.model.common.HttpStatus.REQUEST_TIMEOUT;
@@ -27,6 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.eclipse.ditto.base.model.acks.AcknowledgementLabel;
 import org.eclipse.ditto.base.model.acks.AcknowledgementRequest;
@@ -41,8 +43,10 @@ import org.eclipse.ditto.json.JsonKey;
 import org.eclipse.ditto.json.JsonObject;
 import org.eclipse.ditto.json.JsonPointer;
 import org.eclipse.ditto.json.JsonValue;
+import org.eclipse.ditto.messages.model.MessageDirection;
 import org.eclipse.ditto.testing.common.HttpHeader;
 import org.eclipse.ditto.testing.common.IntegrationTest;
+import org.eclipse.ditto.testing.common.ResourcePathBuilder;
 import org.eclipse.ditto.testing.common.ServiceEnvironment;
 import org.eclipse.ditto.testing.common.Solution;
 import org.eclipse.ditto.testing.common.TestConstants;
@@ -55,6 +59,7 @@ import org.eclipse.ditto.testing.common.ws.ThingsWebsocketClient;
 import org.eclipse.ditto.things.model.Thing;
 import org.eclipse.ditto.things.model.ThingBuilder;
 import org.eclipse.ditto.things.model.ThingId;
+import org.eclipse.ditto.things.model.signals.commands.modify.MigrateThingDefinition;
 import org.eclipse.ditto.things.model.signals.events.ThingModified;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -68,6 +73,13 @@ import io.restassured.response.Response;
  * /things HTTP operations.
  */
 public final class RequestedAcksIT extends IntegrationTest {
+
+    // well below the default fire-and-forget-enforcement-timeout of 3s, after which the gateway answers 202 anyway
+    private static final long MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS = 2_000L;
+    // a supervisor still blocked by its 5s ask timeout would delay this retrieve by ~2s after the 3s fallback 202
+    private static final long MAX_FOLLOW_UP_RETRIEVE_TIME_MS = 1_000L;
+    private static final String THING_DEFINITION_URL =
+            "https://eclipse-ditto.github.io/ditto-examples/wot/models/dimmable-colored-lamp-1.0.0.tm.jsonld";
 
     private static ThingsWebsocketClient websocketClient1;
     private static ThingsWebsocketClient websocketClient2;
@@ -165,12 +177,88 @@ public final class RequestedAcksIT extends IntegrationTest {
 
     @Test
     public void createThingRequestingEmptyAcknowledgementsAndResponseRequiredFalse() {
-        postThing(TestConstants.API_V_2, JsonFactory.newObject())
+        final Response response = postThing(TestConstants.API_V_2, JsonFactory.newObject())
                 .withConfiguredAuth(testingContext)
                 .withHeader(DittoHeaderDefinition.REQUESTED_ACKS.getKey(), "")
                 .withHeader(DittoHeaderDefinition.RESPONSE_REQUIRED.getKey(), false)
                 .expectingHttpStatus(ACCEPTED)
                 .fire();
+
+        assertThat(response.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS);
+    }
+
+    @Test
+    public void sendMessageWithTimeoutZeroIsAcceptedWithoutWaitingForEnforcementTimeout() {
+        final String thingId = createThing();
+
+        final Response response = postMessage(TestConstants.API_V_2, thingId, MessageDirection.TO, "ping",
+                "application/json", "{}", "0")
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(ACCEPTED)
+                .fire();
+
+        assertThat(response.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS);
+    }
+
+    @Test
+    public void modifyAttributeWithTimeoutZeroWithoutPermissionIsRejected() {
+        final String thingId = createThing();
+
+        putAttribute(TestConstants.API_V_2, thingId, "counter", "42")
+                .withParam(DittoHeaderDefinition.TIMEOUT.getKey(), "0")
+                .withConfiguredAuth(serviceEnv.getTestingContext2())
+                .expectingHttpStatus(NOT_FOUND)
+                .fire();
+
+        getAttribute(TestConstants.API_V_2, thingId, "counter")
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(NOT_FOUND)
+                .fire();
+    }
+
+    @Test
+    public void fireAndForgetModifyEndingAsQueryResultIsAcceptedWithoutBlockingTheEntity() {
+        final String thingId = createThing();
+        // the policy created along with the thing has no allowedAdditions, so deleting them is a no-op
+        final String allowedAdditionsPath =
+                ResourcePathBuilder.forPolicy(thingId).policyEntry("DEFAULT").toString() + "/allowedAdditions";
+
+        final Response deleteResponse = delete(dittoUrl(TestConstants.API_V_2, allowedAdditionsPath))
+                .withParam(DittoHeaderDefinition.TIMEOUT.getKey(), "0")
+                .withParam(DittoHeaderDefinition.RESPONSE_REQUIRED.getKey(), "false")
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(ACCEPTED)
+                .fire();
+        final Response retrieveResponse = getPolicy(thingId)
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(OK)
+                .fire();
+
+        assertThat(deleteResponse.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS);
+        assertThat(retrieveResponse.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FOLLOW_UP_RETRIEVE_TIME_MS);
+    }
+
+    @Test
+    public void fireAndForgetMigrateDefinitionDryRunIsAcceptedWithoutBlockingTheThing() {
+        final String thingId = createThing();
+        final JsonObject migrationPayload = JsonObject.newBuilder()
+                .set(MigrateThingDefinition.JsonFields.JSON_THING_DEFINITION_URL, THING_DEFINITION_URL)
+                .set(MigrateThingDefinition.JsonFields.JSON_INITIALIZE_MISSING_PROPERTIES_FROM_DEFAULTS, true)
+                .build();
+
+        final Response migrateResponse = postMigrateDefinition(thingId, migrationPayload.toString(), true)
+                .withParam(DittoHeaderDefinition.TIMEOUT.getKey(), "0")
+                .withParam(DittoHeaderDefinition.RESPONSE_REQUIRED.getKey(), "false")
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(ACCEPTED)
+                .fire();
+        final Response retrieveResponse = getThing(TestConstants.API_V_2, thingId)
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(OK)
+                .fire();
+
+        assertThat(migrateResponse.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FIRE_AND_FORGET_RESPONSE_TIME_MS);
+        assertThat(retrieveResponse.getTimeIn(TimeUnit.MILLISECONDS)).isLessThan(MAX_FOLLOW_UP_RETRIEVE_TIME_MS);
     }
 
     @Test
@@ -370,6 +458,14 @@ public final class RequestedAcksIT extends IntegrationTest {
                 .withConfiguredAuth(testingContext)
                 .expectingHttpStatus(NO_CONTENT)
                 .fire();
+    }
+
+    private static String createThing() {
+        final Response response = postThing(TestConstants.API_V_2, JsonFactory.newObject())
+                .withConfiguredAuth(testingContext)
+                .expectingHttpStatus(CREATED)
+                .fire();
+        return parseIdFromLocation(response.header("Location"));
     }
 
 }

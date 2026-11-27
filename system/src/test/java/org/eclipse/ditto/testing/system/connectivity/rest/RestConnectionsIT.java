@@ -726,6 +726,100 @@ public final class RestConnectionsIT extends IntegrationTest {
     }
 
     @Test
+    public void createConnectionWithMalformedChangeFilterFails() {
+        connectionsClient()
+                .postConnection(connectionWithTargetTopics(
+                        "_/_/things/twin/events?change-filter=gt(attributes/x,)&extraFields=attributes"))
+                .withDevopsAuth()
+                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
+                .expectingErrorCode("rql.expression.invalid")
+                .fire();
+    }
+
+    @Test
+    public void createConnectionWithPipelineExpressionInChangeFilterFailsPointingToFnFilter() {
+        connectionsClient()
+                .postConnection(connectionWithTargetTopics(
+                        "_/_/things/twin/events?change-filter=header:ditto-originator|fn:filter('ne','x')"))
+                .withDevopsAuth()
+                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
+                .expectingErrorCode("connectivity:connection.configuration.invalid")
+                .expectingBody(satisfies(jsonString -> assertThat(String.valueOf(jsonString))
+                        .contains("'change-filter' only accepts an RQL expression")
+                        .contains("fn-filter")))
+                .fire();
+    }
+
+    @Test
+    public void createConnectionWithChangeFilterOnLiveMessagesOrLiveCommandsFails() {
+        // messages and live commands carry no thing data a change-filter could match
+        for (final String topic : List.of(
+                "_/_/things/live/messages?change-filter=eq(resource:path,'/inbox/messages/x')",
+                "_/_/things/live/commands?change-filter=exists(attributes/counter)")) {
+            connectionsClient()
+                    .postConnection(connectionWithTargetTopics(topic))
+                    .withDevopsAuth()
+                    .expectingHttpStatus(HttpStatus.BAD_REQUEST)
+                    .expectingErrorCode("connectivity:connection.configuration.invalid")
+                    .expectingBody(satisfies(jsonString -> assertThat(String.valueOf(jsonString))
+                            .contains("not supported for messages and live commands")))
+                    .fire();
+        }
+    }
+
+    @Test
+    public void createConnectionWithRepeatedChangeFilterParamFails() {
+        connectionsClient()
+                .postConnection(connectionWithTargetTopics(
+                        "_/_/things/twin/events?change-filter=exists(attributes/a)&change-filter=exists(attributes/b)"))
+                .withDevopsAuth()
+                .expectingHttpStatus(HttpStatus.BAD_REQUEST)
+                .expectingErrorCode("connectivity:topic.invalid")
+                .fire();
+    }
+
+    @Test
+    public void createConnectionWithValidChangeFilters() {
+        final JsonObject connection = connectionWithTargetTopics(
+                "_/_/things/twin/events?change-filter=exists(features/temperature)" +
+                        "&extraFields=features/temperature",
+                "_/_/things/live/events?change-filter=exists(features/temperature)" +
+                        "&filter=eq(attributes/location,'Kitchen')" +
+                        "&fn-filter=header:ditto-originator|fn:filter('ne','integration:some:excluded')" +
+                        "&extraFields=features/temperature,attributes/location");
+
+        final String connectionId = parseIdFromResponse(connectionsClient()
+                .postConnection(connection)
+                .withDevopsAuth()
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire());
+
+        try {
+            connectionsClient().getConnection(connectionId)
+                    .withDevopsAuth()
+                    .expectingHttpStatus(HttpStatus.OK)
+                    .expectingBody(satisfies(jsonString -> {
+                        assertThat(String.valueOf(jsonString))
+                                .contains("twin/events?change-filter=exists(features/temperature)" +
+                                        "&extraFields=features/temperature");
+                        // serialized in the order filter, change-filter, fn-filter, extraFields
+                        assertThat(String.valueOf(jsonString))
+                                .contains("live/events?filter=eq(attributes/location,'Kitchen')" +
+                                        "&change-filter=exists(features/temperature)" +
+                                        "&fn-filter=header:ditto-originator" +
+                                        "|fn:filter('ne','integration:some:excluded')" +
+                                        "&extraFields=features/temperature,attributes/location");
+                    }))
+                    .fire();
+        } finally {
+            connectionsClient().deleteConnection(connectionId)
+                    .withDevopsAuth()
+                    .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                    .fire();
+        }
+    }
+
+    @Test
     public void modifyConnectionRevalidatesFnFilters() {
         // GIVEN the existing default connection (created in @Before, deleted in @After)
         final JsonObject existingConnection = JsonObject.of(connectionsClient()

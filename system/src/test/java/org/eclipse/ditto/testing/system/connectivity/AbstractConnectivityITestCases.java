@@ -1369,6 +1369,10 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
                 .fire();
         putCounterAttribute(thingId, 7);
+        // waiting for the consume timeout lets the enrichment of counter=7 finish before the location changes back
+        assertThat(consumeFromTarget(cf.connectionNameWithChangeAndRqlFilter, eventConsumer))
+                .describedAs("a counter change outside the kitchen must be suppressed")
+                .isNull();
         putAttribute(2, thingId, "location", "\"Kitchen\"")
                 .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
                 .expectingHttpStatus(HttpStatus.NO_CONTENT)
@@ -2889,6 +2893,83 @@ public abstract class AbstractConnectivityITestCases<C, M> extends
         assertThat(adaptableC.getPayload().getExtra())
                 .describedAs("topicC extra should be empty (topic has no extraFields)")
                 .isEmpty();
+    }
+
+    @Test
+    @Connections(NONE)
+    public void changeFilterIsEvaluatedPerTopicOfATarget() throws Exception {
+        // A target passes the pre-filter as soon as one of its topics matches, so the change-filter of each topic
+        // has to be evaluated again after enrichment: it decides which topic publishes and with which extra fields.
+        final String connectionName = "multi-twin-change-filter-" + UUID.randomUUID();
+        final Connection baseConnection = cf.getSingleConnection(connectionName);
+        if (baseConnection.getConnectionType() == ConnectionType.AMQP_10 ||
+                baseConnection.getConnectionType() == ConnectionType.AMQP_091) {
+            LOGGER.info("Skipping changeFilterIsEvaluatedPerTopicOfATarget for {} - " +
+                    "requires protocol-specific setup for dynamically created connections",
+                    baseConnection.getConnectionType());
+            return;
+        }
+
+        final String targetAddress = cf.defaultTargetAddress(connectionName);
+        final Target baseTarget = baseConnection.getTargets().get(0);
+        final FilteredTopic topicA = ConnectivityModelFactory.newFilteredTopic(
+                "_/_/things/twin/events?change-filter=exists(attributes/a)&extraFields=attributes/a");
+        final FilteredTopic topicB = ConnectivityModelFactory.newFilteredTopic(
+                "_/_/things/twin/events?filter=exists(attributes/b)");
+        final Target target = ConnectivityModelFactory.newTargetBuilder(baseTarget)
+                .address(targetAddress)
+                .topics(Set.of(topicA, topicB))
+                .build();
+        final Connection connection = baseConnection.toBuilder()
+                .setTargets(Collections.singletonList(target))
+                .build();
+
+        cf.asyncCreateConnection(connection).get(60, TimeUnit.SECONDS);
+        final C consumer = initTargetsConsumer(connectionName, targetAddress);
+
+        final ThingId thingId = generateThingId();
+        final PolicyId policyId = putPolicyForThing(thingId, connectionName);
+        putThing(2, Thing.newBuilder()
+                        .setId(thingId)
+                        .setPolicyId(policyId)
+                        .setAttribute(JsonPointer.of("a"), JsonValue.of("a0"))
+                        .setAttribute(JsonPointer.of("b"), JsonValue.of("b0"))
+                        .build(), JsonSchemaVersion.V_2)
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+        final M created = consumeFromTarget(connectionName, consumer);
+        assertThat(created).describedAs("created event").isNotNull();
+        assertThat(jsonifiableAdaptableFrom(created).getTopicPath().getAction()).contains(TopicPath.Action.CREATED);
+
+        // only attributes/b changes -> topic A's change-filter fails, published through topic B without extra
+        putAttribute(2, thingId, "b", "\"b1\"")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        final M messageB = consumeFromTarget(connectionName, consumer);
+        assertThat(messageB).describedAs("event for the change of attributes/b").isNotNull();
+        final Adaptable adaptableB = jsonifiableAdaptableFrom(messageB);
+        assertThat(adaptableB.getPayload().getPath().toString()).isEqualTo("/attributes/b");
+        assertThat(adaptableB.getPayload().getExtra())
+                .describedAs("published through topic B, so without topic A's extra fields")
+                .isEmpty();
+
+        // only attributes/a changes -> published through topic A with its extra fields
+        putAttribute(2, thingId, "a", "\"a1\"")
+                .withJWT(testingContextWithRandomNs.getOAuthClient().getAccessToken())
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        final M messageA = consumeFromTarget(connectionName, consumer);
+        assertThat(messageA).describedAs("event for the change of attributes/a").isNotNull();
+        final Adaptable adaptableA = jsonifiableAdaptableFrom(messageA);
+        assertThat(adaptableA.getPayload().getPath().toString()).isEqualTo("/attributes/a");
+        assertThat(adaptableA.getPayload().getExtra())
+                .describedAs("published through topic A, with its extra fields")
+                .hasValueSatisfying(extra -> assertThat(extra.getValue(JsonPointer.of("attributes/a")))
+                        .contains(JsonValue.of("a1")));
+
+        assertThat(consumeFromTarget(connectionName, consumer)).isNull();
     }
 
     @Test

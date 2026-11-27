@@ -434,6 +434,72 @@ public final class ThingsServerSentEventIT extends IntegrationTest {
     }
 
     @Test
+    public void historicalEventsWithChangeFilter() {
+        final ThingId thingId = createThingWithMatchingAndNonMatchingChanges();
+
+        final String path = historicalPath(thingId, "change-filter=exists(features/foo/properties/matching)");
+
+        assertHistoricalMatchingValues(path, List.of(10, 30));
+    }
+
+    @Test
+    public void historicalEventsWithChangeFilterAndFilter() {
+        final ThingId thingId = createThingWithMatchingAndNonMatchingChanges();
+
+        final String path = historicalPath(thingId, "change-filter=exists(features/foo/properties/matching)" +
+                "&filter=gt(features/foo/properties/matching/num,15)");
+
+        assertHistoricalMatchingValues(path, List.of(30));
+    }
+
+    /**
+     * Creates a Thing (revision 1) and changes it in revisions 2 to 5, alternating between the "matching" and the
+     * "non-matching" property of feature "foo": matching/num 10, non-matching/num 20, matching/num 30,
+     * non-matching/num 40.
+     */
+    private ThingId createThingWithMatchingAndNonMatchingChanges() {
+        final ThingId thingId = ThingId.of(idGenerator(interestingNamespace).withRandomName());
+        putThing(TestConstants.API_V_2, Thing.newBuilder().setId(thingId).setFeature("foo").build(),
+                JsonSchemaVersion.V_2)
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, "foo", "matching/num", "10")
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, "foo", "non-matching/num", "20")
+                .expectingHttpStatus(HttpStatus.CREATED)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, "foo", "matching/num", "30")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        putProperty(TestConstants.API_V_2, thingId, "foo", "non-matching/num", "40")
+                .expectingHttpStatus(HttpStatus.NO_CONTENT)
+                .fire();
+        return thingId;
+    }
+
+    private static String historicalPath(final ThingId thingId, final String filterParams) {
+        return "/things/" + thingId + "?from-historical-revision=1&to-historical-revision=5" +
+                "&fields=thingId,features,_revision&" + filterParams;
+    }
+
+    private void assertHistoricalMatchingValues(final String path, final List<Integer> expectedValues) {
+        final SseTestDriver driver = createTestDriver(expectedValues.size(), path);
+        driver.connect();
+
+        final List<Integer> actualValues = driver.getMessages().stream()
+                .map(SseTestHandler.Message::getData)
+                .map(ThingsModelFactory::newThing)
+                .map(thing -> thing.getFeatures()
+                        .flatMap(features -> features.getFeature("foo"))
+                        .flatMap(feature -> feature.getProperty("matching/num"))
+                        .map(JsonValue::asInt)
+                        .orElse(null))
+                .toList();
+        assertThat(actualValues).isEqualTo(expectedValues);
+    }
+
+    @Test
     public void attributeModificationWithExtraFieldsContainingSameAttribute() {
         final ThingId thingId1 = ThingId.of(idGenerator(interestingNamespace).withRandomName());
         final String counterKey = "counter";
